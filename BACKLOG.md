@@ -64,7 +64,7 @@ Code, Javadoc, config comments and commits reference items as `backlog #N`.
 | [0-17](#0-17-alert-on-service_client_fallback_totalreasonauth) | Alert on `service_client_fallback_total{reason="auth"}` | tech-debt | Medium | Open |
 | [0-20](#0-20-tenant-owned-fallback-contact) | Tenant-owned fallback contact | design | Medium | Open |
 | [0-22](#0-22-the-operator-alert-is-email-only) | The operator alert is email only | tech-debt | Low | Open |
-| [0-23](#0-23-the-oncall-retry-is-probably-inactive) | The `oncall` `@Retry` is probably inactive | tech-debt | Low | Open |
+| [0-23](#0-23-the-oncall-and-slack-workspace-retry-never-fires) | The `oncall` and `slack-workspace` `@Retry` never fires | tech-debt | Low | Open |
 | [0-24](#0-24-on-call-contacts-are-not-verified-against-tenant-membership) | On-call contacts are not verified against tenant membership | design | Medium | Open |
 | [0-25](#0-25-a-stale-notification_queue-write-can-overwrite-a-terminal-status) | A stale `notification_queue` write can overwrite a terminal status | tech-debt | Medium | Open |
 | [0-28](#0-28-notification_queue-rows-are-never-purged) | `notification_queue` rows are never purged | tech-debt | Low | Open |
@@ -401,19 +401,50 @@ The alert is sent synchronously on the scheduler thread, and the SMTP timeouts b
 
 ---
 
-### 0-23. The `oncall` `@Retry` is probably inactive
+### 0-23. The `oncall` and `slack-workspace` `@Retry` never fires
 
-**Type:** tech-debt · **Priority:** Low · **Status:** Open
+**Type:** tech-debt · **Priority:** Low · **Status:** Open (premise confirmed and approach decided in `/ready`, 2026-11-14:
+remove both retries)
+**Autopilot:** ready · **Risk:** low · **Complexity:** low · **Depends on:** —
+**Touches:** notification-service (client; src/main/resources/application.yml; src/test), root (README.md "Resilience" row, .ai/decisions/0016)
 
-**Problem.** `OncallClientImpl` methods carry `@Retry(name = "oncall")` and a `@CircuitBreaker` with a fallback. Each
-fallback turns every failure into `OncallLookupUnavailableException` (or, for `findBySlackUserId`, an empty
-result), and neither is in `retry-exceptions`, so the retry never sees the original `ResourceAccessException` or
-`HttpServerErrorException`. Before #0-19 the fallback returned an empty result, so it did not fire either. The real
-retry of the recipient lookup is the scheduler's (the entry stays PENDING). How Resilience4j orders Retry around the
-breaker here has not been verified.
+**Problem.** `OncallClientImpl`'s three lookups (`getCurrentOncall`, `findBySlackUserId`, `findCurrentByUserId`) carry
+`@Retry(name = "oncall")` outside a `@CircuitBreaker` whose fallback answers every failure: `getCurrentOncall` and
+`findCurrentByUserId` throw `OncallLookupUnavailableException`, which is not in the retry's `retry-exceptions` (a
+whitelist), and `findBySlackUserId` returns `Optional.empty()`, a success to the retry. So the retry never runs, and
+its `ignore-exceptions` (4xx) has no effect either. `SlackWorkspaceClientImpl`'s `@Retry(name = "slack-workspace")`
+has the same shape and the same defect; its `application.yml` comment points here, and
+`SlackWorkspaceClientResilienceTest` pins `max-attempts=1`, which hides it. No test runs the oncall client through
+its proxies (`OncallClientImplTest` calls it directly). The retry that does run is the scheduler's: an entry whose
+lookup failed stays PENDING and is tried again every cycle (30 s) until `lookup-retry-window` (10 min).
 
-**Approach.** Confirm the behaviour with a test that runs the Spring proxies (the client tests call the methods
-directly), then either remove the retry on these methods or make it fire. Correct the comment in `application.yml`.
+**Approach (decided).** Remove both retries, the way escalation-service's `OncallServiceClient` and notification's
+`IncidentAckClient` work: a circuit breaker with a fail-open fallback that calls `ClientFallbackMetrics.record`, and no
+retry, because the scheduler retries with a deadline (the repository's convention for retries, #0-52). Behaviour does
+not change, as the retries never ran. Not chosen: making them fire the Slack Web API's way (`fallbackMethod` on
+`@Retry`), which doubles the worst case of each lookup on the scheduler thread (8 s to about 16 s, about 32 s for an
+escalated entry) and leaves about 7 s under the 4-minute lock; and listing the fallback's exception in
+`retry-exceptions` (ingestion's way), which would retry 4xx and an open breaker too. The ACK path's invented actor when
+`findBySlackUserId` fails (`UUID.nameUUIDFromBytes`) is #0-15's, not this item's. Left as it is: ingestion-service's
+`application.yml` comment "(unlike notification-service's oncall retry, backlog #0-23)" stays true as history and is
+another service.
+
+**Acceptance criteria.**
+AC1. `OncallClientImpl` carries no `@Retry`, and `application.yml` has no `resilience4j.retry.instances.oncall`; its
+`@CircuitBreaker`s and fallbacks are unchanged.
+AC2. `SlackWorkspaceClientImpl` carries no `@Retry`, and `application.yml` has no
+`resilience4j.retry.instances.slack-workspace`; its `@CircuitBreaker` and fallback are unchanged.
+AC3. A test runs `OncallClientImpl` through its Spring proxies (AOP, `CircuitBreakerAutoConfiguration`,
+`RetryAutoConfiguration`, WireMock, as `SlackWorkspaceClientResilienceTest`): a 503 on each of the three lookups makes
+exactly one request and ends as today (`OncallLookupUnavailableException` for `getCurrentOncall` and
+`findCurrentByUserId`, `Optional.empty()` for `findBySlackUserId`), and `service_client_fallback_total{client="oncall"}`
+goes up by one per call.
+AC4. `SlackWorkspaceClientResilienceTest` no longer sets `max-attempts`, and shows one request on a 503 with the
+service's own configuration.
+AC5. The comments of both clients and of `application.yml`, README's "Resilience" row and ADR-0016 (its lines on
+`@Retry(name = "oncall")` being "probably inactive" and on "the #0-23 problem") say the lookups have no retry of their
+own and the scheduler's PENDING window is their retry; nothing calls them "probably inactive" or "unverified".
+AC6. `./mvnw verify -pl notification-service -am` passes, with the 60% JaCoCo and `diff-cover` thresholds.
 
 ---
 
