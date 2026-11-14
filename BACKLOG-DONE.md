@@ -146,6 +146,7 @@ resolvable.
 | 0-240 | The build VM no longer reaches the Mac's loopback services: its Docker is rootless (code a test runs is `factory`, not root, in the VM) and root's `FACTORY-EGRESS` rejects the gateway (`host.lima.internal`), the VM's network and link-local for every uid from 1000 up, behind an allow-list; `create.sh` checks it after creation and after a reboot (ADR-0057); details in [the section](#0-240-the-build-vm-reaches-the-macs-loopback-services) | PR #632 |
 | 0-241 | Factory guards runs the agent command check tests only when one of their inputs changed (`run-agent-command-tests.sh`, tested by `test-run-agent-command-tests.sh`; a push to `main` or an unreadable base runs them; ADR-0050): the job took 2 min 42 s on PR #633 against about 7 minutes before; details in [the section](#0-241-the-agent-command-check-tests-run-on-every-pull-request-whatever-it-changes) | PR #631 |
 | 0-247 | The build VM's allow-list is kept by its own resolver: every DNS query of a uid from 1000 up is sent to dnsmasq on the VM, which adds what it answers for a listed name (with its subdomains) to `factory-dns`; private, shared and reserved networks rejected, dnsmasq unprivileged and sandboxed; `create.sh` checks it from a container (ADR-0057 amended); details in [the section](#0-247-the-build-vms-allow-list-of-addresses-does-not-hold-for-a-cdn) | PR #640 |
+| 0-248 | The autopilot's isolation check compares a fact, not the agent's yes or no: `review-general` quotes the opening of its instructions, asked without the preamble that points at its file, and the workflow looks for `REVIEW_GENERAL_OPENING` in it (a test holds the phrase equal to the definition); each failure has its own reason; details in [the section](#0-248-the-autopilots-isolation-check-trusts-the-agents-own-yes-or-no) | PR #641 |
 
 Items completed before `BACKLOG.md` existed are not listed.
 
@@ -3313,3 +3314,36 @@ rule in place, a container's answer for a listed name in the set, a container re
 pulls its image again.
 AC5. ADR-0057 (amended), `docs/ai-factory.md` and README "Infrastructure Hardening" say the allow-list is of names
 (with their subdomains) kept by the resolver, and drop "a CDN address that changed since the last refresh".
+
+### 0-248. The autopilot's isolation check trusts the agent's own yes or no
+
+**Type:** ci · **Priority:** High · **Status:** Done, PR #641 (2026-11-14). Found by
+two runs in the build VM (#0-238's AC5; owner, 2026-11-14).
+**Autopilot:** human-only · **Risk:** medium · **Complexity:** low · **Depends on:** —
+**Touches:** factory (.claude/workflows/backlog-autopilot.js, .github/scripts/test-autopilot-workflow.mjs: owner-only),
+docs (docs/ai-factory.md "Troubleshooting")
+
+**Problem.** Before any work the autopilot asks `review-general` which tools it has and "whether your instructions are
+the review-general agent definition", and stops unless the answer is `definitionLoaded: true`. In the build VM, with
+Claude Code 2.1.325, the agent answered `false` in runs wf_1e3befc7-a08 and wf_477d7545-796 although its definition
+had loaded (its transcript: the `review-general` type, its system prompt, its preloaded skill, no Edit or Write): the
+definition's text never names itself `review-general`, and the answer is the model's judgement, not a fact. Both
+runs ended `NOT_STARTED`, and the item could not be resumed.
+
+**Approach (decided by the owner).** Ask for a fact, not a judgement: the agent quotes the first 500 characters of its
+own instructions, and the workflow looks for `REVIEW_GENERAL_OPENING` ("You are the general reviewer", the opening of
+`review-general.md`'s body) in them, not at their start, as a runtime may put a preamble of its own before the
+definition; a test holds the phrase equal to the file. The question goes without `as()`'s preamble (`bare`), which
+tells an agent to read its definition's file, so the answer is not handed to it. The tool check (no Edit, Write,
+MultiEdit, NotebookEdit) stays the barrier: an agent of the wrong type has Edit and Write. Not chosen: dropping the
+definition check and keeping the tools only (a read-only agent of another definition would pass). Left, named (review
+round 1): the phrase is in the repository, so an agent that reads files unasked could still find it; and the tool
+check takes the agent's own list and names four tools, so an MCP tool that writes files would pass it.
+
+AC1. The isolation check passes when the agent's quoted opening holds review-general's phrase (after a runtime preamble
+too) and its tools are a list of names without an editing tool, and stops the run with a reason that says which
+failed otherwise (no answer, no list of tools, an editing tool, other instructions), the lock released.
+AC2. A test fails when `REVIEW_GENERAL_OPENING` no longer opens `.claude/agents/review-general.md`'s body.
+AC3. `docs/ai-factory.md` "Troubleshooting" names both reasons, and the resume of a branch that is only on origin.
+AC4. The isolation question names no definition file and does not hold the phrase it looks for; the other agents keep
+`as()`'s preamble.

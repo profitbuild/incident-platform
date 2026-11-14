@@ -158,7 +158,6 @@ Code, Javadoc, config comments and commits reference items as `backlog #N`.
 | [0-244](#0-244-no-review-rule-covers-the-build-vms-own-allow-list) | No review rule covers the build VM's own allow-list | security | Low | Open |
 | [0-245](#0-245-validation-errors-do-not-redact-apikey-and-privatekey-fields) | Validation errors do not redact `apiKey` and `privateKey` fields | bug | Medium | Open |
 | [0-246](#0-246-service-classes-below-60-coverage-found-with-0-57) | Service classes below 60% coverage, found with #0-57 | tech-debt | Low | Open |
-| [0-248](#0-248-the-autopilots-isolation-check-trusts-the-agents-own-yes-or-no) | The autopilot's isolation check trusts the agent's own yes or no | ci | High | In progress |
 | [0-249](#0-249-claude-code-in-the-devcontainer-image-is-whatever-version-was-current-at-build-time) | Claude Code in the devcontainer image is whatever version was current at build time | ci | Medium | Open |
 | [0-133](#0-133-incidentresolvedevent-carries-no-openedat) | `IncidentResolvedEvent` carries no `openedAt` | tech-debt | Low | Open |
 | [0-134](#0-134-diff-cover-is-installed-by-version-without-hashes) | `diff-cover` is installed by version, without hashes | ci | Low | Open |
@@ -3630,39 +3629,6 @@ Javadoc (`domain/SlackWorkspace.java:36-38`) says "backlog #0-25 exists only bec
 auth-service's `SlackWorkspace` is next changed, the comment should say it carries `@Version` as a row several places
 change over time, and point to the criterion in `.ai/context/architecture.md` (#0-25 AC5). The same words in
 `V17__create_slack_workspaces.sql` stay: a migration on `main` is never edited.
-
-### 0-248. The autopilot's isolation check trusts the agent's own yes or no
-
-**Type:** ci · **Priority:** High · **Status:** In progress, in the PR of `ci/0-248-isolation-check-marker`. Found by
-two runs in the build VM (#0-238's AC5; owner, 2026-11-14).
-**Autopilot:** human-only · **Risk:** medium · **Complexity:** low · **Depends on:** —
-**Touches:** factory (.claude/workflows/backlog-autopilot.js, .github/scripts/test-autopilot-workflow.mjs: owner-only),
-docs (docs/ai-factory.md "Troubleshooting")
-
-**Problem.** Before any work the autopilot asks `review-general` which tools it has and "whether your instructions are
-the review-general agent definition", and stops unless the answer is `definitionLoaded: true`. In the build VM, with
-Claude Code 2.1.325, the agent answered `false` in runs wf_1e3befc7-a08 and wf_477d7545-796 although its definition
-had loaded (its transcript: the `review-general` type, its system prompt, its preloaded skill, no Edit or Write): the
-definition's text never names itself `review-general`, and the answer is the model's judgement, not a fact. Both
-runs ended `NOT_STARTED`, and the item could not be resumed.
-
-**Approach (decided by the owner).** Ask for a fact, not a judgement: the agent quotes the first 500 characters of its
-own instructions, and the workflow looks for `REVIEW_GENERAL_OPENING` ("You are the general reviewer", the opening of
-`review-general.md`'s body) in them, not at their start, as a runtime may put a preamble of its own before the
-definition; a test holds the phrase equal to the file. The question goes without `as()`'s preamble (`bare`), which
-tells an agent to read its definition's file, so the answer is not handed to it. The tool check (no Edit, Write,
-MultiEdit, NotebookEdit) stays the barrier: an agent of the wrong type has Edit and Write. Not chosen: dropping the
-definition check and keeping the tools only (a read-only agent of another definition would pass). Left, named (review
-round 1): the phrase is in the repository, so an agent that reads files unasked could still find it; and the tool
-check takes the agent's own list and names four tools, so an MCP tool that writes files would pass it.
-
-AC1. The isolation check passes when the agent's quoted opening holds review-general's phrase (after a runtime preamble
-too) and its tools are a list of names without an editing tool, and stops the run with a reason that says which
-failed otherwise (no answer, no list of tools, an editing tool, other instructions), the lock released.
-AC2. A test fails when `REVIEW_GENERAL_OPENING` no longer opens `.claude/agents/review-general.md`'s body.
-AC3. `docs/ai-factory.md` "Troubleshooting" names both reasons, and the resume of a branch that is only on origin.
-AC4. The isolation question names no definition file and does not hold the phrase it looks for; the other agents keep
-`as()`'s preamble.
 
 ### 0-249. Claude Code in the devcontainer image is whatever version was current at build time
 
