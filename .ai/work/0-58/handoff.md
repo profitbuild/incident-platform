@@ -27,6 +27,15 @@ implementer after every round.
   - `jacoco:check` and diff-cover were not run here (the first stops at the Docker-backed tests in this
     sandbox; diff-cover runs in CI). The diff changes no production line.
 
+- Test gate r1 (`.ai/runs/0-58/tests-r1-0.log`): 503 tests, 0 failures, 3 errors, all three
+  `ContainerFetchException` in `@BeforeAll start`: `AuditOutboxTest` and `PausedTenantsTest`
+  (`postgres:16-alpine`) and `DeadLetterPublisherKafkaIntegrationTest` (`apache/kafka:3.9.2`). The cause in
+  `shared/target/surefire-reports/com.incidentplatform.shared.audit.AuditOutboxTest.txt` is
+  `Could not pull image: ... dial tcp 18.244.102.34:443: connect: connection refused` to the registry's CDN.
+  The diff (`git diff --stat main HEAD`) touches none of these three classes and no production code.
+  `GlobalExceptionHandlerTest` (12) and `UnauthorizedEntryPointTest` (6) passed in that run. No code was
+  changed in fix-tests r1.
+
 ## Tests changed and why
 - None: no existing test changed.
 
