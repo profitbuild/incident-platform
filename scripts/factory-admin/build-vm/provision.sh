@@ -15,9 +15,9 @@
 # runs as. So the daemon is rootless: it runs as the user `factory`, and root in any container is `factory` in the VM,
 # which cannot change the VM's firewall, read root's files or write the VM's /etc. Everything `factory` sends - its
 # daemon, slirp4netns and so every container, the devcontainer included - goes through one chain of root's,
-# FACTORY-EGRESS (factory-egress.sh below): DNS, an allow-list, nothing on the VM's own network or the gateway (the
-# Mac's loopback services through Lima's host.lima.internal, #0-240; a cloud VM's metadata at 169.254.169.254), and
-# nothing else. The chain is in place before `factory`'s session starts, and rejects everything until its allow-list
+# FACTORY-EGRESS (factory-egress.sh below): DNS to the VM's own resolver, an allow-list, nothing on a private network,
+# the VM's own or the gateway (the Mac's loopback services through Lima's host.lima.internal, #0-240; a cloud VM's
+# metadata at 169.254.169.254), and nothing else. The chain is in place before `factory`'s session starts, and rejects everything until its allow-list
 # is loaded: it fails closed. Not covered: what `factory` itself holds, the devcontainer's volumes with the bot's
 # token and Claude Code's login (stage 4 of ADR-0055, a task container without a token); and DNS as a channel.
 #
@@ -36,7 +36,7 @@
 set -euxo pipefail
 export DEBIAN_FRONTEND=noninteractive
 
-APT_PACKAGES=(git ca-certificates curl xz-utils gnupg uidmap dbus-user-session slirp4netns iptables ipset jq)
+APT_PACKAGES=(git ca-certificates curl xz-utils gnupg uidmap dbus-user-session slirp4netns iptables ipset jq dnsmasq-base)
 # Docker CE by exact version, as Node and the CLI are pinned: VMs made on different days hold the same Docker (review
 # round 3 of #0-116). The versions are the ones of Docker's noble repository for arm64 and amd64, which
 # verify-pins.sh checks; apt checks each package against the repository's signed index.
@@ -96,8 +96,14 @@ sysctl -q -p /etc/sysctl.d/90-factory-build.conf
 install -m 0755 /dev/stdin /usr/local/sbin/factory-egress.sh <<'EGRESS'
 #!/bin/bash
 # The build VM's egress filter (backlog #0-116, #0-240, ADR-0057), written by provision.sh.
-#   factory-egress.sh          (boot, factory-egress.service) the chain, rejecting all, then the allow-list
-#   factory-egress.sh refresh  (factory-egress.timer) the allow-list only, resolved again: CDNs change addresses
+#   factory-egress.sh          (boot, factory-egress.service) the chains, rejecting all, then the allow-list, and the
+#                              resolver's configuration (factory-dns.service runs it)
+#   factory-egress.sh refresh  (factory-egress.timer) the static allow-list only, resolved again
+# The allow-list is of names, kept by the resolver (backlog #0-247): every DNS query of a filtered uid is sent to the
+# VM's own dnsmasq, whatever server it asked, and dnsmasq adds each address it answers for a listed name to the set
+# factory-dns, before its answer reaches the asker. An address resolved once and stored (the static set) does not
+# hold for a CDN: CloudFront answered production.cloudfront.docker.com with other addresses within minutes, and the
+# first autopilot run in the VM failed its image pulls on one the 30-minute refresh had not seen (run 20261114-155647).
 # The chain is root's and takes every socket of a uid from 1000 up: `factory`, whose rootless Docker's packets all
 # carry its uid (slirp4netns runs as factory), and every uid factory could become, its subordinate range among them
 # (100000 up: `rootlesskit -- setpriv --reuid=1 curl` reached example.com when only factory's own uid was matched,
@@ -107,9 +113,9 @@ install -m 0755 /dev/stdin /usr/local/sbin/factory-egress.sh <<'EGRESS'
 set -euo pipefail
 FILTERED=1000-4294967294
 # The devcontainer's own allow-list, copied: .devcontainer/init-firewall.sh's ALLOWED_DOMAINS and OPTIONAL_DOMAINS,
-# entry for entry (check-allowlists.sh holds the copies equal both ways, in create.sh and Factory guards). Both
-# scripts resolve each name to its IPv4 addresses, with different tools (dig there, getent here), and this one again
-# every 30 minutes.
+# entry for entry (check-allowlists.sh holds the copies equal both ways, in create.sh and Factory guards). Here each
+# name is allowed with its subdomains (dnsmasq's `ipset=/name/` matches both), resolved when it is asked for; it is also
+# resolved once at boot and every 30 minutes into the static set, as before.
 DOMAINS=(
   api.anthropic.com claude.ai platform.claude.com console.anthropic.com
   repo.maven.apache.org repo1.maven.org
@@ -152,34 +158,82 @@ load_allowed() {
 if [ "${1:-}" = refresh ]; then load_allowed; exit 0; fi
 
 ipset create factory-allowed hash:net -exist
+# The resolver's set: an address dnsmasq answered for a listed name, for an hour (a connection opened in it stays
+# ESTABLISHED after; a name asked again is added again). Not swapped or flushed by a refresh.
+ipset create factory-dns hash:ip timeout 3600 -exist
 gw=$(ip -4 route show default | awk '{print $3; exit}')
 dev=$(ip -4 route show default | awk '{print $5; exit}')
 net=$(ip -4 -o addr show "$dev" | awk '{print $4; exit}')
 vm_ip=${net%/*}
 dns=$(awk '/^nameserver/ {print $2}' /run/systemd/resolve/resolv.conf 2>/dev/null | grep -E '^[0-9.]+$' || true)
 read -r eph_lo eph_hi < /proc/sys/net/ipv4/ip_local_port_range
+# The resolver (factory-dns.service) listens on the VM's own address, not loopback: a container's query leaves
+# slirp4netns with the VM's address as its source, and the kernel drops a packet from it rewritten to 127.0.0.1
+# (route_localnet). Port 5300: 5353 is systemd-resolved's mDNS (0.0.0.0:5353), which took the queries in the spike.
+DNS_PORT=5300
+[ -n "$vm_ip" ] || { echo "factory-egress: no address on the default route's device" >&2; exit 1; }
+[ -n "$dns" ] || { echo "factory-egress: no upstream resolver in /run/systemd/resolve/resolv.conf" >&2; exit 1; }
+install -d -m 0755 /run/factory-dns
+{
+  echo "port=$DNS_PORT"
+  echo "listen-address=$vm_ip"
+  echo "bind-interfaces"
+  echo "no-resolv"
+  echo "no-hosts"
+  echo "cache-size=1000"
+  # An answer served from the cache is not added to the set again (a cloud resolver's TTLs run to hours; Lima's are 0,
+  # never cached): no answer is cached longer than its set entry lives (3600 s), so an address answered from the cache
+  # is one added in the last 5 minutes (review round 1 of #0-247).
+  echo "max-cache-ttl=300"
+  # A listed name's subdomain is chosen by whoever asks, a test among them: a private, loopback or link-local address in
+  # its answer is refused here, and FACTORY-EGRESS rejects those networks anyway (review round 1 of #0-247).
+  echo "stop-dns-rebind"
+  for r in $(printf '%s\n' $dns | sort -u); do echo "server=$r"; done
+  echo "ipset=/$(printf '%s/' "${DOMAINS[@]}" "${OPTIONAL_DOMAINS[@]}" "${VM_ONLY_DOMAINS[@]}")factory-dns"
+} > /run/factory-dns/dnsmasq.conf.new
+mv /run/factory-dns/dnsmasq.conf.new /run/factory-dns/dnsmasq.conf
+# Every DNS query of a filtered uid goes to it, whatever server the asker named (an in-container resolver, 8.8.8.8):
+# DNAT, as no REDIRECT reaches the VM's own address for a container's query (above). Built in its own chain and
+# swapped in whole, as the filter below.
+iptables -t nat -N FACTORY-DNS-NEW 2>/dev/null || iptables -t nat -F FACTORY-DNS-NEW
+iptables -t nat -A FACTORY-DNS-NEW -p udp --dport 53 -j DNAT --to-destination "$vm_ip:$DNS_PORT"
+iptables -t nat -A FACTORY-DNS-NEW -p tcp --dport 53 -j DNAT --to-destination "$vm_ip:$DNS_PORT"
+iptables -t nat -I OUTPUT 1 -m owner --uid-owner "$FILTERED" -j FACTORY-DNS-NEW
+while iptables -t nat -D OUTPUT -m owner --uid-owner "$FILTERED" -j FACTORY-DNS 2>/dev/null; do :; done
+if iptables -t nat -L FACTORY-DNS -n >/dev/null 2>&1; then iptables -t nat -F FACTORY-DNS; iptables -t nat -X FACTORY-DNS; fi
+iptables -t nat -E FACTORY-DNS-NEW FACTORY-DNS
+# The resolver answers the VM itself only: a query from the VM's network (under Lima, the gateway) is dropped.
+for p in udp tcp; do
+  iptables -C INPUT ! -i lo -p "$p" --dport "$DNS_PORT" -j DROP 2>/dev/null \
+    || iptables -I INPUT 1 ! -i lo -p "$p" --dport "$DNS_PORT" -j DROP
+done
 iptables -N FACTORY-EGRESS-NEW 2>/dev/null || iptables -F FACTORY-EGRESS-NEW
-# Loopback: the local resolver, and the VM's own address on the ports Docker publishes a container's on (the kernel's
-# ephemeral range: Testcontainers' mapped ports, through host.docker.internal). Nothing else of the VM's own listeners,
-# sshd among them, nor one a later change adds (review round 2 of #0-116).
-iptables -A FACTORY-EGRESS-NEW -o lo -d 127.0.0.0/8 -p udp --dport 53 -j ACCEPT
-iptables -A FACTORY-EGRESS-NEW -o lo -d 127.0.0.0/8 -p tcp --dport 53 -j ACCEPT
-[ -z "$vm_ip" ] || iptables -A FACTORY-EGRESS-NEW -o lo -d "$vm_ip" -p tcp --dport "$eph_lo:$eph_hi" -j ACCEPT
+# DNS: the resolver only, on any output device (a container's query, rewritten from the gateway's resolver, still
+# leaves by the default route's device). No other DNS server is reached by a filtered uid: the DNAT above sent every
+# query here.
+iptables -A FACTORY-EGRESS-NEW -d "$vm_ip" -p udp --dport "$DNS_PORT" -j ACCEPT
+iptables -A FACTORY-EGRESS-NEW -d "$vm_ip" -p tcp --dport "$DNS_PORT" -j ACCEPT
+# Loopback: the VM's own address on the ports Docker publishes a container's on (the kernel's ephemeral range:
+# Testcontainers' mapped ports, through host.docker.internal). Nothing else of the VM's own listeners, sshd among them,
+# nor one a later change adds (review round 2 of #0-116).
+iptables -A FACTORY-EGRESS-NEW -o lo -d "$vm_ip" -p tcp --dport "$eph_lo:$eph_hi" -j ACCEPT
 iptables -A FACTORY-EGRESS-NEW -o lo -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
 iptables -A FACTORY-EGRESS-NEW -o lo -j REJECT
-# DNS to the resolvers systemd-resolved uses, and only them: under Lima that is the gateway, in a cloud the provider's
-# resolver; a gateway that is no resolver stays rejected below (review round 3 of #0-116). None found: no DNS.
-for r in $(printf '%s\n' $dns | sort -u); do
-  iptables -A FACTORY-EGRESS-NEW -d "$r" -p udp --dport 53 -j ACCEPT
-  iptables -A FACTORY-EGRESS-NEW -d "$r" -p tcp --dport 53 -j ACCEPT
-done
 # The gateway and the VM's network: under Lima the Mac (its loopback services, #0-240), in a cloud the provider's
 # network; and link-local, a cloud VM's metadata service.
 [ -z "$gw" ] || iptables -A FACTORY-EGRESS-NEW -d "$gw" -j REJECT
 [ -z "$net" ] || iptables -A FACTORY-EGRESS-NEW -d "$net" -j REJECT
 iptables -A FACTORY-EGRESS-NEW -d 169.254.0.0/16 -j REJECT
+# And every other private, shared or loopback network, before either set is accepted: a listed name's subdomain (the
+# resolver's set holds whatever it answered for one) that resolves into one would open it, under Lima the Mac's LAN
+# behind its NAT. Held here, not only by the resolver's stop-dns-rebind (review round 1 of #0-247).
+# 198.18/15 is what a fake-IP proxy on the Mac answers, 224/4 and 240/4 are multicast and reserved (review round 2).
+for n in 0.0.0.0/8 10.0.0.0/8 100.64.0.0/10 127.0.0.0/8 172.16.0.0/12 192.168.0.0/16 198.18.0.0/15 224.0.0.0/4 240.0.0.0/4; do
+  iptables -A FACTORY-EGRESS-NEW -d "$n" -j REJECT
+done
 iptables -A FACTORY-EGRESS-NEW -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
 iptables -A FACTORY-EGRESS-NEW -m set --match-set factory-allowed dst -j ACCEPT
+iptables -A FACTORY-EGRESS-NEW -m set --match-set factory-dns dst -j ACCEPT
 iptables -A FACTORY-EGRESS-NEW -j REJECT
 # Swap in whole: the new chain takes the traffic before the old one goes.
 iptables -I OUTPUT 1 -m owner --uid-owner "$FILTERED" -j FACTORY-EGRESS-NEW
@@ -205,6 +259,49 @@ ExecStart=/usr/local/sbin/factory-egress.sh
 [Install]
 WantedBy=multi-user.target
 UNIT
+# The resolver of every filtered uid (backlog #0-247): dnsmasq as its own user (dnsmasq, a system uid, so its own
+# queries upstream are not filtered), from the configuration factory-egress.sh wrote; restarted when that unit is. It
+# parses what a test sends it and what an upstream answers for a name a test chose, and it holds CAP_NET_ADMIN (the
+# set): it never runs as root (User=, the one capability ambient), and the unit leaves it nothing else (review round 1
+# of #0-247; ADR-0057 names what is left: a flaw in dnsmasq gives CAP_NET_ADMIN, which can change the chain).
+cat > /etc/systemd/system/factory-dns.service <<UNIT
+[Unit]
+Description=Resolver of $FACTORY_USER's egress, adding what it answers for the allow-list (backlog #0-247)
+Requires=factory-egress.service
+After=factory-egress.service
+PartOf=factory-egress.service
+Before=user@$factory_uid.service
+[Service]
+User=dnsmasq
+Group=nogroup
+AmbientCapabilities=CAP_NET_ADMIN
+CapabilityBoundingSet=CAP_NET_ADMIN
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_NETLINK AF_UNIX
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+ProtectProc=invisible
+ProcSubset=pid
+ExecStart=/usr/sbin/dnsmasq --keep-in-foreground --conf-file=/run/factory-dns/dnsmasq.conf --pid-file=
+Restart=on-failure
+[Install]
+WantedBy=multi-user.target
+UNIT
 cat > /etc/systemd/system/factory-egress-refresh.service <<UNIT
 [Unit]
 Description=Resolve the allow-list of $FACTORY_USER's egress again
@@ -226,16 +323,17 @@ WantedBy=timers.target
 UNIT
 # factory's session (its lingering rootless Docker) requires the filter, not only follows it: if factory-egress.sh fails
 # before its OUTPUT rule is in, the session does not start, rather than start unfiltered (fail closed at boot, review
-# round 1 of #0-116).
+# round 1 of #0-116). And the resolver: without it no name resolves, which closes too, but its session would start
+# into a VM where nothing can be pulled.
 install -d "/etc/systemd/system/user@$factory_uid.service.d"
 cat > "/etc/systemd/system/user@$factory_uid.service.d/factory-egress.conf" <<UNIT
 [Unit]
-Requires=factory-egress.service
-After=factory-egress.service
+Requires=factory-egress.service factory-dns.service
+After=factory-egress.service factory-dns.service
 UNIT
 systemctl daemon-reload
-systemctl enable factory-egress.service factory-egress.timer
-systemctl start factory-egress.service factory-egress.timer
+systemctl enable factory-egress.service factory-dns.service factory-egress.timer
+systemctl start factory-egress.service factory-dns.service factory-egress.timer
 
 # --- Docker CE, rootless for `factory`, no rootful daemon --------------------------------------------------------
 docker_installed() {  # every package of DOCKER_PACKAGES at its pinned version

@@ -3467,6 +3467,8 @@ AC3. The repository inside the VM is a clone of its own: no mount of the owner's
 owner's (#0-202's concern, checked in the VM).
 AC4. In the VM the devcontainer starts with its firewall and a test gate with Testcontainers passes (S3).
 AC5. Three autopilot items run on the VM with no environment problem (ADR-0055's exit), each named here with its run id.
+Runs so far: run 20261114-155647 (#0-58, PR #639, draft): BLOCKED by the environment, so not one of the three: its
+gate's Testcontainers pulls were refused on CloudFront addresses the VM's allow-list had not resolved (#0-247).
 AC6. README "Infrastructure Hardening" and `docs/ai-factory.md` say where the autopilot runs and what isolates it;
 #0-202 and #0-225 point at what this stage settled for them, and #0-116 at what it did not.
 
@@ -3581,6 +3583,10 @@ line of defence must not parse the original, not where its consumer has no repos
 AC1. FAC-S02 names `VM_ONLY_DOMAINS` (or every egress allow-list of the factory) and both kinds of host to look for.
 AC2. FAC-S02 (or a new rule) covers every firewall of the factory, the build VM's `FACTORY-EGRESS` among them.
 AC3. FAC-A01 names a copy kept because its consumer has no repository at run time, with the check it then needs.
+AC4. The rule covers how the build VM matches a name too (#0-247): its resolver allows each entry with every subdomain,
+which whoever asks chooses, so an entry is a namespace nobody else can create names under (not an object-storage,
+user-content or other multi-tenant domain, such as `*.r2.cloudflarestorage.com` or `githubusercontent.com`), and the
+VM's copy of the devcontainer's list is judged by that meaning, not only by equal entries (review round 2 of #0-247).
 
 ### 0-245. Validation errors do not redact `apiKey` and `privateKey` fields
 
@@ -3619,4 +3625,3 @@ Javadoc (`domain/SlackWorkspace.java:36-38`) says "backlog #0-25 exists only bec
 auth-service's `SlackWorkspace` is next changed, the comment should say it carries `@Version` as a row several places
 change over time, and point to the criterion in `.ai/context/architecture.md` (#0-25 AC5). The same words in
 `V17__create_slack_workspaces.sql` stay: a migration on `main` is never edited.
-
