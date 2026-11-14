@@ -28,3 +28,5 @@ NEXT: implementer
 - [implementer rules] SEC-31: GlobalExceptionHandlerTest#authentication/#accessDenied/#optimisticLocking/#unexpected and UnauthorizedEntryPointTest#bodyHoldsNoExceptionText assert the distinct exception text is absent
 - [implementer rules] SEC-50: not applicable: no POM change
 - [implementer r1] fix-tests: no code change; gate's 3 errors (AuditOutboxTest, PausedTenantsTest, DeadLetterPublisherKafkaIntegrationTest) are ContainerFetchException, image pull refused by the network (connection refused to the registry CDN); none touched by this diff; this item's 18 tests passed in the gate run; blocked on the environment
+- [blocked] test gate failed on the environment (ContainerFetchException, image pull refused); needs a sandbox that can pull or already has postgres:16-alpine and apache/kafka:3.9.2
+NEXT: owner
