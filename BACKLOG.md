@@ -958,7 +958,7 @@ Redis, the pattern ingestion-service already uses (#67), answering 202 either wa
 
 ### 0-58. `GlobalExceptionHandler` and `UnauthorizedEntryPoint` have no tests of their own in `shared`
 
-**Type:** tech-debt · **Priority:** Medium · **Status:** Open (found with #0-57; narrowed in `/ready`, 2026-11-14)
+**Type:** tech-debt · **Priority:** Medium · **Status:** Blocked — test gate failed on the environment: three Docker-backed tests of main cannot pull images (autopilot run 20261114-155647) (found with #0-57; narrowed in `/ready`, 2026-11-14)
 **Autopilot:** ready · **Risk:** low · **Complexity:** medium · **Depends on:** —
 **Touches:** shared (src/test: com.incidentplatform.shared.exception, com.incidentplatform.shared.security)
 
