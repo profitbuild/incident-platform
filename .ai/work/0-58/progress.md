@@ -13,3 +13,5 @@ autopilot reads the last `NEXT:` line to resume an interrupted run.
 NEXT: <stage>
 - [start] started by start-item.sh; branch `refactor/0-58-shared-exception-handler-tests`; base `9b824cf551713b8af8a8c24b9b018185ec77312b`
 NEXT: architect
+- [architect] plan: two test-only classes in shared, GlobalExceptionHandlerTest (exception pkg: handler called directly with real Spring exceptions, real BeanPropertyBindingResult and a real jakarta Validator for violations, MDC set/cleared) and UnauthorizedEntryPointTest (security pkg: MockHttpServletRequest/Response, ObjectMapper with JavaTimeModule, as ApiKeyAuthFilterTest/TenantStatusFilterTest); no production or POM change; ADR: none; modules: shared; rules: GEN-01, GEN-02, GEN-03, GEN-07, GEN-08, GEN-20, GEN-22, GEN-24, SEC-30, SEC-31, SEC-50
+NEXT: implementer
