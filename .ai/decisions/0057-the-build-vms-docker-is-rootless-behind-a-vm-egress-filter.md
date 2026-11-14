@@ -1,6 +1,6 @@
 # ADR-0057: The build VM's Docker is rootless, and everything it sends passes a VM egress filter
 
-- **Status:** Proposed
+- **Status:** Accepted (2026-11-14, by the owner, after PR #632 merged)
 - **Amends:** ADR-0056 (the build VM's Docker Engine: Docker CE run rootless for `factory`, not Ubuntu's `docker.io`
   run by root with `factory` in the docker group)
 - **Backlog:** #0-116, #0-240
