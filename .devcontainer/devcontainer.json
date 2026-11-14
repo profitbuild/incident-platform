@@ -9,6 +9,12 @@
     "--add-host=host.docker.internal:host-gateway"
   ],
   "remoteUser": "dev",
+  // `dev` keeps uid 1000 (the Dockerfile's) on every host: on Linux the devcontainer CLI would otherwise give it the
+  // uid of the user who runs `devcontainer up`. In the build VM that user is `factory` under rootless Docker, and
+  // create.sh gives the clone to the subordinate uid that uid 1000 maps to; a cloud image's `factory` need not be uid 1000 (its `ubuntu` user holds it)
+  // (backlog #0-116, ADR-0057, review round 1). No effect on a Mac. On any other Linux host it applies too: a user
+  // whose uid is not 1000 there owns the bind-mounted checkout under a different uid than `dev`, and writes to it fail.
+  "updateRemoteUserUID": false,
   // The container's main process runs as root; you and the agents work as `dev` (remoteUser). The
   // docker-outside-of-docker feature's start script (docker-init.sh) needs root to proxy the host's Docker
   // socket (root:root, 660 on Docker Desktop) to one `dev` may use. Run as `dev`, it calls sudo, which
