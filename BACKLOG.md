@@ -66,7 +66,7 @@ Code, Javadoc, config comments and commits reference items as `backlog #N`.
 | [0-22](#0-22-the-operator-alert-is-email-only) | The operator alert is email only | tech-debt | Low | Open |
 | [0-23](#0-23-the-oncall-retry-is-probably-inactive) | The `oncall` `@Retry` is probably inactive | tech-debt | Low | Open |
 | [0-24](#0-24-on-call-contacts-are-not-verified-against-tenant-membership) | On-call contacts are not verified against tenant membership | design | Medium | Open |
-| [0-25](#0-25-notificationqueueentry-has-no-version) | `NotificationQueueEntry` has no `@Version` | tech-debt | Medium | Open |
+| [0-25](#0-25-a-stale-notification_queue-write-can-overwrite-a-terminal-status) | A stale `notification_queue` write can overwrite a terminal status | tech-debt | Medium | Open |
 | [0-28](#0-28-notification_queue-rows-are-never-purged) | `notification_queue` rows are never purged | tech-debt | Low | Open |
 | [0-31](#0-31-auth-service-identityconfig-split-evaluated-and-deferred) | auth-service identity/config split — evaluated and deferred | design | Low | Open |
 | [0-32](#0-32-no-notification-channel-is-retried-after-a-failed-send) | No notification channel is retried after a failed send | design | Medium | Open |
@@ -434,21 +434,52 @@ Related: #0-20 (tenant-owned fallback contact).
 
 ---
 
-### 0-25. `NotificationQueueEntry` has no `@Version`
+### 0-25. A stale `notification_queue` write can overwrite a terminal status
 
-**Type:** tech-debt · **Priority:** Medium · **Status:** Open
+**Type:** tech-debt · **Priority:** Medium · **Status:** Open (approach decided in `/ready`, 2026-11-14: state-guarded
+conditional UPDATEs, not `@Version`)
+**Autopilot:** ready · **Risk:** low · **Complexity:** medium · **Depends on:** —
+**Touches:** notification-service (domain, repository, service, scheduler; src/test), root (.ai/context/architecture.md)
 
-**Problem.** CLAUDE.md lists optimistic locking (`@Version`) as the decided pattern for mutable entities, but the
-notification outbox entity has none. Its writers (`markSent`, `markFailed`, and since #0-18/#0-19 `markUndeliverable`
-and `recordLookupFailure`) save a detached entity, which is a merge that writes every mapped column as it was loaded.
+**Problem.** The notification outbox entity, `NotificationQueueEntry`, has no guard against a stale write. Its
+writers (`NotificationPersistenceService.markSent`, `markFailed`, and since #0-18/#0-19 `markUndeliverable` and
+`recordLookupFailure`) save a detached entity, which is a merge that writes every mapped column as it was loaded.
 That is safe today only because ShedLock serialises the scheduler; a run that outlives the lock, or an old pod during a
-rollout, could overwrite another writer's status (for example the catch-all `markFailed` over an UNDELIVERABLE).
+rollout, could overwrite another writer's status (for example the scheduler's catch-all `markFailed` over an
+UNDELIVERABLE). And there is a second writer: `NotificationQueueRepository.restartLookupRetryWindows`, the bulk
+UPDATE run when a tenant is resumed, whose own Javadoc says a stale scheduler entry "can write its old value back".
 
-**Approach.** Either `@Version` as below, or what auth-service's `AuthEmailOutbox` does since #0-52: the scheduler as
-the only writer, each transition a conditional `UPDATE ... WHERE id = ? AND status IN (...)` whose row count says
-whether it applied. Add a `version` column (its own Flyway migration — V7 went to backlog #0-12's `team_id`
-column, so this one is V8) and `@Version`, and decide how the scheduler treats
-an `OptimisticLockingFailureException` (skip the entry; the next cycle reloads it).
+**Approach (decided).** The way auth-service's `AuthEmailOutbox` does it since #0-52 (ADR-0015), not `@Version`: each
+transition is a conditional `UPDATE ... WHERE id = :id AND status = 'PENDING'` (`@Modifying(flushAutomatically = true,
+clearAutomatically = true)`, returning the row count), and `recordLookupFailure` also guards its own field
+(`first_lookup_failure_at`), so a stale write neither overwrites a terminal status nor undoes a restart. A count of 0
+means another writer got there first: logged at info and counted in a Micrometer counter
+`notification.queue.stale_write` tagged with the operation (`sent`, `failed`, `undeliverable`, `lookup`), and nothing
+else happens (no audit event, no operator alert). No migration. Why not `@Version`, though CLAUDE.md lists it and
+escalation-service's `EscalationTask` uses it for the same pause/resume shape: the criterion this item writes into
+`.ai/context/architecture.md` (AC6). A write that records the outcome of an irreversible step on a row in a one-way
+state machine is a state-guarded conditional UPDATE; a row that several places change over time (a timer, a level,
+edited fields) carries `@Version`. `notification_queue` records a send that already happened, so it is the first;
+`EscalationTask` moves its timer and level again and again, so it stays the second. Neither prevents a duplicate send
+(it is detected after the send): ShedLock stays the guard against that.
+
+**Acceptance criteria.**
+AC1. An integration test (Testcontainers, notification-service) shows `markSent`, `markFailed`, `markUndeliverable`
+and `recordLookupFailure` change only a row whose `status` is `PENDING`: on a row already SENT, FAILED or
+UNDELIVERABLE each changes nothing and its row count is 0.
+AC2. A test shows the scheduler's catch-all, after `markUndeliverable` has committed, leaves the row UNDELIVERABLE (its
+`error_message` and `processed_at` unchanged).
+AC3. A unit test shows that when the conditional update affects 0 rows, `NotificationPersistenceService.markUndeliverable`
+writes no `NOTIFICATION_UNDELIVERABLE` audit event, `NotificationService.markUndeliverable` raises no operator alert,
+and `notification.queue.stale_write` is incremented with the operation's tag.
+AC4. A test shows `recordLookupFailure` does not overwrite a non-null `first_lookup_failure_at`, and a restart by
+`restartLookupRetryWindows` is not undone by a stale scheduler write.
+AC5. `.ai/context/architecture.md` replaces "An outbox row has one writer after its INSERT … the two such exceptions"
+with the criterion above (outcome of an irreversible step on a one-way state machine: state-guarded conditional
+UPDATE; a row changed over time from several places: `@Version`), names the notification queue next to the auth email
+outbox, `AuthToken.markUsedIfUnused` and `mfa_recovery_requests`, and `EscalationTask` as the `@Version` case with a
+bulk UPDATE that bumps `version`.
+AC6. `./mvnw verify -pl notification-service -am` passes, with the 60% JaCoCo and `diff-cover` thresholds.
 
 ---
 
@@ -3550,4 +3581,11 @@ AC2. The fields of the services' request DTOs that hold a secret are all matched
 
 **Approach.** Pick them up when they are next changed (CI's changed-lines gate asks for it). If an item is wanted for
 them, measure again first and split by service: one PR per service, none of them a guard.
+
+**Also, a stale comment (found in the `/review` of `/ready #0-25`, 2026-11-14).** auth-service's `SlackWorkspace`
+Javadoc (`domain/SlackWorkspace.java:36-38`) says "backlog #0-25 exists only because `NotificationQueueEntry` skipped
+[`@Version`] on a mutable entity". #0-25 decided state-guarded conditional UPDATEs instead, not `@Version`: when
+auth-service's `SlackWorkspace` is next changed, the comment should say it carries `@Version` as a row several places
+change over time, and point to the criterion in `.ai/context/architecture.md` (#0-25 AC5). The same words in
+`V17__create_slack_workspaces.sql` stay: a migration on `main` is never edited.
 
