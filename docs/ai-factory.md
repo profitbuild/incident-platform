@@ -446,7 +446,9 @@ file as the local VM (`provision.sh`, taken as cloud-init user-data, ADR-0056), 
 
 | Symptom | Likely cause |
 |---|---|
-| `NOT_STARTED: agent isolation check failed` | `AGENT_TYPE_OPTION` is wrong: reviewers ran as general-purpose agents |
+| `NOT_STARTED: agent isolation check failed: the reviewer can edit files` (or `did not list its tools`) | `AGENT_TYPE_OPTION` is wrong: reviewers ran as general-purpose agents (or the answer was malformed: run again) |
+| `NOT_STARTED: agent isolation check failed: the reviewer's instructions are not review-general's` | `AGENT_TYPE_OPTION` is wrong, or `REVIEW_GENERAL_OPENING` in the workflow no longer opens `.claude/agents/review-general.md` (its test says which) (#0-248) |
+| a resumed run stops at the pick: `no local branch <branch> to resume` | the branch is only on origin (a new VM's clone has `main` alone): in the devcontainer, `git fetch origin <branch>:<branch>` on `main`, then resume |
 | `NOT_STARTED: label '…' does not exist` | create the labels of #0-113 |
 | a hook says "factory scripts were changed on this branch" | `scripts/factory/` differs from the base commit in `.ai/runs/LOCK` (or `origin/main` without a run) — either the branch touched it (owner's decision) or `main` moved on: rebase the branch by hand |
 | every run `BLOCKED: test environment failure` | Docker not reachable from the container, or the firewall blocks Maven Central |

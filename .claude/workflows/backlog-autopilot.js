@@ -100,15 +100,18 @@ let noAnswer = null
 // inside stopItem are covered the same way: a shipper that fails still lets `state.sh record` release the lock. If
 // factory-ops itself fails on that `record` (or on `unlock`), the lock stays and the run's outcome still returns; the
 // next preflight then refuses to start (a lock held), so it fails closed, and the cause is in this run's log.
-async function as(type, prompt, opts = {}) {
+async function as(type, prompt, { bare = false, ...opts } = {}) {
   noAnswer = null
   if (!UNBUDGETED.has(type)) {
     calls += 1
     if (calls > MAX_AGENT_CALLS) { budgetExceeded = true; return null }
   }
   const label = opts.label ?? type
-  const preamble = `You are running as the \`${type}\` agent defined in .claude/agents/${type}.md. ` +
-    `If your instructions are not that definition, read the file and follow it exactly. Autopilot run ${runId}.\n\n`
+  // `bare`: no pointer to the agent's definition file, for a question whose answer must come from the agent's own
+  // instructions, not from reading that file (the isolation check, review round 1 of #0-248).
+  const preamble = bare ? `Autopilot run ${runId}.\n\n`
+    : `You are running as the \`${type}\` agent defined in .claude/agents/${type}.md. ` +
+      `If your instructions are not that definition, read the file and follow it exactly. Autopilot run ${runId}.\n\n`
   try {
     return await agent(preamble + prompt, { ...opts, [AGENT_TYPE_OPTION]: type, label })
   } catch (e) {
@@ -191,9 +194,22 @@ const PREFLIGHT = answerOf({ ok: { type: 'boolean' }, reasons: { type: 'array', 
   baseRef: { type: 'string' }, baseSha: { type: 'string' }, runId: { type: 'string' }, today: { type: 'string' },
   state: { type: 'object' } })
 const ISOLATION = {
-  type: 'object', required: ['tools', 'definitionLoaded'],
-  properties: { tools: { type: 'array', items: { type: 'string' } }, definitionLoaded: { type: 'boolean' } },
+  type: 'object', required: ['tools', 'opening'],
+  properties: { tools: { type: 'array', items: { type: 'string' } }, opening: { type: 'string' } },
 }
+// The opening words of review-general's definition (.claude/agents/review-general.md, the first line of its body;
+// test-autopilot-workflow.mjs fails when the two differ). The isolation check asked the agent whether its
+// instructions were that definition, and trusted a yes or no: with Claude Code 2.1.325 in the build VM the agent
+// answered no twice, its definition loaded (its transcript shows it), as the text never names itself review-general
+// (runs wf_1e3befc7-a08 and wf_477d7545-796, backlog #0-248). It quotes the opening of its instructions now, a fact
+// to compare, not a judgement, and the workflow looks for this phrase in it, not at its start: a runtime may put a
+// preamble of its own before the definition (review round 1). The question goes without as()'s preamble, which
+// points at the definition's file: an agent told to read it could copy the phrase from there. What stays: the phrase
+// tells review-general from another read-only definition, and an agent that can read the repository could still
+// find it unasked; the barrier is the tool check (no editing tool), as an agent of the wrong type has Edit and Write.
+// That check takes the agent's own list and names four tools: an MCP tool that writes files is not one of them
+// (named in #0-248).
+const REVIEW_GENERAL_OPENING = 'You are the general reviewer'
 const PICK = {
   type: 'object', required: ['none'],
   properties: { none: { type: 'boolean' }, failed: { type: 'boolean' }, reason: { type: 'string' }, itemId: { type: 'string' }, title: { type: 'string' },
@@ -506,11 +522,18 @@ base.sha = pre.baseSha
 
 // A reviewer that can edit files is not a reviewer: if the custom agent type did not apply, stop here.
 const iso = await as('review-general',
-  'Isolation check, no review: list the names of the tools available to you in this session, and say whether your instructions are the review-general agent definition. Answer JSON only.',
-  { schema: ISOLATION, label: 'isolation check' })
-if (!iso || iso.definitionLoaded !== true || iso.tools.some((t) => /^(Edit|Write|MultiEdit|NotebookEdit)$/.test(t))) {
+  'Isolation check, no review, read no file: list the names of the tools available to you in this session, and copy the first 500 characters of your own system instructions exactly as written. Answer JSON only.',
+  { schema: ISOLATION, label: 'isolation check', bare: true })
+const toolsListed = Array.isArray(iso?.tools) && iso.tools.every((t) => typeof t === 'string')
+const canEdit = toolsListed && iso.tools.some((t) => /^(Edit|Write|MultiEdit|NotebookEdit)$/.test(t))
+const ownDefinition = typeof iso?.opening === 'string' && iso.opening.includes(REVIEW_GENERAL_OPENING)
+if (!iso || !toolsListed || canEdit || !ownDefinition) {
   await ops('state.sh', ['unlock'], STATE_UNLOCKED, 'state')
-  return { outcome: 'NOT_STARTED', reasons: [`agent isolation check failed (tools: ${iso?.tools?.join(', ') ?? 'no answer'}): set AGENT_TYPE_OPTION in .claude/workflows/backlog-autopilot.js`] }
+  const why = !iso ? 'no answer'
+    : !toolsListed ? 'the reviewer did not list its tools'
+      : canEdit ? `the reviewer can edit files (tools: ${iso.tools.join(', ')}): the custom agent type did not apply, check AGENT_TYPE_OPTION in .claude/workflows/backlog-autopilot.js`
+        : `the reviewer's instructions are not review-general's (they open: ${JSON.stringify((iso.opening ?? '').slice(0, 120))}): check AGENT_TYPE_OPTION, or REVIEW_GENERAL_OPENING against .claude/agents/review-general.md`
+  return { outcome: 'NOT_STARTED', reasons: [`agent isolation check failed: ${why}`] }
 }
 
 let item

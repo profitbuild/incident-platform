@@ -96,7 +96,7 @@ const BASE = SHA('a'), HEAD = SHA('c')
 // A run that goes through: every agent and script answers as on a good day (low risk and complexity, one round).
 const DEFAULTS = {
   'ops:preflight.sh': { ok: true, reasons: [], baseSha: BASE, runId: 'run-1' },
-  isolation: { tools: ['Read', 'Grep', 'Glob', 'Bash'], definitionLoaded: true },
+  isolation: { tools: ['Read', 'Grep', 'Glob', 'Bash'], opening: 'You are the general reviewer: correctness, tests and conventions.' },
   'ops:next-item.sh': { ok: true, item: '#0-1', source: 'queue', position: 1, eligible: true, modules: ['incident-service'],
     risk: 'low', complexity: 'low', type: 'bug', branchPrefix: 'fix' },
   picker: { none: false, itemId: '#0-1', title: 'An item', slug: 'an-item', branch: 'fix/0-1-an-item', workDir: '.ai/work/0-1',
@@ -137,7 +137,7 @@ function fakeAgent(answers) {
     let key = type
     if (type === 'factory-ops') key = `ops:${(prompt.match(/scripts\/factory\/([\w.-]+)/) ?? [])[1]}`
     else if (opts.label === 'isolation check') key = 'isolation'
-    calls.push({ key, type, label: opts.label, prompt, schema: opts.schema })
+    calls.push({ key, type, label: opts.label, prompt, schema: opts.schema, opts })
     const n = calls.filter((c) => c.key === key).length
     let answer = key in answers ? answers[key] : DEFAULTS[key]
     if (answer === undefined && type?.startsWith('review-')) answer = approve(type.slice('review-'.length))
@@ -335,13 +335,53 @@ test('preflight: no answer, a refusal or no base commit stops before anything st
 })
 
 test('isolation: a reviewer that can edit files, or without its definition, stops the run', async () => {
-  for (const iso of [{ tools: ['Read', 'Edit'], definitionLoaded: true }, { tools: ['Read'], definitionLoaded: false }, null]) {
+  const own = 'You are the general reviewer: correctness, tests and conventions.'
+  for (const [iso, why] of [
+    [{ tools: ['Read', 'Edit'], opening: own }, /can edit files/],
+    [{ tools: ['Read'], opening: 'You are a helpful assistant.' }, /instructions are not review-general's/],
+    [{ tools: ['Read'], opening: '' }, /instructions are not review-general's/],
+    [{ tools: ['Read'] }, /instructions are not review-general's/],
+    [{ tools: 'Read, Edit', opening: own }, /did not list its tools/],
+    [{ tools: [1, 2], opening: own }, /did not list its tools/],
+    [{ opening: own }, /did not list its tools/],
+    [null, /no answer/],
+  ]) {
     const { outcome, calls } = await run({ answers: { isolation: iso } })
     assert.equal(outcome.outcome, 'NOT_STARTED')
     assert.match(outcome.reasons[0], /agent isolation check failed/)
+    assert.match(outcome.reasons[0], why)
     assert.ok(keys(calls).includes('ops:state.sh'), 'the lock is released')
     assert.ok(!keys(calls).includes('picker'))
   }
+})
+
+test('isolation: a reviewer quoting its own definition goes on, after a runtime preamble too', async () => {
+  for (const opening of [
+    '  You are the general reviewer: correctness, tests and conventions. ',
+    "You are a Claude agent, built on Anthropic's Claude Agent SDK.You are the general reviewer: correctness, tests and conventions.",
+  ]) {
+    const { calls } = await run({ answers: { isolation: { tools: ['Read', 'Bash', 'StructuredOutput'], opening } } })
+    assert.ok(keys(calls).includes('picker'), `the run went past the isolation check (${opening.slice(0, 40)})`)
+  }
+})
+
+test('isolation: the question does not point the reviewer at its definition file (review round 1 of #0-248)', async () => {
+  const { calls } = await run({})
+  const iso = calls.find((c) => c.key === 'isolation')
+  assert.ok(iso, 'the isolation check was asked')
+  assert.ok(!/review-general\.md|\.claude\/agents/.test(iso.prompt), `its prompt names no definition file: ${iso.prompt}`)
+  assert.ok(!iso.prompt.includes('You are the general reviewer'), 'its prompt does not hold the phrase it looks for')
+  assert.ok(!('bare' in iso.opts), 'as() does not pass its own option on to agent()')
+  const other = calls.find((c) => c.key === 'picker')
+  assert.match(other.prompt, /\.claude\/agents\/picker\.md/, 'other agents keep the preamble')
+})
+
+test('isolation: REVIEW_GENERAL_OPENING is how review-general.md begins (backlog #0-248)', () => {
+  const opening = SRC.match(/const REVIEW_GENERAL_OPENING = '([^']+)'/)?.[1]
+  assert.ok(opening, 'REVIEW_GENERAL_OPENING is a single-quoted string in the workflow')
+  const md = readFileSync(join(dirname(FILE), '..', 'agents', 'review-general.md'), 'utf8')
+  const body = md.split(/^---$/m).slice(2).join('---').split('\n').find((l) => l.trim() !== '')
+  assert.ok(body?.startsWith(opening), `review-general.md's body begins "${body}", not "${opening}"`)
 })
 
 test('args: acceptUnverifiable without branch, a malformed item, malformed claim ids', async () => {
