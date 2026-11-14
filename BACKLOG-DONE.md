@@ -143,6 +143,7 @@ resolvable.
 | 0-233 | `.ai/runs/ops-calls/`, the marks that give a factory-ops run its one call (#0-169), is on the runtime list of `.ai/rules/protected-paths.md`, with `Edit`/`Write` denies in `settings.autopilot.json` and an alternative in `guard-protected-bash.sh` (matched without the trailing `/`, so the directory itself counts), as `.ai/runs/LOCK` is; another agent's Bash can no longer delete, repoint or pre-create a mark. Code run through `./mvnw` still reaches it (#0-116), and so does a command that removes the marks through their parent `.ai/runs` (#0-235) | PR #618 |
 | 0-235 | No allow rule of an autopilot session runs a program that can remove a path it does not name: rule 4 of `check-agent-commands.rb` holds every Bash allow rule (both settings files, a preloaded skill's `allowed-tools`) to `SAFE_PREFIXES` or a reasoned `EXEMPT_RULES` entry (`./mvnw`, `scripts/factory/`, git's commands on the working tree), no shell operator in a rule (ADR-0054); `git_runtime_unsafe` refuses git's plain forms as a heuristic; the shell guard resolves `//` and `/./`. The git route stays open until #0-236. Decision history kept in [the section #0-235 below](#0-235-the-shell-guard-does-not-see-a-protected-runtime-path-removed-through-its-parent) | PR #619 |
 | 0-237 | Migration stage 1 (ADR-0055): the repository moved to the organisation `profitbuild`; the owner is read from `repository.json` (`scripts/factory/owner-login.sh`) by the audits and Factory guards, and only the owner's approval counts; the ruleset's bypass list, emptied by the transfer, restored; `dismissal_restriction` written; the bot's classic token pushes there. 2FA in the organisation is the owner's step left; the findings and the rollback are in [the section #0-237 below](#0-237-migration-stage-1-the-organisation-profitbuild-and-the-transfer-of-incident-platform) | PRs #623, #624 |
+| 0-240 | The build VM no longer reaches the Mac's loopback services: its Docker is rootless (code a test runs is `factory`, not root, in the VM) and root's `FACTORY-EGRESS` rejects the gateway (`host.lima.internal`), the VM's network and link-local for every uid from 1000 up, behind an allow-list; `create.sh` checks it after creation and after a reboot (ADR-0057); details in [the section](#0-240-the-build-vm-reaches-the-macs-loopback-services) | PR #632 |
 
 Items completed before `BACKLOG.md` existed are not listed.
 
@@ -3182,3 +3183,37 @@ AC3. `owner-login.sh` refuses zero or several admins, a non-list, a non-string, 
 without the file, and honours no replace ref or textconv driver (test-owner-login.sh, in Factory guards).
 AC4. After the transfer `repository-settings.rb check` passes with the owner's token, and one item is merged the usual
 way (PR 1b).
+
+### 0-240. The build VM reaches the Mac's loopback services
+
+**Type:** security · **Priority:** Medium · **Status:** Done, PR #632 (2026-11-14)
+(ADR-0057: neither option alone; rootless Docker, so code a test runs is no longer root in the VM, and with it a rule
+of root's in the VM, option 1, which that makes binding). From review round 3
+of #0-238 (security, finding 1), checked by hand the same day (owner, 2026-11-14).
+**Autopilot:** human-only · **Risk:** high · **Complexity:** medium · **Depends on:** #0-238
+**Touches:** factory (scripts/factory-admin/build-vm/, an owner-only path), root (.ai/decisions/ ADR-0056 amended or a
+new ADR), docs (docs/ai-factory.md "Build VM" and "What isolates what", README.md "Infrastructure Hardening")
+
+**Problem.** Lima's user-mode network forwards `host.lima.internal` (192.168.5.2) to the Mac's loopback. On
+2026-11-14 a server bound only to the Mac's `127.0.0.1` answered from the build VM and from a container started on
+the VM's Docker. Code an agent runs gets root over that Docker (#0-116), so it reaches every service the owner keeps
+on loopback to keep it private: Grafana with every tenant's logs (behind its password), Ollama, a service started by
+`spring-boot:run`, anything else. The devcontainer's firewall denies the path from inside the container, but not from
+a container the code starts beside it. Not a regression (Docker Desktop's `host.docker.internal` reaches the Mac's
+loopback the same way), but stage 2 is meant to take the Mac out of the reach of that code, and this path keeps it in.
+
+**Approach.** Decide between, by testing each on `factory-build` (`create.sh`, then the isolation checks and the S3
+gate still pass):
+1. A rule in the VM, from `provision.sh`, that drops traffic addressed to 192.168.5.2 except DNS (port 53): that
+   address is also the VM's gateway and resolver (checked 2026-11-14), so the rule matches the destination address,
+   not the route. Root in the VM can remove it, so it binds only code without root, and is a layer, not a boundary.
+2. A network for the VM in which the Mac's loopback is not forwarded (`vzNAT`, if Lima can then do without its
+   user-mode network for its own SSH and guest agent).
+3. Keep it open until stage C, where the VM runs off the Mac and a cloud firewall sits outside it, and say so where
+   the gap is listed.
+Whatever is chosen, `create.sh` checks it on the started VM, as it does the mounts.
+
+AC1. The decision and the test of each option tried are in ADR-0056 (amended) or a new ADR.
+AC2. If the path is closed: from the VM and from a container on its Docker, a server on the Mac's `127.0.0.1` does not
+answer, and `create.sh` refuses a VM where it does; the S3 gate still passes.
+AC3. README "Infrastructure Hardening", `docs/ai-factory.md` and #0-116 say what is closed and what is left.

@@ -153,7 +153,6 @@ Code, Javadoc, config comments and commits reference items as `backlog #N`.
 | [0-236](#0-236-the-factorys-runtime-state-lives-in-the-working-tree-the-agents-git-commands-act-on) | The factory's runtime state lives in the working tree the agents' git commands act on | security | Medium | Blocked (superseded, ADR-0055) |
 | [0-238](#0-238-migration-stage-2-a-build-vm-provisioned-as-code-runs-todays-devcontainer) | Migration stage 2: a build VM, provisioned as code, runs today's devcontainer | ci | High | In progress |
 | [0-239](#0-239-the-build-vms-scripts-have-no-repeatable-test) | The build VM's scripts have no repeatable test | ci | Low | Open |
-| [0-240](#0-240-the-build-vm-reaches-the-macs-loopback-services) | The build VM reaches the Mac's loopback services | security | Medium | In progress |
 | [0-241](#0-241-the-agent-command-check-tests-run-on-every-pull-request-whatever-it-changes) | The agent command check tests run on every pull request, whatever it changes | ci | Low | In progress |
 | [0-242](#0-242-the-build-vms-listener-check-runs-only-when-the-vm-is-created) | The build VM's listener check runs only when the VM is created | security | Low | Open |
 | [0-243](#0-243-two-parsers-read-the-devcontainers-allow-list) | Two parsers read the devcontainer's allow-list | ci | Low | Open |
@@ -3432,40 +3431,6 @@ AC3. `provision.sh` run twice in a container changes nothing the second time (no
 AC4. The tests run in CI on every PR that touches `scripts/factory-admin/build-vm/`.
 AC5. CI fails a PR on which `provision.sh`'s `NODE_VERSION` and `.node-version` differ (a Renovate bump of
 `.node-version` then shows the pin to change in the same PR).
-
-### 0-240. The build VM reaches the Mac's loopback services
-
-**Type:** security · **Priority:** Medium · **Status:** In progress, closed by the PR of `ci/0-116-rootless-build-vm`
-(ADR-0057: neither option alone; rootless Docker, so code a test runs is no longer root in the VM, and with it a rule
-of root's in the VM, option 1, which that makes binding). From review round 3
-of #0-238 (security, finding 1), checked by hand the same day (owner, 2026-11-14).
-**Autopilot:** human-only · **Risk:** high · **Complexity:** medium · **Depends on:** #0-238
-**Touches:** factory (scripts/factory-admin/build-vm/, an owner-only path), root (.ai/decisions/ ADR-0056 amended or a
-new ADR), docs (docs/ai-factory.md "Build VM" and "What isolates what", README.md "Infrastructure Hardening")
-
-**Problem.** Lima's user-mode network forwards `host.lima.internal` (192.168.5.2) to the Mac's loopback. On
-2026-11-14 a server bound only to the Mac's `127.0.0.1` answered from the build VM and from a container started on
-the VM's Docker. Code an agent runs gets root over that Docker (#0-116), so it reaches every service the owner keeps
-on loopback to keep it private: Grafana with every tenant's logs (behind its password), Ollama, a service started by
-`spring-boot:run`, anything else. The devcontainer's firewall denies the path from inside the container, but not from
-a container the code starts beside it. Not a regression (Docker Desktop's `host.docker.internal` reaches the Mac's
-loopback the same way), but stage 2 is meant to take the Mac out of the reach of that code, and this path keeps it in.
-
-**Approach.** Decide between, by testing each on `factory-build` (`create.sh`, then the isolation checks and the S3
-gate still pass):
-1. A rule in the VM, from `provision.sh`, that drops traffic addressed to 192.168.5.2 except DNS (port 53): that
-   address is also the VM's gateway and resolver (checked 2026-11-14), so the rule matches the destination address,
-   not the route. Root in the VM can remove it, so it binds only code without root, and is a layer, not a boundary.
-2. A network for the VM in which the Mac's loopback is not forwarded (`vzNAT`, if Lima can then do without its
-   user-mode network for its own SSH and guest agent).
-3. Keep it open until stage C, where the VM runs off the Mac and a cloud firewall sits outside it, and say so where
-   the gap is listed.
-Whatever is chosen, `create.sh` checks it on the started VM, as it does the mounts.
-
-AC1. The decision and the test of each option tried are in ADR-0056 (amended) or a new ADR.
-AC2. If the path is closed: from the VM and from a container on its Docker, a server on the Mac's `127.0.0.1` does not
-answer, and `create.sh` refuses a VM where it does; the S3 gate still passes.
-AC3. README "Infrastructure Hardening", `docs/ai-factory.md` and #0-116 say what is closed and what is left.
 
 ### 0-241. The agent command check tests run on every pull request, whatever it changes
 
