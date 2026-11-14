@@ -9,7 +9,9 @@
 # to the devcontainer's list alone is one the VM rejects, and a host removed from it alone is one the VM still lets a
 # test reach - and VM_ONLY_DOMAINS apart from both. The GitHub ranges are part of the list too: both files take them
 # from api.github.com/meta with `jq -r '(<keys>)[]`, and the keys (.web, .api, .git) must be the same set, or narrowing
-# the devcontainer's would leave the VM's wider (review round 4 of #0-116). Run by create.sh before a VM is made and by
+# the devcontainer's would leave the VM's wider (review round 4 of #0-116). Equal entries, not equal meaning: the
+# devcontainer resolves each as an exact host, the VM's resolver allows it with its subdomains (backlog #0-247, ADR-0057),
+# so a host added here opens its whole domain in the VM. Run by create.sh before a VM is made and by
 # Factory guards on every pull request, as its own step and as its test's last case, so a drift fails CI, not the
 # running VM.
 # What it reads is the array literals `NAME=( ... )` and the jq key selection; a host appended elsewhere (`NAME+=(...)`)

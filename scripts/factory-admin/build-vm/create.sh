@@ -16,7 +16,8 @@
 # (review round 3): a half-made VM was never checked, and would only block the next run.
 # And the boundary of ADR-0057 (#0-116, #0-240), the same way, on the started VM: no rootful Docker daemon, `factory`
 # in no docker group, its daemon rootless, its egress chain in place, the VM's gateway (under Lima, the Mac's loopback
-# services) rejected for it, a host outside the allow-list unreachable and one inside it reachable. Before the VM, the
+# services) rejected for it, a host outside the allow-list unreachable and one inside it reachable, and its DNS sent to
+# the VM's resolver, which adds what it answers for the allow-list (#0-247), checked from a container. Before the VM, the
 # VM's copy of the devcontainer's allow-list must equal it both ways (check-allowlists.sh).
 # The clone is owned by the subordinate uid the devcontainer's `dev` (uid 1000) maps to under rootless Docker, so
 # `dev` can write its workspace.
@@ -182,6 +183,50 @@ check_boundary() {
   refused "the VM's sshd ($vm_ip:22) by factory" \
     "${as_factory[@]}" curl -q -s -m 10 -o /dev/null "http://$vm_ip:22/"
   vm "${as_factory[@]}" curl -q -s -m 10 -o /dev/null https://api.github.com/zen || boundary_fail "factory cannot reach api.github.com: the allow-list is not loaded"
+  # The resolver (backlog #0-247): every DNS query of a filtered uid goes to it, and it adds what it answers for a
+  # listed name to factory-dns. Checked where a test meets it, from a container: a static set failed the first
+  # autopilot run's image pulls, which a check from the VM's own shell, right after the set was loaded, did not show.
+  [ "$(vm systemctl is-active factory-dns.service 2>/dev/null || true)" = active ] || boundary_fail "factory's resolver (factory-dns.service) is not active"
+  vm sudo iptables -t nat -C OUTPUT -m owner --uid-owner 1000-4294967294 -j FACTORY-DNS 2>/dev/null \
+    || boundary_fail "the DNS of uids from 1000 up is not sent to the resolver (nat OUTPUT -> FACTORY-DNS)"
+  vm sudo iptables -C FACTORY-EGRESS -m set --match-set factory-dns dst -j ACCEPT 2>/dev/null \
+    || boundary_fail "FACTORY-EGRESS does not take the resolver's set factory-dns"
+  # Every check pulls its image again: the pull is what goes through the registry and its CDN, which a cached image
+  # never shows (backlog #0-247).
+  vm "${as_factory[@]}" docker rmi -f alpine >/dev/null 2>&1 || true
+  # shellcheck disable=SC2016 # the awk program runs in the container's shell, not here
+  answered=$(vm "${as_factory[@]}" docker run --rm alpine sh -c 'nslookup -type=a registry-1.docker.io 2>/dev/null | awk "/^Address: /{print \$2}"' | grep -E '^[0-9.]+$' | head -1) \
+    || boundary_fail "a container cannot resolve registry-1.docker.io through the resolver"
+  vm sudo ipset test factory-dns "$answered" 2>/dev/null || boundary_fail "the resolver's answer $answered for registry-1.docker.io is not in factory-dns"
+  # Outside the list: resolved (the resolver answers every name), never reached. slirp4netns does not pass the REJECT
+  # back to the container, so the attempt ends by its own timeout, not curl's exit 7.
+  if vm "${as_factory[@]}" docker run --rm alpine wget -q -T 8 -O /dev/null https://example.com 2>/dev/null; then
+    boundary_fail "a container reaches example.com, outside the allow-list"
+  fi
+  # ... and its address does not enter the resolver's set; a query to an outside server (8.8.8.8) is answered by the
+  # resolver all the same (its answer lands in the set); the resolver answers no one outside the VM, never runs as
+  # root, and the private networks are rejected before either set (review round 1 of #0-247).
+  # shellcheck disable=SC2016 # the awk programs run in the container's shell, not here
+  outside=$(vm "${as_factory[@]}" docker run --rm alpine sh -c 'nslookup -type=a example.com 2>/dev/null | awk "/^Address: /{print \$2}"' | grep -E '^[0-9.]+$' | head -1) \
+    || boundary_fail "a container cannot resolve example.com through the resolver (it answers every name)"
+  if vm sudo ipset test factory-dns "$outside" 2>/dev/null; then boundary_fail "example.com's address $outside is in factory-dns"; fi
+  # shellcheck disable=SC2016 # as above
+  via=$(vm "${as_factory[@]}" docker run --rm alpine sh -c 'nslookup -type=a registry-1.docker.io 8.8.8.8 2>/dev/null | awk "/^Address: /{print \$2}"' | grep -E '^[0-9.]+$' | head -1) \
+    || boundary_fail "a container's query to 8.8.8.8 is not answered: it is not sent to the resolver"
+  vm sudo ipset test factory-dns "$via" 2>/dev/null || boundary_fail "the answer $via to a query to 8.8.8.8 is not in factory-dns: it did not come from the resolver"
+  for p in udp tcp; do
+    vm sudo iptables -C INPUT ! -i lo -p "$p" --dport 5300 -j DROP 2>/dev/null || boundary_fail "the resolver answers $p queries from outside the VM"
+  done
+  # shellcheck disable=SC2016 # expanded in the VM's shell, not here
+  [ "$(vm sh -c 'ps -o user= -p "$(systemctl show -p MainPID --value factory-dns.service)"' | tr -d ' ')" = dnsmasq ] \
+    || boundary_fail "the resolver does not run as the user dnsmasq"
+  for n in 0.0.0.0/8 10.0.0.0/8 100.64.0.0/10 127.0.0.0/8 172.16.0.0/12 192.168.0.0/16 198.18.0.0/15 224.0.0.0/4 240.0.0.0/4; do
+    vm sudo iptables -C FACTORY-EGRESS -d "$n" -j REJECT 2>/dev/null || boundary_fail "the network $n is not rejected for factory"
+  done
+  # And the resolver's own refusals, read from the configuration it runs with (review round 2 of #0-247).
+  conf=$(vm cat /run/factory-dns/dnsmasq.conf) || boundary_fail "cannot read the resolver's configuration"
+  grep -qx stop-dns-rebind <<<"$conf" || boundary_fail "the resolver does not refuse private answers (stop-dns-rebind)"
+  grep -qx 'max-cache-ttl=300' <<<"$conf" || boundary_fail "the resolver caches answers longer than 300 s (max-cache-ttl)"
   # The devcontainer's docker-outside-of-docker feature mounts /var/run/docker.sock: the rootless daemon must see it,
   # in its own mount namespace, which it builds when it starts (a link made later is missing to it).
   vm "${as_factory[@]}" docker run --rm -v /var/run/docker.sock:/s alpine test -S /s \
