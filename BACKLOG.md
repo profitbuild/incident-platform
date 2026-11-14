@@ -153,8 +153,11 @@ Code, Javadoc, config comments and commits reference items as `backlog #N`.
 | [0-236](#0-236-the-factorys-runtime-state-lives-in-the-working-tree-the-agents-git-commands-act-on) | The factory's runtime state lives in the working tree the agents' git commands act on | security | Medium | Blocked (superseded, ADR-0055) |
 | [0-238](#0-238-migration-stage-2-a-build-vm-provisioned-as-code-runs-todays-devcontainer) | Migration stage 2: a build VM, provisioned as code, runs today's devcontainer | ci | High | In progress |
 | [0-239](#0-239-the-build-vms-scripts-have-no-repeatable-test) | The build VM's scripts have no repeatable test | ci | Low | Open |
-| [0-240](#0-240-the-build-vm-reaches-the-macs-loopback-services) | The build VM reaches the Mac's loopback services | security | Medium | Open |
+| [0-240](#0-240-the-build-vm-reaches-the-macs-loopback-services) | The build VM reaches the Mac's loopback services | security | Medium | In progress |
 | [0-241](#0-241-the-agent-command-check-tests-run-on-every-pull-request-whatever-it-changes) | The agent command check tests run on every pull request, whatever it changes | ci | Low | In progress |
+| [0-242](#0-242-the-build-vms-listener-check-runs-only-when-the-vm-is-created) | The build VM's listener check runs only when the VM is created | security | Low | Open |
+| [0-243](#0-243-two-parsers-read-the-devcontainers-allow-list) | Two parsers read the devcontainer's allow-list | ci | Low | Open |
+| [0-244](#0-244-no-review-rule-covers-the-build-vms-own-allow-list) | No review rule covers the build VM's own allow-list | security | Low | Open |
 | [0-133](#0-133-incidentresolvedevent-carries-no-openedat) | `IncidentResolvedEvent` carries no `openedAt` | tech-debt | Low | Open |
 | [0-134](#0-134-diff-cover-is-installed-by-version-without-hashes) | `diff-cover` is installed by version, without hashes | ci | Low | Open |
 | [0-135](#0-135-kubectl-in-ci-is-downloaded-unverified) | kubectl in CI is downloaded unverified | ci | Low | Open |
@@ -1840,6 +1843,13 @@ AC2. Once required, a score under the threshold fails the check.
 **Stage 2 (#0-238, ADR-0056):** narrowed, not closed. In the build VM the Docker that code an agent runs gets root
 over is the VM's, which mounts nothing of the Mac; that code still holds the VM (the bot's token and Claude Code's
 login in the devcontainer's volumes) and reaches the Mac's loopback services (Grafana with every tenant's logs, Ollama, anything bound to `127.0.0.1`) through Lima's user-mode network (#0-240).
+**ADR-0057 (2026-11-14, spike approved by the owner):** in the build VM, AC1 and AC2 hold. The VM's Docker is rootless,
+so root in any container a test starts is the unprivileged `factory`; root's `FACTORY-EGRESS` lets `factory` reach DNS
+and an allow-list only. Checked as `dev` through `docker`: a `--network host` or bridged container reaching
+`example.com`, and one reaching the Mac's `127.0.0.1`, are rejected; `iptables` flushes and writes to the VM's `/etc` do
+not reach the VM; the gate passes (639 tests). `create.sh` checks the boundary on every VM. Left open: code still reads
+what `factory` holds (the devcontainer's volumes with the bot's token and Claude Code's login, stage 4 of ADR-0055),
+and on the Mac nothing changed. This item closes with #0-238's AC5, once the autopilot runs only in the build VM.
 
 **Problem.** The devcontainer's firewall (`.devcontainer/init-firewall.sh`) is `iptables` in the same network
 namespace the agents run in, and it holds only while nothing there is root. Testcontainers needs Docker, so
@@ -3400,7 +3410,11 @@ run; `verify-pins.sh` refusing a wrong digest, a wrong signer, a missing line or
 breaks one of them is seen only when the owner next creates a VM, or never, for the isolation checks, which pass
 silently while Lima adds nothing. And `provision.sh`'s `NODE_VERSION` is a copy of `.node-version` that only
 `create.sh` compares: Renovate can bump `.node-version` with CI green, and the next `create.sh` refuses (review round 2
-of #0-238, architecture).
+of #0-238, architecture). ADR-0057 adds more of the same kind: `provision.sh`'s rootless setup and egress chain (fail
+closed, no duplicate rule on a reboot), `create.sh`'s boundary checks, and `verify-pins.sh`'s Docker key check (the allow-list subset
+check has its own test, `test-check-allowlists.sh`). And the filtered uid range (`1000-4294967294`, its floor 1000) is
+written out in `provision.sh` (the chain, the subordinate-range check) and `create.sh` (three checks): a change to one
+alone fails only at the next `create.sh` (review round 5 of #0-116, architecture).
 
 **Approach.** The repository's pattern for a script that calls tools it cannot run in CI (`test-seed-scan.sh`,
 `test-owner-login.sh`): a test under `.github/scripts/` that puts fake `limactl`, `docker` and `curl` first on the
@@ -3421,8 +3435,10 @@ AC5. CI fails a PR on which `provision.sh`'s `NODE_VERSION` and `.node-version` 
 
 ### 0-240. The build VM reaches the Mac's loopback services
 
-**Type:** security · **Priority:** Medium · **Status:** Open. From review round 3 of #0-238 (security, finding 1),
-checked by hand the same day (owner, 2026-11-14).
+**Type:** security · **Priority:** Medium · **Status:** In progress, closed by the PR of `ci/0-116-rootless-build-vm`
+(ADR-0057: neither option alone; rootless Docker, so code a test runs is no longer root in the VM, and with it a rule
+of root's in the VM, option 1, which that makes binding). From review round 3
+of #0-238 (security, finding 1), checked by hand the same day (owner, 2026-11-14).
 **Autopilot:** human-only · **Risk:** high · **Complexity:** medium · **Depends on:** #0-238
 **Touches:** factory (scripts/factory-admin/build-vm/, an owner-only path), root (.ai/decisions/ ADR-0056 amended or a
 new ADR), docs (docs/ai-factory.md "Build VM" and "What isolates what", README.md "Infrastructure Hardening")
@@ -3503,3 +3519,71 @@ cannot be read runs it.
 AC3. The inventory of inputs is a comment next to the condition, with how it was found.
 AC4. The saving is measured on the first pull requests after the change (Factory guards' duration before and
 after), in this item or `BACKLOG-DONE.md`.
+
+### 0-242. The build VM's listener check runs only when the VM is created
+
+**Type:** security · **Priority:** Low · **Status:** Open. From review round 4 of #0-116 (security, finding 2; owner, 2026-11-14).
+**Autopilot:** human-only · **Risk:** medium · **Complexity:** low · **Depends on:** #0-116
+**Touches:** factory (scripts/factory-admin/build-vm/provision.sh and create.sh, owner-only), root (.ai/decisions/
+ADR-0057 amended), docs (docs/ai-factory.md "Build VM")
+
+**Problem.** `FACTORY-EGRESS` (ADR-0057) lets every uid from 1000 up reach the VM's own address on the ephemeral
+ports, meant for the ports rootless Docker publishes there. `create.sh` refuses a VM where any other process listens
+in that range on a non-loopback address, but it checks only when the VM is created and after its one reboot. A root
+or system-uid service that starts listening there later (a package, a debugging server) is reachable by code a test
+runs, and nothing notices until the VM is recreated.
+
+**Approach.** Repeat the check where the chain is built: `factory-egress.sh` (every boot and every 30-minute refresh)
+or `provision.sh` (every boot). On a stranger, fail closed the way a missing domain does (the egress unit fails, so
+`factory`'s session and its Docker do not start) and log the listener; or narrow the loopback rule to the ports
+rootlesskit itself publishes. Decide in an ADR-0057 amendment, tested on `factory-build` with a root `nc -l` on an
+ephemeral port.
+
+AC1. A root process listening on the VM's address in the ephemeral range, started after creation, is found at the
+next boot or refresh, and `factory` cannot reach it from then on.
+AC2. The behaviour and its availability cost are in ADR-0057 and `docs/ai-factory.md` "Build VM".
+
+### 0-243. Two parsers read the devcontainer's allow-list
+
+**Type:** ci · **Priority:** Low · **Status:** Open. From review round 4 of #0-116 (architecture, ARC-02; owner, 2026-11-14).
+**Autopilot:** human-only · **Risk:** low · **Complexity:** low · **Depends on:** #0-116
+**Touches:** ci (.github/scripts/check-web-access.sh and its test, owner-only), factory
+(scripts/factory-admin/build-vm/check-allowlists.sh and its test, owner-only)
+
+**Problem.** `.devcontainer/init-firewall.sh`'s `ALLOWED_DOMAINS` is read by `.github/scripts/check-web-access.sh`
+(a list from column 0, no comment stripping, ended by a line starting with `)`) and by
+`scripts/factory-admin/build-vm/check-allowlists.sh` (indent allowed, `#` comments stripped, a one-line list read).
+A change of the list's format that one accepts and the other does not fails CI with a confusing message, or, worse,
+makes one of them read fewer hosts than the file holds. Both fail closed on an empty list, so it is not a gap today.
+
+**Approach.** One parser, a sourced function or a small script both call (`.github/scripts/` is owner-only and so is
+`scripts/factory-admin/`; stage 4 of ADR-0055 moves the latter, so the shared one lives where both can reach it then),
+with the stricter grammar of the two and its own fixture cases (indent, comment with parentheses, one-line list).
+
+AC1. Both checks read `ALLOWED_DOMAINS` through the same code.
+AC2. A test covers the grammar's cases, and both checks still pass on the repository's lists.
+
+### 0-244. No review rule covers the build VM's own allow-list
+
+**Type:** security · **Priority:** Low · **Status:** Open. From review round 4 of #0-116 (security, rule gap; owner, 2026-11-14).
+**Autopilot:** human-only · **Risk:** low · **Complexity:** low · **Depends on:** #0-116
+**Touches:** factory (.ai/rules/review/factory.md, a human-owned path)
+
+**Problem.** FAC-S02 (`.ai/rules/review/factory.md`) has the reviewers check each host opened in `init-firewall.sh`
+and the WebFetch allow-list for shared front ends and services that accept data. The build VM has a second egress
+list of its own, `VM_ONLY_DOMAINS` in `provision.sh` (ADR-0057), which binds everything code a test runs can send, and
+no rule names it: review round 4 of #0-116 found its push-capable registries (`registry-1.docker.io`, `ghcr.io`) and
+`downloads.claude.ai`'s shared front end unnamed in the ADR only because a reviewer looked beyond the rule.
+
+**Approach.** Extend FAC-S02 to every egress allow-list of the factory (the devcontainer's, the WebFetch one, the
+build VM's `VM_ONLY_DOMAINS`), each entry reviewed for a shared front end and for a service that takes a push or an
+upload with credentials of the sender's own, and named where its list's ADR lists what is left open.
+
+Review round 5 of #0-116 found two neighbouring gaps to settle in the same change: no FAC-S rule names a firewall
+other than the devcontainer's (`FACTORY-EGRESS` in the build VM), and FAC-A01 allows a copied list only where the last
+line of defence must not parse the original, not where its consumer has no repository at run time (the VM's
+`provision.sh`, ADR-0056 S2), which is why the build VM's copy exists.
+
+AC1. FAC-S02 names `VM_ONLY_DOMAINS` (or every egress allow-list of the factory) and both kinds of host to look for.
+AC2. FAC-S02 (or a new rule) covers every firewall of the factory, the build VM's `FACTORY-EGRESS` among them.
+AC3. FAC-A01 names a copy kept because its consumer has no repository at run time, with the check it then needs.

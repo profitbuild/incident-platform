@@ -1,6 +1,7 @@
 # ADR-0056: The build VM is a Lima instance, created by a script, its contents from one provision file
 
-- **Status:** Accepted (2026-11-14, by the owner, after PR #628 merged)
+- **Status:** Accepted (2026-11-14, by the owner, after PR #628 merged); amended by ADR-0057 (the VM's Docker is
+  rootless, behind a VM egress filter)
 - **Amends:** ADR-0055 ("Local first, portable from the first VM": Lima reads no raw cloud-init user-data; the
   portable part is one provision script, "S2, reworded" below)
 - **Backlog:** #0-238 (stage 2 of ADR-0055)
@@ -34,11 +35,13 @@ moves to the `factory` repository in stage 4):
   forwarded to the Mac; Lima's containerd off. 12 GiB is below `devcontainer.json`'s `hostRequirements` (16 GB) on
   purpose, to leave the Mac (32 GB) room: S3 proved it with Postgres only, so AC5's items, with Kafka and several
   modules, are where it holds or is raised.
-- `provision.sh`: the VM's whole contents. Docker Engine and git from Ubuntu's archive; Node from nodejs.org at
+- `provision.sh`: the VM's whole contents. Docker Engine and git from Ubuntu's archive (amended by ADR-0057: Docker CE rootless, from
+  Docker's apt repository); Node from nodejs.org at
   `.node-version`'s version (the one CI runs, ADR-0043; Ubuntu's noble ships 18 and the devcontainer CLI needs 20 or
   later), checked against a pinned sha256; the devcontainer CLI from npm's tarball, checked against a pinned sha512
   and installed from the file with `--ignore-scripts` (it has no dependencies, so npm fetches nothing, and runs no
-  script of it as root); user `factory` in the docker group.
+  script of it as root); user `factory` in the docker group (amended by ADR-0057: Docker CE rootless for `factory`, in no docker group, and an
+  egress filter for everything it sends).
   Every step is guarded by what it installs (each apt package by `dpkg -s`), so Lima's every-boot run changes
   nothing. Lima runs it as a `mode: system` provision; a cloud VM takes the same file as its user-data (a user-data
   starting with `#!` is run as a script). Nothing in it names Lima or a cloud, and it reads no file of the repository.
@@ -109,11 +112,11 @@ environment (a new VM, a new `.m2` volume, the cloud) hit it; the Mac did not, b
 - The autopilot runs in the devcontainer inside `factory-build`; the owner's sessions stay on the Mac. What isolates
   it is in README "Infrastructure Hardening" and `docs/ai-factory.md` "What isolates what".
 - **#0-202** is settled for the build VM: its clone is its own, with no gitignored file of the owner's.
-- **#0-116** is narrowed, not closed: code an agent runs still reaches Docker with root, now the VM's, which holds no
+- **#0-116** is narrowed, not closed (ADR-0057 narrows it further: the daemon is rootless, its egress filtered): code an agent runs still reaches Docker with root, now the VM's, which holds no
   file of the owner's but does hold the factory's own logins (the bot's token, Claude Code's) in the devcontainer's
   volumes. A boundary around the code an agent runs (Docker API proxy, Sysbox, stage 4's token-less container) is
   still #0-116's.
-- **The VM reaches the Mac's loopback services** (checked 2026-11-14, review round 3): a server bound to the Mac's
+- **The VM reaches the Mac's loopback services** (checked 2026-11-14, review round 3; closed by ADR-0057, #0-240): a server bound to the Mac's
   `127.0.0.1` answered from the VM and from a container on the VM's Docker, through `host.lima.internal`
   (192.168.5.2), which Lima's user-mode network forwards to the Mac's loopback. That reaches Grafana (every tenant's
   logs, behind its password), Ollama and anything else listening there. The devcontainer's firewall denies it from

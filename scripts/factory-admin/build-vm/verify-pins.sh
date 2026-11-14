@@ -16,6 +16,11 @@
 #      below (where Node's README sends a verifier). Bump that commit when a new releaser signs.
 #   3. The devcontainer CLI (provision.sh): the sha512 is npm's `dist.integrity` of that version, and the package
 #      still declares no dependencies, peer or optional ones included (provision.sh installs the tarball alone).
+#   4. Docker's apt key (provision.sh, DOCKER_KEY_FPR; backlog #0-116, ADR-0057): the key download.docker.com serves
+#      is one key, with the pinned fingerprint, which provision.sh also checks before trusting the file; a mismatch here is Docker
+#      rotating its key, to confirm in three places again before the pin changes.
+#   5. Docker CE's versions (provision.sh, DOCKER_VERSION and CONTAINERD_VERSION): each package is in the index of
+#      Docker's noble repository at its pinned version, for arm64 and amd64, the index read by apt with the key of 4.
 # Everything that reads a downloaded file runs in the container (the Mac has no gpg): the Mac passes it the pins only.
 #
 #   verify-pins.sh       prints one "verified: ..." line per pin and exits 0, or names what failed and exits 1
@@ -52,16 +57,20 @@ node_arm64=$(one 's/^NODE_SHA256_ARM64=\([0-9a-f]\{64\}\)$/\1/p' "$prov")
 node_x64=$(one 's/^NODE_SHA256_X64=\([0-9a-f]\{64\}\)$/\1/p' "$prov")
 cli_version=$(one 's/^DEVCONTAINER_CLI_VERSION=\([0-9.]*\)$/\1/p' "$prov")
 cli_sha512=$(one 's/^DEVCONTAINER_CLI_SHA512=\([0-9a-f]\{128\}\)$/\1/p' "$prov")
+docker_fpr=$(one 's/^DOCKER_KEY_FPR=\([0-9A-F]\{40\}\).*$/\1/p' "$prov")
+docker_version=$(one 's/^DOCKER_VERSION=\([0-9A-Za-z.:~+-]*\)$/\1/p' "$prov")
+containerd_version=$(one 's/^CONTAINERD_VERSION=\([0-9A-Za-z.:~+-]*\)$/\1/p' "$prov")
 
 docker run --rm \
   -e IMG_DIR="${location%/*}" -e IMG_FILE="${location##*/}" -e IMG_DIGEST="$digest" -e UBUNTU_KEY_FPR="$UBUNTU_KEY_FPR" \
   -e NODE_VERSION="$node_version" -e NODE_ARM64="$node_arm64" -e NODE_X64="$node_x64" -e NODE_KEYS_COMMIT="$NODE_KEYS_COMMIT" \
-  -e CLI_VERSION="$cli_version" -e CLI_SHA512="$cli_sha512" \
+  -e CLI_VERSION="$cli_version" -e CLI_SHA512="$cli_sha512" -e DOCKER_FPR="$docker_fpr" \
+  -e DOCKER_VERSION="$docker_version" -e CONTAINERD_VERSION="$containerd_version" \
   "$CONTAINER" bash -euo pipefail -c '
   bad() { echo "verify-pins.sh: $*" >&2; exit 1; }
   export DEBIAN_FRONTEND=noninteractive
   apt-get update -qq >/dev/null
-  apt-get install -y -qq --no-install-recommends ca-certificates curl gpgv openssl jq ubuntu-cloudimage-keyring >/dev/null
+  apt-get install -y -qq --no-install-recommends ca-certificates curl gpg gpgv openssl jq ubuntu-cloudimage-keyring >/dev/null
   cd "$(mktemp -d)"
 
   # 1. The image. --status-fd gives the machine-readable result: VALIDSIG ends with the primary key that signed.
@@ -95,4 +104,28 @@ docker run --rm \
   [ "$deps" = "{}" ] \
     || bad "@devcontainers/cli@$CLI_VERSION declares dependencies ($deps): provision.sh installs the tarball alone"
   echo "verified: @devcontainers/cli@$CLI_VERSION sha512 is npm'"'"'s dist.integrity, no dependencies"
+
+  # 4. Docker'"'"'s apt key.
+  curl -fsSL -o docker.asc https://download.docker.com/linux/ubuntu/gpg
+  served=$(gpg --show-keys --with-colons docker.asc 2>/dev/null | awk -F: "/^fpr/ {print \$10; exit}")
+  keys=$(gpg --show-keys --with-colons docker.asc 2>/dev/null | grep -c "^pub:" || true)
+  [ "$keys" = 1 ] || bad "download.docker.com serves $keys keys in one file: provision.sh trusts the whole file, so it refuses it"
+  [ "$served" = "$DOCKER_FPR" ] || bad "download.docker.com serves key $served, provision.sh pins $DOCKER_FPR"
+  echo "verified: Docker'"'"'s apt key at download.docker.com is $DOCKER_FPR"
+
+  # 5. Docker CE'"'"'s versions, through apt and the key just checked.
+  dpkg --add-architecture amd64; dpkg --add-architecture arm64
+  install -m 0644 docker.asc /etc/apt/keyrings/docker.asc 2>/dev/null || { mkdir -p /etc/apt/keyrings; install -m 0644 docker.asc /etc/apt/keyrings/docker.asc; }
+  echo "deb [arch=arm64,amd64 signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu noble stable" \
+    > /etc/apt/sources.list.d/docker.list
+  apt-get update -qq -o Dir::Etc::sourcelist=/etc/apt/sources.list.d/docker.list -o Dir::Etc::sourceparts=- >/dev/null \
+    || bad "apt cannot read Docker'"'"'s repository with its key"
+  for arch in arm64 amd64; do
+    for p in docker-ce docker-ce-cli docker-ce-rootless-extras containerd.io; do
+      want=$DOCKER_VERSION; [ "$p" = containerd.io ] && want=$CONTAINERD_VERSION
+      apt-cache madison "$p:$arch" | awk -F"|" "{gsub(/ /, \"\", \$2); print \$2}" | grep -Fqx "$want" \
+        || bad "Docker'"'"'s noble repository has no $p $want for $arch"
+    done
+  done
+  echo "verified: Docker CE $DOCKER_VERSION and containerd.io $CONTAINERD_VERSION are in Docker'"'"'s noble repository for arm64 and amd64"
 '

@@ -16,7 +16,8 @@
 # workflow's logic against a fake agent(), on the Node of .node-version (backlog #0-163, ADR-0043); and that the
 # review rule files' labels, words and the seeded patterns' rule ids are true (backlog #0-184), and the tests of the
 # owner's scan of a seed run's transcripts (backlog #0-179). The tests of the agent command check run only when a
-# pull request changes one of their inputs, or on any other event (backlog #0-241, run-agent-command-tests.sh).
+# pull request changes one of their inputs, or on any other event (backlog #0-241, run-agent-command-tests.sh). And
+# that the build VM's copy of the devcontainer's allow-list equals it both ways (backlog #0-116, check-allowlists.sh).
 #
 # A required check of main (its ruleset, .github/repository-settings/rulesets/main.json, backlog #0-113,
 # ADR-0034). On its own it binds nobody who can change check-factory-guards.sh, since a pull request runs its
@@ -150,6 +151,16 @@ jobs:
 
       - name: Agent command test selector tests
         run: .github/scripts/test-run-agent-command-tests.sh
+
+      # Backlog #0-116 (ADR-0057): the build VM's copy of the devcontainer's allow-list must equal it both ways, or a
+      # host added to or removed from init-firewall.sh alone passes CI and the running VM disagrees; create.sh runs
+      # the same check.
+      - name: Build VM allow-list tests
+        run: .github/scripts/test-check-allowlists.sh
+
+      # The check itself on the repository, a step of its own as the other structural checks are (review round 3).
+      - name: Build VM allow-list copy equals the devcontainer's
+        run: scripts/factory-admin/build-vm/check-allowlists.sh
 
       # The step runner of .github/scripts/ci-local.sh, the owner's local run of this job and of lint-workflows
       # (backlog #0-166): it must run these steps as the runner does, or a local green means nothing.

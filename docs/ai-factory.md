@@ -127,40 +127,57 @@ Stage 2 of ADR-0055 (#0-238, ADR-0056): the same devcontainer, inside a Lima VM 
 reaches is the VM's and the repository is a clone of its own, not your checkout. The files are in
 `scripts/factory-admin/build-vm/`; the Mac needs Lima (`brew install lima`) and, for `verify-pins.sh`, Docker.
 Until AC5 of #0-238 is met the devcontainer on the Mac (Setup above) stays the way back.
+The VM's Docker is rootless (ADR-0057, #0-116, #0-240): its daemon runs as `factory`, so root in any container,
+the devcontainer's included, is `factory` in the VM, and root's chain `FACTORY-EGRESS` filters everything any uid
+from 1000 up sends, `factory` and its subordinate range among them (a copy of the devcontainer's allow-list plus the
+VM's own: image registries, Ubuntu's archive; nothing on the Mac, none of the VM's own listeners but the ports Docker
+publishes, no IPv6). A domain added to or removed from the devcontainer's `init-firewall.sh` changes the copy in
+`factory-egress.sh` in `provision.sh` too: Factory guards and `create.sh` refuse the two apart.
 
 1. **Create:** `scripts/factory-admin/build-vm/create.sh`. It refuses an instance that exists (`delete.sh` first),
-   downloads Ubuntu's image once (Lima checks the pinned sha256), runs `provision.sh` (Docker Engine, git, Node at
-   `.node-version`, the devcontainer CLI, user `factory`), and clones `github.com/profitbuild/incident-platform` (anonymously, while it is public) into
-   `/home/factory/incident-platform`.
+   downloads Ubuntu's image once (Lima checks the pinned sha256), runs `provision.sh` (Docker CE rootless for user
+   `factory`, its egress filter, git, Node at `.node-version`, the devcontainer CLI), checks the boundary (the rootful
+   daemon masked, `factory`'s rootless and filtered, the Mac rejected, `example.com` unreachable, GitHub reachable),
+   restarts the VM once and checks it again (what holds only on a fresh VM fails there), and clones
+   `github.com/profitbuild/incident-platform` (anonymously, while it is public) into
+   `/home/factory/incident-platform`, owned by the uid the devcontainer's `dev` maps to under rootless Docker.
    Nothing of the Mac is mounted and no VM port is forwarded to it: `create.sh` checks the started VM and deletes it if
    Lima added a mount, SSH agent or X11 forwarding, a port forward, a network or the Mac's proxy variables (from
    `~/.lima/_config/default.yaml` or `override.yaml`, which Lima merges into every instance: keep both free of those
    keys), or if a check cannot answer; a failure anywhere before the clone is done deletes the VM too. It also refuses a
    copy to the Mac, an extra disk, provision or probe. Run it from an up-to-date `main`: the VM's contents come from
    your checkout's `provision.sh`, its clone from GitHub's `main`, and `create.sh` warns when the two differ. Measured
-   2026-11-14: 68 s with the image's first download, 32–44 s from Lima's cache.
-2. **Enter**, always as `factory` (the clone's owner, in the docker group):
-   `limactl shell factory-build sudo -iu factory`, then `cd incident-platform`.
-3. **Check the clone** (#0-202): `git status --ignored --short` prints nothing: no `docker/.env`, no
-   `application-local.yml`, no `.claude/settings.local.json` of yours.
-4. **Start the devcontainer:** `devcontainer up --workspace-folder .`, then `devcontainer exec --workspace-folder . bash`;
+   2026-11-14: about 65 s from Lima's cache, the reboot included.
+2. **Enter**, always as `factory`, the user of the rootless daemon (`docker` needs no `DOCKER_HOST`: the default
+   socket is its): `limactl shell factory-build sudo -iu factory`, then `cd incident-platform`. Never `docker` as
+   root in the VM (`sudo docker`): `/run/docker.sock` leads to `factory`'s daemon, which code a test runs can replace
+   through `factory`'s own systemd unit, so root's client would talk to that code (ADR-0057).
+3. **Start the devcontainer:** `devcontainer up --workspace-folder .`, then `devcontainer exec --workspace-folder . bash`;
    the firewall's start log and `example.com` check are as in Setup 1. For phone notifications export
-   `FACTORY_NTFY_TOPIC` in the VM's shell before `up` (Setup 5).
+   `FACTORY_NTFY_TOPIC` in the VM's shell before `up` (Setup 5); its host is not in the VM's allow-list: add it to
+   `VM_ONLY_DOMAINS` in `provision.sh` (the only list `check-allowlists.sh` lets hold it) in a PR, then recreate the
+   VM. Not there by default: ntfy.sh is a publishing service, a channel out for code a test runs.
+4. **Check the clone** (#0-202), inside the devcontainer (the clone is `dev`'s, not `factory`'s):
+   `git status --ignored --short` prints nothing: no `docker/.env`, no `application-local.yml`, no
+   `.claude/settings.local.json` of yours.
 5. **Log in inside the devcontainer**, as in Setup 2: `claude` (it prints a URL; open it on the Mac and paste the
    code back) and the bot's token with `gh auth login --with-token`. Both are kept in the devcontainer's volumes,
    on the VM's disk: `delete.sh` removes them with it, and you enter them again after the next `create.sh`.
 6. **Run the autopilot** there as in "Running it". Your own sessions stay on the Mac, in your checkout. The local
    model ("Local model" below) is not reached from the VM: `OLLAMA_URL`'s `host.docker.internal` is the VM there, so
-   `localReview` reports `Ollama not reachable` and skips (ADR-0056).
+   `localReview` reports `Ollama not reachable` and skips (ADR-0056); the VM's filter rejects the Mac (ADR-0057).
 
 **Changing the VM:** its contents only in `provision.sh`, its size or image only in `factory-build.yaml`, then
 `delete.sh` and `create.sh`: a VM is recreated, never patched by hand. Every pin is bumped by hand (Renovate does not
-read these files) and `verify-pins.sh` must print three `verified:` lines in the same PR:
+read these files) and `verify-pins.sh` must print five `verified:` lines in the same PR:
 - the image: the two `images:` lines (Ubuntu's dated directory under `cloud-images.ubuntu.com/releases/noble/` and
   the file's sha256 from its `SHA256SUMS`);
 - Node: `NODE_VERSION` and its two sha256 (`linux-arm64`, `linux-x64`, from nodejs.org's `SHASUMS256.txt`), with
   `.node-version` in the same change (`create.sh` refuses the two apart);
-- the devcontainer CLI: `DEVCONTAINER_CLI_VERSION` and its sha512 (npm's `dist.integrity`, in hex).
+- the devcontainer CLI: `DEVCONTAINER_CLI_VERSION` and its sha512 (npm's `dist.integrity`, in hex);
+- Docker's apt key: `DOCKER_KEY_FPR`, which changes only when Docker rotates its key, confirmed in three places first;
+- Docker CE: `DOCKER_VERSION` and `CONTAINERD_VERSION`, versions of Docker's noble repository
+  (`apt-cache madison docker-ce` in the VM lists them).
 **Stopping it** (12 GiB of RAM while it runs): `limactl stop factory-build`; `limactl start factory-build` brings it
 back with the clone and the logins.
 
@@ -318,7 +335,7 @@ The agents' instructions are not a boundary; these are, each with its limit:
 | Gates on commits (`changed-paths.sh` before review, CI "Factory guards" on the PR) | the same changes once committed, whatever produced them | — the PR is the last and most reliable line |
 | The ruleset of `main` (#0-113, ADR-0034, `.github/repository-settings/`) | a push to `main` without a PR (anyone's), a merge with a red or missing required check, without an approval of the last push, or of a code owner's path without the owner's (anyone's but the owner's) | the owner's token can merge any PR (the admin role's bypass, at merge; Claude Code sessions are denied it); a bypass actor or an admin added in the UI is seen only when the owner runs `repository-settings.rb check` |
 | Devcontainer + firewall | the agents' own commands: access to your host account, files and credentials; network beyond Anthropic, GitHub, Maven Central and the verifier's advisory hosts (OSV, Tomcat, Spring: open to the whole container, by IP, so also to other sites a CDN serves from those IPs) (IPv4; IPv6 only loopback; a failed setup blocks everything) | **code an agent runs** (a test): Testcontainers needs the host's Docker, and Docker access is root over the devcontainer itself, so such code can drop the firewall, start a container outside it, or read files the agents' tools may not (#0-116, accepted for shadow mode only); data through DNS the resolver forwards; GitHub itself as a channel |
-| Build VM (`factory-build`, Lima, ADR-0056; when the autopilot runs there, "Build VM") | the reach of that code to the Mac's files: the Docker it gets root over is the VM's, which mounts nothing of the Mac and holds a clone of its own, no file of yours (#0-202) | that code still owns the VM: the devcontainer's volumes there hold the bot's token and Claude Code's login (#0-116 stays open), and from the VM's Docker it reaches the Mac's loopback services (Grafana, Ollama, anything bound to `127.0.0.1`) through `host.lima.internal`, as Docker Desktop's `host.docker.internal` did (#0-240) |
+| Build VM (`factory-build`, Lima, ADR-0056 and ADR-0057; when the autopilot runs there, "Build VM") | the reach of that code to the Mac's files, the VM and the network: the Docker it uses is rootless, so root in any container it starts is the unprivileged `factory` in the VM (no change to the VM's firewall, `/etc` or root's files), and root's `FACTORY-EGRESS` lets every uid from 1000 up (`factory`, its subordinate range) reach only DNS, the ports Docker publishes on the VM's address and an allow-list: not the Mac (its loopback services, #0-240), not the VM's network, not a host outside the list, with `--network host` either; the VM mounts nothing of the Mac and holds a clone of its own (#0-202) | what `factory` holds: the devcontainer's volumes with the bot's token and Claude Code's login (stage 4 of ADR-0055); data through DNS, and through any site a shared front end in the list serves (Cloudflare, CloudFront: Docker Hub, download.docker.com, downloads.claude.ai), and the registries that take a push with the pusher's own credentials (Docker Hub, ghcr.io), as for the devcontainer's advisory hosts; a CDN address that changed since the last refresh (30 minutes) fails a download |
 
 ## Measuring the reviewers and the pipeline
 

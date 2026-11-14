@@ -55,6 +55,10 @@ fail_closed() {
 trap fail_closed EXIT
 
 # Required: the run cannot work without them, so one that does not resolve stops the setup (fail closed).
+# The build VM filters everything its rootless Docker sends with a copy of this list and a list of its own
+# (factory-egress.sh in scripts/factory-admin/build-vm/provision.sh, ADR-0057): a domain added here or removed from here
+# changes that copy too, which Factory guards checks (check-allowlists.sh). Both resolve each name to its IPv4
+# addresses, with different tools (dig here, getent there): two scripts, as provision.sh reads no repository file.
 ALLOWED_DOMAINS=(
     api.anthropic.com claude.ai platform.claude.com console.anthropic.com
     repo.maven.apache.org repo1.maven.org

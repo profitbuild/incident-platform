@@ -665,17 +665,29 @@ security boundary, so every rule that matters is also enforced outside the model
   no VM port is forwarded to the Mac, nor X11, a network, the Mac's proxy variables or a copy of VM files onto the Mac: `create.sh` checks each on the
   started VM and deletes it otherwise, when a check cannot answer, or when anything fails before the clone is done (Lima merges the Mac's `~/.lima/_config/` files into every instance). The repository there is
   a clone of its own, with no gitignored file of the owner's (#0-202).
-  The devcontainer runs inside it unchanged, so the Docker a test gets root over (#0-116) is the VM's Docker
-  Engine, not Docker Desktop with the owner's files shared to it.
+  The devcontainer runs inside it, with `dev` kept at uid 1000 (`updateRemoteUserUID: false`).
+- **The build VM's Docker is rootless, and everything it sends is filtered** (backlog #0-116, #0-240, ADR-0057):
+  Docker CE runs as the unprivileged user `factory` (the rootful daemon masked, `factory` in no docker group, Docker's
+  apt key pinned by fingerprint), so root in any container a test starts is `factory` in the VM and cannot change the
+  VM's firewall or `/etc`, nor read root's files. Root's chain `FACTORY-EGRESS`, matched on every uid from 1000 up
+  (`factory`, its subordinate range, any later user; only system accounts are free), lets everything they send (the
+  daemon, every container, the devcontainer's included) reach DNS and an allow-list only, refreshed every 30 minutes,
+  rejects the gateway (the Mac's loopback services), the VM's network, link-local, the VM's own listeners but the
+  ports Docker publishes, and IPv6;
+  it is in place before `factory`'s session starts, which requires it, and fails closed. Root writes nothing under
+  `factory`'s home (a link planted there would turn a root write into root for `factory`). `create.sh` checks all of it
+  on every VM it makes, and it and Factory guards refuse a VM copy of the devcontainer's allow-list that differs from it either way.
 
 **Known gaps**: a bypass actor or an admin added in the UI is seen only when the owner runs
 `repository-settings.rb check` (#0-113, ADR-0034), and so is a secret added in the UI (ADR-0035); a scan that
 cannot run on `main` (an expired token, an NVD outage) looks the same as one that found issues, and alerts no one
 (#0-155); the devcontainer's firewall binds the agents' own
 commands but not code they run, as Docker access (needed by Testcontainers) is root over the container
-(#0-116, accepted for shadow mode, required before auto-merge): in the build VM that code no longer reaches the
-owner's files, but it still holds the VM, where the bot's token and Claude Code's login live in the devcontainer's
-volumes, and the Mac's loopback services (Grafana with every tenant's logs, Ollama, anything bound to `127.0.0.1`) through Lima's user-mode network (ADR-0056, #0-240); secrets are scanned only after the push, when a
+(#0-116, accepted for shadow mode, required before auto-merge): in the build VM that code is only the unprivileged
+`factory`, with no route past the VM's allow-list or to the Mac (ADR-0057, which closed #0-240 there; a listener a
+root service opens on the VM's ephemeral ports after its creation is reachable, checked only by `create.sh`, #0-242), but it still
+reads what `factory` holds, the devcontainer's volumes with the bot's token and Claude Code's login (ADR-0055 stage 4),
+and on the Mac, the way back until #0-238's AC5, all of the above stays as it was; secrets are scanned only after the push, when a
 branch is already public, and an allow comment passes whatever its line holds (#0-156, ADR-0036); no Maven Enforcer
 (#0-110); the shell guards are heuristics, the commit gates and the PR checks are the reliable lines; an owner's
 session on a Claude Code older than 2.1.295 ignores the hooks' `onFailure` without a word, so there a hook that
