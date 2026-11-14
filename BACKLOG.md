@@ -85,7 +85,7 @@ Code, Javadoc, config comments and commits reference items as `backlog #N`.
 | [0-48](#0-48-user-pii-lives-on-the-users-row-erasure-is-in-place-anonymization) | User PII lives on the `users` row; erasure is in-place anonymization | design | Low | Open |
 | [0-55](#0-55-auth-email-failures-do-not-tell-an-smtp-outage-from-a-rejected-address) | Auth email failures do not tell an SMTP outage from a rejected address | design | Low | Open |
 | [0-56](#0-56-forgot-password-leaks-whether-an-account-exists-through-response-time) | forgot-password leaks whether an account exists through response time | design | Medium | Open |
-| [0-58](#0-58-shareds-kafka-tenant-classes-have-no-tests-of-their-own) | `shared`'s Kafka tenant classes have no tests of their own | tech-debt | Medium | Open |
+| [0-58](#0-58-globalexceptionhandler-and-unauthorizedentrypoint-have-no-tests-of-their-own-in-shared) | `GlobalExceptionHandler` and `UnauthorizedEntryPoint` have no tests of their own in `shared` | tech-debt | Medium | Open |
 | [0-62](#0-62-any-github-action-from-the-marketplace-is-allowed-to-run) | Any GitHub Action from the Marketplace is allowed to run | ci | Low | Open |
 | [0-64](#0-64-kubernetes-pods-run-without-a-securitycontext) | Kubernetes pods run without a `securityContext` | design | Medium | Open |
 | [0-65](#0-65-no-networkpolicy-every-pod-can-reach-every-other-pod) | No NetworkPolicy: every pod can reach every other pod | design | Medium | Open |
@@ -156,6 +156,8 @@ Code, Javadoc, config comments and commits reference items as `backlog #N`.
 | [0-242](#0-242-the-build-vms-listener-check-runs-only-when-the-vm-is-created) | The build VM's listener check runs only when the VM is created | security | Low | Open |
 | [0-243](#0-243-two-parsers-read-the-devcontainers-allow-list) | Two parsers read the devcontainer's allow-list | ci | Low | Open |
 | [0-244](#0-244-no-review-rule-covers-the-build-vms-own-allow-list) | No review rule covers the build VM's own allow-list | security | Low | Open |
+| [0-245](#0-245-validation-errors-do-not-redact-apikey-and-privatekey-fields) | Validation errors do not redact `apiKey` and `privateKey` fields | bug | Medium | Open |
+| [0-246](#0-246-service-classes-below-60-coverage-found-with-0-57) | Service classes below 60% coverage, found with #0-57 | tech-debt | Low | Open |
 | [0-133](#0-133-incidentresolvedevent-carries-no-openedat) | `IncidentResolvedEvent` carries no `openedAt` | tech-debt | Low | Open |
 | [0-134](#0-134-diff-cover-is-installed-by-version-without-hashes) | `diff-cover` is installed by version, without hashes | ci | Low | Open |
 | [0-135](#0-135-kubectl-in-ci-is-downloaded-unverified) | kubectl in CI is downloaded unverified | ci | Low | Open |
@@ -892,35 +894,54 @@ Redis, the pattern ingestion-service already uses (#67), answering 202 either wa
 
 ---
 
-### 0-58. `shared`'s Kafka tenant classes have no tests of their own
+### 0-58. `GlobalExceptionHandler` and `UnauthorizedEntryPoint` have no tests of their own in `shared`
 
-**Type:** tech-debt · **Priority:** Medium · **Status:** Open (found with #0-57)
+**Type:** tech-debt · **Priority:** Medium · **Status:** Open (found with #0-57; narrowed in `/ready`, 2026-11-14)
+**Autopilot:** ready · **Risk:** low · **Complexity:** medium · **Depends on:** —
+**Touches:** shared (src/test: com.incidentplatform.shared.exception, com.incidentplatform.shared.security)
 
-**Problem.** Once the JaCoCo agent attached (#0-57), `shared`'s own tests turned out to cover 0% of
-`TenantKafkaRecordResolver`, `TenantKafkaProducerInterceptor`, `TenantKafkaConsumerInterceptor`,
-`DeadLetterPublisher` and `GlobalExceptionHandler`, and little of `AuditEventKafkaSender` and
-`UnauthorizedEntryPoint`. Service tests use most of them (consumer tests in four services, security
-tests everywhere), often as mocks, and JaCoCo counts only a module's own tests. So the per-record
-tenant resolution that CLAUDE.md calls the most easily broken property has no test of its contract
-where it is defined: header first, payload `tenantId` fallback, dead-letter otherwise, and a blank or
-reserved tenant. `TenantKafkaConsumerInterceptor` has no test anywhere.
+**Problem.** Once the JaCoCo agent attached (#0-57), `shared`'s own tests turned out to cover none or little of its
+Kafka tenant classes, `GlobalExceptionHandler` and `UnauthorizedEntryPoint`. #0-91/#0-92 gave the Kafka classes
+their own tests (`TenantKafkaRecordResolverTest`, the interceptors' tests, `DeadLetterPublisherTest`; and
+`AuditEventKafkaSenderTest` exists). Left: `GlobalExceptionHandler` (`shared/exception`) and `UnauthorizedEntryPoint`
+(`shared/security`) have no test class in `shared`: services' security tests exercise them, and the
+`SharedSecurityAutoConfiguration*Test`s only construct the entry point, but JaCoCo counts only a module's own tests.
+Both are on the error path of every service: the body of every 4xx/5xx answer and of every 401.
 
-**Work.** Unit tests in `shared` for each class's contract, starting with `TenantKafkaRecordResolver`
-and the two interceptors (a header/payload mismatch was #0-39, closed by #0-91/#0-92). Until then, a PR
-that changes one of them fails CI's changed-lines coverage gate unless it adds those tests, which is
-the intended pressure.
+**Work.** Unit tests of each class's contract in `shared`: JUnit 5 and Mockito, no Spring context (as
+`JwtAuthFilterTest`), `GlobalExceptionHandlerTest` in `shared/src/test/java/com/incidentplatform/shared/exception/`
+and `UnauthorizedEntryPointTest` in `.../shared/security/`. The response is a Mockito `HttpServletResponse` over a
+`StringWriter` (or `spring-test`'s `MockHttpServletResponse` if it is already on `shared`'s test classpath): no new
+dependency in `shared/pom.xml`. Test code only: a test that would need a production change is not written here.
+Out of scope: `GlobalExceptionHandler` does not redact `apiKey` and `privateKey` fields (#0-245), and the service
+classes below 60% (#0-246).
 
-**Progress (backlog #0-91/#0-92).** `TenantKafkaRecordResolver`, `TenantKafkaProducerInterceptor`,
-`TenantKafkaConsumerInterceptor` and `DeadLetterPublisher` now have their own tests in `shared`
-(`TenantKafkaRecordResolverTest`, `TenantKafkaProducerInterceptorTest`, `TenantKafkaConsumerInterceptorTest`,
-`DeadLetterPublisherTest`), and the header/payload mismatch (#0-39) is decided and tested. Left:
-`GlobalExceptionHandler`, `UnauthorizedEntryPoint`.
-
-**Also below 60% (instruction coverage, measured with #0-57), not tenant-critical:** auth-service
-`IntegrationService`, `TenantSettingsService`, `TenantSettings`, `TeamMember`, `Integration`;
-incident-service `IncidentWebSocketPublisher`, `IncidentWebSocketController`,
-`IncidentEventOutboxPersistenceService`; notification-service `SlackActionService`, `SlackMessageTs`;
-postmortem-service `GeminiClientImpl`. Pick them up when they are next changed; the gate asks for it.
+**Acceptance criteria.**
+AC1. `GlobalExceptionHandlerTest`: `handleResourceNotFound` returns 404 with `RESOURCE_NOT_FOUND` and the
+exception's message.
+AC2. `GlobalExceptionHandlerTest`: `handleBusinessException` returns the exception's own `httpStatus` and `errorCode`.
+AC3. `GlobalExceptionHandlerTest`: `handleValidationErrors` returns 400 `VALIDATION_FAILED` with one `ValidationError`
+per field error; the rejected value of a field whose lower-cased name contains `password`, `secret`, `token` or
+`api_key` is `[REDACTED]` (`userPassword` among them); a normal field keeps its value; a null rejected value stays
+null. (`apiKey` and `privateKey` are not redacted today: #0-245, not asserted here.)
+AC4. `GlobalExceptionHandlerTest`: `handleConstraintViolation` returns 400 with the property path and message of each
+violation, and a null rejected value.
+AC5. `GlobalExceptionHandlerTest`: `handleTypeMismatch` returns 400 `INVALID_PARAMETER_TYPE`, its message naming the
+parameter only.
+AC6. `GlobalExceptionHandlerTest`: `handleAuthenticationException` returns 401 `UNAUTHORIZED` with a fixed body that
+holds no text of the exception; `handleAccessDenied` returns 403 `FORBIDDEN` with a fixed body.
+AC7. `GlobalExceptionHandlerTest`: `handleOptimisticLocking` returns 409 `OPTIMISTIC_LOCK_CONFLICT`.
+AC8. `GlobalExceptionHandlerTest`: `handleUnexpectedException` returns 500 `INTERNAL_SERVER_ERROR` with no internal
+message in the body, and rethrows a `NoResourceFoundException` instead of answering 500.
+AC9. `GlobalExceptionHandlerTest`: the `requestId` of every body is the MDC's `requestId`, or `"unknown"` when the MDC
+has none; the MDC is cleared after each test.
+AC10. `UnauthorizedEntryPointTest`: `commence` sets status 401, content type `application/json` and UTF-8, and writes
+an `ErrorResponse` with `errorCode` `UNAUTHORIZED` and `status` 401, read back with a real `ObjectMapper`.
+AC11. `UnauthorizedEntryPointTest`: `requestId` comes from the response's `X-Request-Id` header when it is set and not
+blank, else from the MDC, else `"unknown"`: all three paths and a blank header.
+AC12. `UnauthorizedEntryPointTest`: the body holds no text of the `AuthenticationException` passed in.
+AC13. Both classes are above 60% LINE in `shared`'s JaCoCo report (`./mvnw verify -pl shared`), and the change passes
+the existing `jacoco:check` and `diff-cover`; no new CI check.
 
 ---
 
@@ -3498,3 +3519,35 @@ line of defence must not parse the original, not where its consumer has no repos
 AC1. FAC-S02 names `VM_ONLY_DOMAINS` (or every egress allow-list of the factory) and both kinds of host to look for.
 AC2. FAC-S02 (or a new rule) covers every firewall of the factory, the build VM's `FACTORY-EGRESS` among them.
 AC3. FAC-A01 names a copy kept because its consumer has no repository at run time, with the check it then needs.
+
+### 0-245. Validation errors do not redact `apiKey` and `privateKey` fields
+
+**Type:** bug · **Priority:** Medium · **Status:** Open. Found in `/ready #0-58` (2026-11-14).
+
+**Problem.** `GlobalExceptionHandler` (`shared/exception`) replaces the rejected value of a sensitive field with
+`[REDACTED]` in a 400 `VALIDATION_FAILED` body. `isSensitiveField` lower-cases the field name and checks it against
+`SENSITIVE_FIELD_NAMES` with `contains`, but two of the set's entries are mixed-case, `apiKey` and `privateKey`, and a
+lower-cased name never contains them. So a request field named `apiKey`, `privateKey` or `userApiKey` (anything not
+also holding `token`, `secret`, `password`, `api_key`, `authorization` or `credential`) is echoed back in the error
+body with its rejected value. A key's value is what the set exists to keep out of answers. `shared`, so every service.
+
+**Approach.** Lower-case the set's entries (or compare case-insensitively), and test every entry, mixed-case names
+among them. Check the services' request DTOs for other sensitive field names the set misses.
+
+**Acceptance criteria.**
+AC1. A field error on `apiKey`, `privateKey` or `userApiKey` answers `[REDACTED]` as its rejected value; a test in
+`shared` covers every entry of the set in more than one case form.
+AC2. The fields of the services' request DTOs that hold a secret are all matched, or the item names why one is not.
+
+### 0-246. Service classes below 60% coverage, found with #0-57
+
+**Type:** tech-debt · **Priority:** Low · **Status:** Open. Moved out of #0-58 in its `/ready` (2026-11-14).
+
+**Problem.** Measured with #0-57 (instruction coverage), not tenant-critical: auth-service `IntegrationService`,
+`TenantSettingsService`, `TenantSettings`, `TeamMember`, `Integration`; incident-service `IncidentWebSocketPublisher`,
+`IncidentWebSocketController`, `IncidentEventOutboxPersistenceService`; notification-service `SlackActionService`,
+`SlackMessageTs`; postmortem-service `GeminiClientImpl`. The numbers are from #0-57's time and not measured since.
+
+**Approach.** Pick them up when they are next changed (CI's changed-lines gate asks for it). If an item is wanted for
+them, measure again first and split by service: one PR per service, none of them a guard.
+
