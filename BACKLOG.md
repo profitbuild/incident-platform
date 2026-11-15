@@ -158,6 +158,7 @@ Code, Javadoc, config comments and commits reference items as `backlog #N`.
 | [0-244](#0-244-no-review-rule-covers-the-build-vms-own-allow-list) | No review rule covers the build VM's own allow-list | security | Low | Open |
 | [0-245](#0-245-validation-errors-do-not-redact-apikey-and-privatekey-fields) | Validation errors do not redact `apiKey` and `privateKey` fields | bug | Medium | Open |
 | [0-246](#0-246-service-classes-below-60-coverage-found-with-0-57) | Service classes below 60% coverage, found with #0-57 | tech-debt | Low | Open |
+| [0-249](#0-249-claude-code-in-the-devcontainer-image-is-whatever-version-was-current-at-build-time) | Claude Code in the devcontainer image is whatever version was current at build time | ci | Medium | Open |
 | [0-133](#0-133-incidentresolvedevent-carries-no-openedat) | `IncidentResolvedEvent` carries no `openedAt` | tech-debt | Low | Open |
 | [0-134](#0-134-diff-cover-is-installed-by-version-without-hashes) | `diff-cover` is installed by version, without hashes | ci | Low | Open |
 | [0-135](#0-135-kubectl-in-ci-is-downloaded-unverified) | kubectl in CI is downloaded unverified | ci | Low | Open |
@@ -3587,6 +3588,9 @@ AC4. The rule covers how the build VM matches a name too (#0-247): its resolver 
 which whoever asks chooses, so an entry is a namespace nobody else can create names under (not an object-storage,
 user-content or other multi-tenant domain, such as `*.r2.cloudflarestorage.com` or `githubusercontent.com`), and the
 VM's copy of the devcontainer's list is judged by that meaning, not only by equal entries (review round 2 of #0-247).
+AC5. A FAC-A rule says a workflow's check of an agent (its type, its definition, its tools) asks for an answer the
+workflow's own prompt does not give it: #0-248 found `as()`'s preamble pointing the isolation check's agent at the
+file holding the expected answer (review round 1 of #0-248).
 
 ### 0-245. Validation errors do not redact `apiKey` and `privateKey` fields
 
@@ -3625,3 +3629,30 @@ Javadoc (`domain/SlackWorkspace.java:36-38`) says "backlog #0-25 exists only bec
 auth-service's `SlackWorkspace` is next changed, the comment should say it carries `@Version` as a row several places
 change over time, and point to the criterion in `.ai/context/architecture.md` (#0-25 AC5). The same words in
 `V17__create_slack_workspaces.sql` stay: a migration on `main` is never edited.
+
+### 0-249. Claude Code in the devcontainer image is whatever version was current at build time
+
+**Type:** ci · **Priority:** Medium · **Status:** Open. Found with #0-248 (owner, 2026-11-14).
+**Autopilot:** human-only · **Risk:** medium · **Complexity:** low · **Depends on:** —
+**Touches:** factory (.devcontainer/Dockerfile, owner-only), docs (docs/ai-factory.md "Pinned versions"), root
+(.ai/decisions/ ADR-0039 amended, if the floor 2.1.295 becomes a pin)
+
+**Problem.** `.devcontainer/Dockerfile` installs Claude Code with `curl -fsSL https://claude.ai/install.sh | bash`, the
+newest release at the moment the image is built; `DISABLE_AUTOUPDATER` only stops it from moving afterwards. So two
+images built on different days run different versions, and nothing records which: the build VM's image (built
+2026-11-14) runs 2.1.325, the Mac's devcontainer an older one, and the isolation check that passed on the Mac failed
+on the VM (#0-248). `docs/ai-factory.md` "Pinned versions" says Claude Code "is pinned to the version the
+devcontainer image was built with", which is true of one image, not of the factory; a change of agent behaviour
+arrives with a rebuild, unreviewed, while every other tool of the factory is pinned and bumped in a PR (ADR-0033).
+
+**Approach.** Install an exact version (the native installer takes one: `bash -s <version>`), held in one place the
+Dockerfile reads, bumped in a PR like the other pins, with the seed-bugs benchmark run before a bump is trusted (as
+"Pinned versions" already asks); check it in the preflight (the floor of ADR-0039 becomes the pinned version, or the
+pin is checked beside it) and, if Renovate can read it, let it propose bumps. Decide whether the installer script
+itself, fetched from claude.ai at build time, is checked against a digest.
+
+AC1. Two images built from the same commit run the same Claude Code version, the one named in the repository.
+AC2. A bump is a change to that one place, in a PR; `docs/ai-factory.md` "Pinned versions" says how.
+AC3. The preflight refuses a Claude Code other than the pinned version (or below it, if the owner keeps a floor), and
+says which it found.
+
