@@ -147,7 +147,7 @@ resolvable.
 | 0-241 | Factory guards runs the agent command check tests only when one of their inputs changed (`run-agent-command-tests.sh`, tested by `test-run-agent-command-tests.sh`; a push to `main` or an unreadable base runs them; ADR-0050): the job took 2 min 42 s on PR #633 against about 7 minutes before; details in [the section](#0-241-the-agent-command-check-tests-run-on-every-pull-request-whatever-it-changes) | PR #631 |
 | 0-247 | The build VM's allow-list is kept by its own resolver: every DNS query of a uid from 1000 up is sent to dnsmasq on the VM, which adds what it answers for a listed name (with its subdomains) to `factory-dns`; private, shared and reserved networks rejected, dnsmasq unprivileged and sandboxed; `create.sh` checks it from a container (ADR-0057 amended); details in [the section](#0-247-the-build-vms-allow-list-of-addresses-does-not-hold-for-a-cdn) | PR #640 |
 | 0-248 | The autopilot's isolation check compares a fact, not the agent's yes or no: `review-general` quotes the opening of its instructions, asked without the preamble that points at its file, and the workflow looks for `REVIEW_GENERAL_OPENING` in it (a test holds the phrase equal to the definition); each failure has its own reason; details in [the section](#0-248-the-autopilots-isolation-check-trusts-the-agents-own-yes-or-no) | PR #641 |
-| 0-58 | `GlobalExceptionHandlerTest` (12 tests) and `UnauthorizedEntryPointTest` (6) in `shared`, test code only: statuses, error codes, fixed bodies, redaction, requestId resolution; both classes at 100% of their lines; details in [the section](#0-58-globalexceptionhandler-and-unauthorizedentrypoint-have-no-tests-of-their-own-in-shared) | PR #pending |
+| 0-58 | `GlobalExceptionHandlerTest` (12 tests) and `UnauthorizedEntryPointTest` (6) in `shared`, test code only: statuses, error codes, fixed bodies, redaction, requestId resolution; both classes at 100% of their lines; details in [the section](#0-58-globalexceptionhandler-and-unauthorizedentrypoint-have-no-tests-of-their-own-in-shared) | PR #639 |
 
 Items completed before `BACKLOG.md` existed are not listed.
 
@@ -3351,7 +3351,7 @@ AC4. The isolation question names no definition file and does not hold the phras
 
 ### 0-58. `GlobalExceptionHandler` and `UnauthorizedEntryPoint` have no tests of their own in `shared`
 
-**Type:** tech-debt · **Priority:** Medium · **Status:** Done, PR #pending (2026-11-16) (found with #0-57; narrowed in `/ready`, 2026-11-14)
+**Type:** tech-debt · **Priority:** Medium · **Status:** Done, PR #639 (2026-11-16) (found with #0-57; narrowed in `/ready`, 2026-11-14)
 **Autopilot:** ready · **Risk:** low · **Complexity:** medium · **Depends on:** —
 **Touches:** shared (src/test: com.incidentplatform.shared.exception, com.incidentplatform.shared.security)
 
