@@ -80,8 +80,12 @@ public interface NotificationQueueRepository
      * reads no row of a paused tenant, and this runs in the transaction that
      * ends the pause, before the scheduler can read the rows again. An entry the
      * scheduler loaded before the tenant was paused and is still processing
-     * when the tenant is resumed again (within one run) can write its old value
-     * back: the window is then the one it would have had without the pause.
+     * when the tenant is resumed again (within one run) cannot undo the restart
+     * (backlog #0-25, ADR-0059): the scheduler writes a row only through the
+     * conditional UPDATEs below, none of which writes
+     * {@code first_lookup_failure_at} back from what it loaded, and
+     * {@link #recordLookupFailure} stores the time of its own call, so the
+     * window it starts is a new one.
      *
      * @return the entries whose window starts again
      */
@@ -94,6 +98,84 @@ public interface NotificationQueueRepository
                AND first_lookup_failure_at IS NOT NULL
             """, nativeQuery = true)
     int restartLookupRetryWindows(@Param("tenantId") String tenantId);
+
+    // ── Backlog #0-25 (ADR-0059): every change of an existing row ──────────
+    //
+    // After its INSERT an entry changes only through the state-guarded
+    // conditional UPDATEs below (and restartLookupRetryWindows above), never
+    // through a save() of a loaded entity: a merge writes every mapped column
+    // as it was loaded, so a stale writer (a run that outlived its ShedLock,
+    // an old pod in a rollout, the scheduler's catch-all after markUndeliverable
+    // had committed) overwrote a terminal status. Each UPDATE applies only to
+    // a PENDING row of the given tenant and returns the number of rows changed:
+    // 0 means another writer got there first, and the caller records nothing
+    // more. Not @Version: the outcome is already decided by whoever won, so
+    // there is nothing to retry, and a version column would need a migration
+    // and an OptimisticLockingFailureException path in every caller (the auth
+    // email outbox's shape, AuthEmailOutboxRepository, backlog #0-52). Flush
+    // before, clear after (ADR-0010): markUndeliverable writes its audit event
+    // in the same transaction.
+
+    /**
+     * SENT once every routed channel has been tried (backlog #0-25,
+     * ADR-0059): only while the entry is still PENDING.
+     *
+     * @return 1 if the entry was PENDING and is now SENT, 0 otherwise
+     */
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("UPDATE NotificationQueueEntry e SET e.status = 'SENT', e.processedAt = :now "
+            + "WHERE e.id = :id AND e.tenantId = :tenantId AND e.status = 'PENDING'")
+    int markSent(@Param("id") UUID id, @Param("tenantId") String tenantId,
+                 @Param("now") Instant now);
+
+    /**
+     * FAILED after an unexpected error in processing (backlog #0-25,
+     * ADR-0059): only while the entry is still PENDING, so the scheduler's
+     * catch-all never overwrites an UNDELIVERABLE (or SENT) that already
+     * committed.
+     *
+     * @return 1 if the entry was PENDING and is now FAILED, 0 otherwise
+     */
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("UPDATE NotificationQueueEntry e SET e.status = 'FAILED', e.errorMessage = :error, "
+            + "e.processedAt = :now "
+            + "WHERE e.id = :id AND e.tenantId = :tenantId AND e.status = 'PENDING'")
+    int markFailed(@Param("id") UUID id, @Param("tenantId") String tenantId,
+                   @Param("error") String error, @Param("now") Instant now);
+
+    /**
+     * UNDELIVERABLE, nobody in the tenant could be notified (backlog #0-18;
+     * guarded by backlog #0-25, ADR-0059): only while the entry is still
+     * PENDING.
+     *
+     * @param reason the {@code UndeliverableReason}'s name, stored as the
+     *               entry's {@code error_message}
+     * @return 1 if the entry was PENDING and is now UNDELIVERABLE, 0 otherwise
+     */
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("UPDATE NotificationQueueEntry e SET e.status = 'UNDELIVERABLE', e.errorMessage = :reason, "
+            + "e.processedAt = :now "
+            + "WHERE e.id = :id AND e.tenantId = :tenantId AND e.status = 'PENDING'")
+    int markUndeliverable(@Param("id") UUID id, @Param("tenantId") String tenantId,
+                          @Param("reason") String reason, @Param("now") Instant now);
+
+    /**
+     * Records the first failed recipient lookup (backlog #0-19; guarded by
+     * backlog #0-25, ADR-0059): only while the entry is still PENDING and has
+     * none recorded, so a later failure never moves the start of the retry
+     * window, and a scheduler that loaded the entry before
+     * {@link #restartLookupRetryWindows} ran writes the time of its own call,
+     * not the one it loaded.
+     *
+     * @return 1 if the time was stored, 0 if the entry is no longer PENDING or
+     *         already has one
+     */
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("UPDATE NotificationQueueEntry e SET e.firstLookupFailureAt = :now "
+            + "WHERE e.id = :id AND e.tenantId = :tenantId AND e.status = 'PENDING' "
+            + "AND e.firstLookupFailureAt IS NULL")
+    int recordLookupFailure(@Param("id") UUID id, @Param("tenantId") String tenantId,
+                            @Param("now") Instant now);
 
     /**
      * Idempotency check — prevents duplicate queue entries for the same

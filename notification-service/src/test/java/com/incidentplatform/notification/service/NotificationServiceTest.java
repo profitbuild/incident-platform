@@ -576,6 +576,7 @@ class NotificationServiceTest {
             given(router.route(any(), any(), any(), any(), any(), any(), any()))
                     .willReturn(NotificationRouter.Routing.undeliverable(
                             UndeliverableReason.NO_ONCALL));
+            parks(entry, UndeliverableReason.NO_ONCALL);
 
             notificationService.processEntry(entry);
 
@@ -612,6 +613,7 @@ class NotificationServiceTest {
             given(router.route(any(), any(), any(), any(), any(), any(), any()))
                     .willReturn(NotificationRouter.Routing.undeliverable(
                             UndeliverableReason.NO_REACHABLE_CHANNEL));
+            parks(entry, UndeliverableReason.NO_REACHABLE_CHANNEL);
 
             notificationService.processEntry(entry);
 
@@ -629,6 +631,7 @@ class NotificationServiceTest {
             given(router.route(any(), any(), any(), any(), any(), any(), any()))
                     .willReturn(NotificationRouter.Routing.undeliverable(
                             UndeliverableReason.NO_ONCALL));
+            parks(entry, UndeliverableReason.NO_ONCALL);
 
             notificationService.processEntry(entry);
 
@@ -694,6 +697,7 @@ class NotificationServiceTest {
         @DisplayName("markUndeliverable is callable by the scheduler for an oncall-service outage (backlog #0-19)")
         void markUndeliverableForOutage() {
             final NotificationQueueEntry entry = buildEscalationEntry(2, UUID.randomUUID());
+            parks(entry, UndeliverableReason.ONCALL_UNAVAILABLE);
 
             notificationService.markUndeliverable(entry, UndeliverableReason.ONCALL_UNAVAILABLE);
 
@@ -702,6 +706,30 @@ class NotificationServiceTest {
             then(operatorAlertService).should().undeliverable(
                     INCIDENT_ID, TENANT_ID, ESCALATED_EVENT_TYPE,
                     UndeliverableReason.ONCALL_UNAVAILABLE);
+        }
+
+        /**
+         * Backlog #0-25 (AC3): the entry was no longer PENDING, so the
+         * conditional UPDATE changed nothing. Someone else closed it; this run
+         * did not find it undeliverable, so nobody is alerted and nothing is
+         * counted as undeliverable (the stale write is counted by the
+         * persistence service).
+         */
+        @Test
+        @DisplayName("an entry no longer PENDING raises no operator alert and is not counted as undeliverable")
+        void markUndeliverableOnAStaleRowRaisesNoOperatorAlert() {
+            final NotificationQueueEntry entry = buildPendingEntry();
+            given(persistenceService.markUndeliverable(entry, UndeliverableReason.NO_ONCALL)).willReturn(false);
+
+            notificationService.markUndeliverable(entry, UndeliverableReason.NO_ONCALL);
+
+            then(operatorAlertService).shouldHaveNoInteractions();
+            assertThat(count(EVENT_TYPE, UndeliverableReason.NO_ONCALL)).isZero();
+        }
+
+        /** The UNDELIVERABLE write changed the row (backlog #0-25: it returns whether it did). */
+        private void parks(NotificationQueueEntry entry, UndeliverableReason reason) {
+            given(persistenceService.markUndeliverable(entry, reason)).willReturn(true);
         }
     }
 

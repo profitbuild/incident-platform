@@ -41,6 +41,18 @@ import java.util.UUID;
  * {@link NotificationLog} is an immutable append-only audit trail written
  * after each channel send (SENT or FAILED). This table is a mutable work
  * queue — the two have separate lifecycles and separate concerns.
+ *
+ * <h2>Changed after its INSERT only by conditional UPDATEs (backlog #0-25, ADR-0059)</h2>
+ * PENDING leads to SENT, FAILED or UNDELIVERABLE, each terminal. These moves,
+ * and the first failed lookup, are written by {@code NotificationQueueRepository}'s
+ * {@code markSent}, {@code markFailed}, {@code markUndeliverable} and
+ * {@code recordLookupFailure}: UPDATEs that apply only to a PENDING row of the
+ * entry's tenant and return the row count. This class has no mutators on
+ * purpose, so no code path changes a loaded entry and {@code save()}s it:
+ * such a merge writes every mapped column as it was loaded, and a stale one
+ * (a run that outlived its ShedLock, the scheduler's catch-all after
+ * {@code markUndeliverable} had committed) used to overwrite a terminal
+ * status. A loaded entry therefore keeps the state it was read with.
  */
 @Entity
 @Table(
@@ -213,43 +225,6 @@ public class NotificationQueueEntry {
         entry.status = NotificationQueueStatus.PENDING;
         entry.createdAt = Instant.now();
         return entry;
-    }
-
-    /**
-     * Marks this entry as successfully processed — all channels sent.
-     */
-    public void markSent() {
-        this.status = NotificationQueueStatus.SENT;
-        this.processedAt = Instant.now();
-    }
-
-    /**
-     * Marks this entry as failed — processing could not complete.
-     */
-    public void markFailed(String errorMessage) {
-        this.status = NotificationQueueStatus.FAILED;
-        this.errorMessage = errorMessage;
-        this.processedAt = Instant.now();
-    }
-
-    /**
-     * Marks this entry undeliverable — nobody in the tenant could be
-     * notified (backlog #0-18). Terminal, like SENT and FAILED.
-     */
-    public void markUndeliverable(UndeliverableReason reason) {
-        this.status = NotificationQueueStatus.UNDELIVERABLE;
-        this.errorMessage = reason.name();
-        this.processedAt = Instant.now();
-    }
-
-    /**
-     * Records that the recipient lookup failed. Only the first failure is kept:
-     * the retry window runs from it.
-     */
-    public void recordLookupFailure() {
-        if (this.firstLookupFailureAt == null) {
-            this.firstLookupFailureAt = Instant.now();
-        }
     }
 
     public Instant getFirstLookupFailureAt()     { return firstLookupFailureAt; }
