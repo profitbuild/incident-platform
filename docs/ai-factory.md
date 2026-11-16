@@ -219,6 +219,11 @@ what it missed:
   `settings.json`. A session reads its settings once, when it starts: after a change to either reaches `main`, even
   through the preflight's own fast-forward, start a new session. The three limits (`FACTORY_MAX_BLOCKED`, `FACTORY_AUDIT_EVERY`, `FACTORY_MAX_MERGES_PER_DAY`) have no
   default either.
+- **a short Bash timeout**: `BASH_DEFAULT_TIMEOUT_MS` or `BASH_MAX_TIMEOUT_MS` is unset or below 30 minutes
+  (`1800000`). Claude Code moves a foreground command that reaches its timeout to the background, and factory-ops,
+  with one call per task, would lose the test gate's answer (backlog #0-250). The ceiling is set too because the docs
+  do not say whether it bounds the default. Both apply to every agent of the autopilot: a command that hangs holds
+  its agent up to 30 minutes.
 
 After changing `settings.autopilot.json` or `settings.json`, put the value `scripts/factory/settings-hash.sh` prints
 into `settings.autopilot.json`'s `env.FACTORY_SETTINGS_SHA256`; Factory guards ("Autopilot settings carry their hash") fails the PR until you do.
@@ -455,6 +460,7 @@ file as the local VM (`provision.sh`, taken as cloud-init user-data, ADR-0056), 
 | `permission denied while trying to connect to the docker API` inside the container | the container's main process must run as root (`"containerUser": "root"` in `devcontainer.json`) for the docker-outside-of-docker feature to proxy the socket to `dev`; rebuild with `devcontainer up --workspace-folder . --remove-existing-container` |
 | `mkdir: cannot create directory '/home/dev/.m2/wrapper': Permission denied` (or `gh` cannot store its login) | a volume created before the image made its mount point, so it is root's: remove it if it is empty (`docker volume rm incident-platform-m2` / `incident-platform-gh`) and start the container again; to keep its contents (a Maven cache, a login), give it to `dev` instead: `docker run --rm -v incident-platform-m2:/v alpine chown -R 1000:1000 /v` |
 | `FIREWALL SETUP FAILED: all traffic is blocked` at container start | a required domain did not resolve or GitHub's IP ranges could not be fetched; the message above it names the cause. Fix it and restart the container (an optional domain only warns) |
+| `BLOCKED: test gate returned no result` | factory-ops ended without `run-tests.sh`'s JSON. Its transcript shows whether the command was moved to the background: it reached the Bash timeout (`BASH_DEFAULT_TIMEOUT_MS` and `BASH_MAX_TIMEOUT_MS`, 30 minutes in the autopilot's settings since #0-250), so a gate that long needs a narrower module set or a higher timeout, an owner's change |
 | a reviewer "returned no valid verdict" | it answered prose instead of JSON; check its transcript; repeated → audit finding |
 | `BLOCKED: <agent> gave no answer (last agent call without an answer: <agent>: …)` | the agent ended without its JSON, usually its `maxTurns` spent (#0-206): the item is stopped like any block (draft PR when the run has a branch, state recorded with the stage, notification). Read its transcript for where the turns went, often refused commands (a hook names what to use instead); resume the branch once fixed |
 | `BLOCKED: picker failed: …` | a command of the picker was refused or failed (#0-206), not an empty queue: the reason quotes it. The picker creates no branch since #0-209; were one named anyway, the reason says so (`next-item.sh` skips the item while that branch exists: delete it, or resume it with `branch`). On resume the item is the one the branch names, so the stop is recorded against it |
