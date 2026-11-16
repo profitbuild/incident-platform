@@ -15,3 +15,23 @@ NEXT: <stage>
 NEXT: architect
 - [architect] plan: four tenant-scoped conditional UPDATEs from PENDING in NotificationQueueRepository (AuthEmailOutboxRepository precedent), persistence methods return boolean, 0 rows logged and counted in notification.queue.stale_write{operation}, no audit/alert on a stale markUndeliverable, entity mutators removed, architecture.md criterion; ADR: 0059 (Proposed); modules: notification-service, root; rules: GEN-01, GEN-02, GEN-04, GEN-05, GEN-07, GEN-08, GEN-20, GEN-32, ARC-02, ARC-26, ARC-29, ARC-22, SEC-06, SEC-31, DOC-01, DOC-10, DOC-11, DOC-30
 NEXT: implementer
+- [implementer r0] commits 2cbcde35 + handoff commit; 11 code/doc files + handoff/proofs; tests: NotificationQueueStaleWriteIntegrationTest (new), NotificationPersistenceServiceTest, NotificationServiceTest, NotificationEscalationSchemaIntegrationTest, AuditOutboxPersistenceIntegrationTest; local `./mvnw -q verify -pl notification-service -am` finished without error
+- [implementer rules] GEN-01: NotificationQueueStaleWriteIntegrationTest (each guard), NotificationPersistenceServiceTest#staleWriteIsCountedPerOperation, NotificationServiceTest$Undeliverable#markUndeliverableOnAStaleRowRaisesNoOperatorAlert
+- [implementer rules] GEN-02: NotificationPersistenceServiceTest#staleWriteIsCountedPerOperation / #markUndeliverableOnAStaleRowWritesNoAuditEvent (0 rows)
+- [implementer rules] GEN-04: NotificationQueueStaleWriteIntegrationTest, Testcontainers postgres:16-alpine
+- [implementer rules] GEN-05: NotificationQueueStaleWriteIntegrationTest#aTransitionWithAnotherTenantChangesNothing
+- [implementer rules] GEN-07: NotificationQueueStaleWriteIntegrationTest compares JDBC reads with JDBC reads; registry cleared and queue emptied per test
+- [implementer rules] GEN-08: handoff.md "Tests changed and why"
+- [implementer rules] GEN-20: Javadoc of NotificationQueueRepository's new UPDATEs (why not @Version), NotificationQueueEntry class Javadoc, NotificationPersistenceService class Javadoc
+- [implementer rules] GEN-32: NotificationQueueRepository markSent/markFailed/markUndeliverable/recordLookupFailure WHERE status = 'PENDING'
+- [implementer rules] ARC-02: shape of AuthEmailOutboxRepository/AuthEmailPersistenceService.recordSent (int row count, boolean return)
+- [implementer rules] ARC-26: the four new @Modifying carry flushAutomatically = true with clearAutomatically = true
+- [implementer rules] ARC-29: guard on status = 'PENDING', row count checked in NotificationPersistenceService.applied; second writer restartLookupRetryWindows covered by #restartIsNotUndoneByAStaleSchedulerWrite
+- [implementer rules] ARC-22: NotificationPersistenceService.markUndeliverable publishes NOTIFICATION_UNDELIVERABLE in the same transaction, only after 1 row
+- [implementer rules] SEC-06: AND e.tenantId = :tenantId in all four UPDATEs
+- [implementer rules] SEC-31: NotificationPersistenceService.applied logs operation, entry id, incidentId, tenant only
+- [implementer rules] DOC-01: .ai/context/architecture.md criterion; ADR-0059 present (Proposed) and indexed
+- [implementer rules] DOC-10: grep "one writer after its INSERT", "two such exceptions", "can write its old value back": architecture.md and the repository Javadoc changed; ARC-29 (level A) replacement text in handoff.md
+- [implementer rules] DOC-11: @return of the four persistence methods, restartLookupRetryWindows Javadoc, scheduler catch-all Javadoc and recordLookupFailure comment, NotificationService.markUndeliverable comment/Javadoc
+- [implementer rules] DOC-30: architecture.md text states the criterion, not a history
+NEXT: tests
