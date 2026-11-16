@@ -150,7 +150,7 @@ resolvable.
 | 0-58 | `GlobalExceptionHandlerTest` (12 tests) and `UnauthorizedEntryPointTest` (6) in `shared`, test code only: statuses, error codes, fixed bodies, redaction, requestId resolution; both classes at 100% of their lines; details in [the section](#0-58-globalexceptionhandler-and-unauthorizedentrypoint-have-no-tests-of-their-own-in-shared) | PR #639 |
 | 0-250 | Every Bash call of the autopilot waits 30 minutes (`BASH_DEFAULT_TIMEOUT_MS` and `BASH_MAX_TIMEOUT_MS` in `settings.autopilot.json`'s `env`), and the preflight refuses a session with less, so a test gate longer than two minutes is not moved to the background and its answer reaches the workflow (ADR-0052 refusal 6); details in [the section](#0-250-the-test-gate-goes-to-the-background-after-two-minutes-and-its-answer-is-lost) | PR #642 |
 | 0-252 | The isolation check reads the agent type Claude Code gives review-general's probe command: the session-level hook `isolation-probe.sh` records it under `.ai/runs/isolation/` for the locked run, `isolation.sh` reads it, the preflight clears the records as it takes the lock; the model's answers are read no more (ADR-0058); details in [the section](#0-252-the-isolation-check-depends-on-the-model-agreeing-to-quote-its-prompt) | PR #643 |
-| 0-25 | Every `notification_queue` transition after the INSERT is a conditional UPDATE from PENDING (`markSent`, `markFailed`, `markUndeliverable`, `recordLookupFailure`, scoped by id and tenant, row count returned); the entity's mutators are gone; a stale write is logged at info and counted in `notification.queue.stale_write` with no audit event and no operator alert; `.ai/context/architecture.md` states the criterion for a state-guarded UPDATE versus `@Version` (ADR-0059); details in [the section](#0-25-a-stale-notification_queue-write-can-overwrite-a-terminal-status) | PR #pending |
+| 0-25 | Every `notification_queue` transition after the INSERT is a conditional UPDATE from PENDING (`markSent`, `markFailed`, `markUndeliverable`, `recordLookupFailure`, scoped by id and tenant, row count returned); the entity's mutators are gone; a stale write is logged at info and counted in `notification.queue.stale_write` with no audit event and no operator alert; `.ai/context/architecture.md` states the criterion for a state-guarded UPDATE versus `@Version` (ADR-0059); details in [the section](#0-25-a-stale-notification_queue-write-can-overwrite-a-terminal-status) | PR #645 |
 
 Items completed before `BACKLOG.md` existed are not listed.
 
@@ -3487,7 +3487,7 @@ AC5. A run in the build VM goes past the isolation check on this probe (the resu
 
 ### 0-25. A stale `notification_queue` write can overwrite a terminal status
 
-**Type:** tech-debt · **Priority:** Medium · **Status:** Done, PR #pending (2026-11-16) (approach decided in `/ready`, 2026-11-14:
+**Type:** tech-debt · **Priority:** Medium · **Status:** Done, PR #645 (2026-11-16) (approach decided in `/ready`, 2026-11-14:
 state-guarded conditional UPDATEs, not `@Version`)
 **Autopilot:** ready · **Risk:** low · **Complexity:** medium · **Depends on:** —
 **Touches:** notification-service (domain, repository, service, scheduler; src/test), root (.ai/context/architecture.md)
