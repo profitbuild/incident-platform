@@ -3453,6 +3453,11 @@ On 2026-11-16, after #0-250: wf_24c48844-aa4 was refused by `guard-factory-scrip
 no environment problem; the gate built and tested all nine modules in 03:03 min (Testcontainers' pulls allowed,
 #0-247) and answered, the isolation probe was recorded as review-general, the panel approved in round 1 and the
 acceptance met AC1-AC13. Its PR kept the draft's title "(BLOCKED)" (#0-254).
+**2 of 3: run wf_5135023f-b7d (#0-25, PR #645, merged 2026-11-16)**, the queue's next item, started with no argument:
+through every stage with no environment problem; six reviewers approved in round 1, the acceptance accepted, ADR-0059.
+Its factory-ops relayed one `changed-paths.sh` answer with a file name garbled (`a35aa6ee/context/architecture.md`
+for `.ai/context/architecture.md`; the script's own output, in the transcript, was right): a model's copy, not the
+script, and nothing it decided was wrong (the relay of ADR-0058's Consequences).
 AC6. README "Infrastructure Hardening" and `docs/ai-factory.md` say where the autopilot runs and what isolates it;
 #0-202 and #0-225 point at what this stage settled for them, and #0-116 at what it did not.
 
