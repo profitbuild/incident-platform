@@ -145,6 +145,8 @@ resolvable.
 | 0-237 | Migration stage 1 (ADR-0055): the repository moved to the organisation `profitbuild`; the owner is read from `repository.json` (`scripts/factory/owner-login.sh`) by the audits and Factory guards, and only the owner's approval counts; the ruleset's bypass list, emptied by the transfer, restored; `dismissal_restriction` written; the bot's classic token pushes there. 2FA in the organisation is the owner's step left; the findings and the rollback are in [the section #0-237 below](#0-237-migration-stage-1-the-organisation-profitbuild-and-the-transfer-of-incident-platform) | PRs #623, #624 |
 | 0-240 | The build VM no longer reaches the Mac's loopback services: its Docker is rootless (code a test runs is `factory`, not root, in the VM) and root's `FACTORY-EGRESS` rejects the gateway (`host.lima.internal`), the VM's network and link-local for every uid from 1000 up, behind an allow-list; `create.sh` checks it after creation and after a reboot (ADR-0057); details in [the section](#0-240-the-build-vm-reaches-the-macs-loopback-services) | PR #632 |
 | 0-241 | Factory guards runs the agent command check tests only when one of their inputs changed (`run-agent-command-tests.sh`, tested by `test-run-agent-command-tests.sh`; a push to `main` or an unreadable base runs them; ADR-0050): the job took 2 min 42 s on PR #633 against about 7 minutes before; details in [the section](#0-241-the-agent-command-check-tests-run-on-every-pull-request-whatever-it-changes) | PR #631 |
+| 0-247 | The build VM's allow-list is kept by its own resolver: every DNS query of a uid from 1000 up is sent to dnsmasq on the VM, which adds what it answers for a listed name (with its subdomains) to `factory-dns`; private, shared and reserved networks rejected, dnsmasq unprivileged and sandboxed; `create.sh` checks it from a container (ADR-0057 amended); details in [the section](#0-247-the-build-vms-allow-list-of-addresses-does-not-hold-for-a-cdn) | PR #640 |
+| 0-248 | The autopilot's isolation check compares a fact, not the agent's yes or no: `review-general` quotes the opening of its instructions, asked without the preamble that points at its file, and the workflow looks for `REVIEW_GENERAL_OPENING` in it (a test holds the phrase equal to the definition); each failure has its own reason; details in [the section](#0-248-the-autopilots-isolation-check-trusts-the-agents-own-yes-or-no) | PR #641 |
 
 Items completed before `BACKLOG.md` existed are not listed.
 
@@ -3274,3 +3276,74 @@ cannot be read runs it.
 AC3. The inventory of inputs is a comment next to the condition, with how it was found.
 AC4. The saving is measured on the first pull requests after the change (Factory guards' duration before and
 after), in this item or `BACKLOG-DONE.md`.
+
+### 0-247. The build VM's allow-list of addresses does not hold for a CDN
+
+**Type:** security · **Priority:** High · **Status:** Done, PR #640 (2026-11-14) (ADR-0057
+amended). Found by the first autopilot run in the VM, run 20261114-155647 (#0-238's AC5; owner, 2026-11-14).
+**Autopilot:** human-only · **Risk:** high · **Complexity:** medium · **Depends on:** #0-116
+**Touches:** factory (scripts/factory-admin/build-vm/provision.sh and create.sh, owner-only), root (.ai/decisions/
+ADR-0057 amended), docs (docs/ai-factory.md "Build VM" and "What isolates what", README.md "Infrastructure Hardening")
+
+**Problem.** `FACTORY-EGRESS` (ADR-0057) allows the addresses its domains resolved to at boot and every 30 minutes.
+CloudFront answers `production.cloudfront.docker.com` with other addresses within minutes: the first autopilot run in
+the VM (#0-58) failed its gate on three Testcontainers pulls (`postgres:16-alpine`, `apache/kafka:3.9.2`), the daemon
+refused at `18.244.102.34:443`, which was not in the set; none of the four addresses DNS gave then was. `create.sh`
+did not show it, as it pulls seconds after the set is loaded. ADR-0057 named the gap as "a CDN that moves between two
+refreshes fails a download until the next": in practice, for CloudFront, most of the time.
+
+**Approach (decided, from a spike on factory-build).** Filter by name through the VM's own resolver, as dnsmasq's
+`ipset=` and Cilium's FQDN policies do: every DNS query of a uid from 1000 up goes, by a nat `OUTPUT` DNAT, to
+dnsmasq on the VM's address (port 5300, as the system user `dnsmasq`), which adds each address it answers for a listed
+name to the set `factory-dns` before the answer reaches the asker; `FACTORY-EGRESS` accepts that set and DNS only to
+the resolver. Not chosen: an HTTP proxy with a domain list (Maven, npm, the image build and Testcontainers behind proxy
+settings, a larger change), the CDNs' whole ranges (opens every site behind CloudFront and Cloudflare), pulling images
+ahead (a workaround: every new image meets the same refusal). Found in the spike: a container's query leaves
+slirp4netns from the VM's address and by `eth0`, so the rewrite is a DNAT to the VM's address, not a `REDIRECT` to
+127.0.0.1 (dropped, `route_localnet`), and its accept rule names no device; 5353 is systemd-resolved's mDNS.
+
+AC1. Every DNS query of a uid from 1000 up reaches only the VM's resolver, and an address it answers for a listed name
+is in `factory-dns` before the asker connects; a container resolves through it.
+AC2. An image whose blobs come from CloudFront is pulled by the rootless daemon long after the last refresh (the three
+images of run 20261114-155647, pulled again from nothing after a reboot), and the gate's Testcontainers tests that
+failed in that run pass in the devcontainer in the VM.
+AC3. `example.com` stays refused, as `factory`, as a subordinate uid and from a container, and its address does not
+enter `factory-dns`; the resolver answers no query from outside the VM.
+AC4. `create.sh` checks it on the started VM and after its reboot: the resolver active, the DNS rewrite and the set's
+rule in place, a container's answer for a listed name in the set, a container refused `example.com`, and each check
+pulls its image again.
+AC5. ADR-0057 (amended), `docs/ai-factory.md` and README "Infrastructure Hardening" say the allow-list is of names
+(with their subdomains) kept by the resolver, and drop "a CDN address that changed since the last refresh".
+
+### 0-248. The autopilot's isolation check trusts the agent's own yes or no
+
+**Type:** ci · **Priority:** High · **Status:** Done, PR #641 (2026-11-14). Found by
+two runs in the build VM (#0-238's AC5; owner, 2026-11-14).
+**Autopilot:** human-only · **Risk:** medium · **Complexity:** low · **Depends on:** —
+**Touches:** factory (.claude/workflows/backlog-autopilot.js, .github/scripts/test-autopilot-workflow.mjs: owner-only),
+docs (docs/ai-factory.md "Troubleshooting")
+
+**Problem.** Before any work the autopilot asks `review-general` which tools it has and "whether your instructions are
+the review-general agent definition", and stops unless the answer is `definitionLoaded: true`. In the build VM, with
+Claude Code 2.1.325, the agent answered `false` in runs wf_1e3befc7-a08 and wf_477d7545-796 although its definition
+had loaded (its transcript: the `review-general` type, its system prompt, its preloaded skill, no Edit or Write): the
+definition's text never names itself `review-general`, and the answer is the model's judgement, not a fact. Both
+runs ended `NOT_STARTED`, and the item could not be resumed.
+
+**Approach (decided by the owner).** Ask for a fact, not a judgement: the agent quotes the first 500 characters of its
+own instructions, and the workflow looks for `REVIEW_GENERAL_OPENING` ("You are the general reviewer", the opening of
+`review-general.md`'s body) in them, not at their start, as a runtime may put a preamble of its own before the
+definition; a test holds the phrase equal to the file. The question goes without `as()`'s preamble (`bare`), which
+tells an agent to read its definition's file, so the answer is not handed to it. The tool check (no Edit, Write,
+MultiEdit, NotebookEdit) stays the barrier: an agent of the wrong type has Edit and Write. Not chosen: dropping the
+definition check and keeping the tools only (a read-only agent of another definition would pass). Left, named (review
+round 1): the phrase is in the repository, so an agent that reads files unasked could still find it; and the tool
+check takes the agent's own list and names four tools, so an MCP tool that writes files would pass it.
+
+AC1. The isolation check passes when the agent's quoted opening holds review-general's phrase (after a runtime preamble
+too) and its tools are a list of names without an editing tool, and stops the run with a reason that says which
+failed otherwise (no answer, no list of tools, an editing tool, other instructions), the lock released.
+AC2. A test fails when `REVIEW_GENERAL_OPENING` no longer opens `.claude/agents/review-general.md`'s body.
+AC3. `docs/ai-factory.md` "Troubleshooting" names both reasons, and the resume of a branch that is only on origin.
+AC4. The isolation question names no definition file and does not hold the phrase it looks for; the other agents keep
+`as()`'s preamble.

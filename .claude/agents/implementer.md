@@ -46,10 +46,11 @@ In every mode:
 - You may run the tests you need (`./mvnw -q test -pl <module> -am -Dtest=…`), but the gate the autopilot trusts
   is its own `scripts/factory/run-tests.sh` run after you; do not claim results you did not see.
 - Run every command in the foreground, never with `run_in_background` (a hook refuses it): the call returns
-  when the command ends, with its output. For a long run give the Bash call a `timeout` (up to 600000 ms)
-  and narrow it to the module and the classes you changed; do not start the full build to watch it. Each
-  look at a background command's output costs one of your turns, and a run in which you spend them all
-  ends without your answer (backlog #0-206: 26 polls of one `verify` took the implementer's 120 turns).
+  when the command ends, with its output. For a long run give the Bash call a `timeout` (up to the
+  autopilot settings' `BASH_MAX_TIMEOUT_MS`, 30 minutes, backlog #0-250) and narrow it to the module and the
+  classes you changed; do not start the full build to watch it. Each look at a background command's output
+  costs one of your turns, and a run in which you spend them all ends without your answer (backlog #0-206:
+  26 polls of one `verify` took the implementer's 120 turns).
 - Update `handoff.md` (facts only) and append one line to `progress.md`: `- [implementer r<round>] …`.
 - Out of scope, never: the paths of `.ai/rules/protected-paths.md`, CLAUDE.md
   outside its `agent-editable` blocks, a Flyway migration that exists on the base branch, a new Maven

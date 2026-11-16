@@ -12,7 +12,8 @@
 # FACTORY_LOCK_HOURS, default 3); Docker is not reachable (the tests need it); Claude Code is older than 2.1.295, or
 # does not say its version (the hooks' onFailure, backlog #0-162); the run is not in the devcontainer, is not the
 # bot's, or example.com is not refused (no firewall); the session was not started with main's
-# .claude/settings.autopilot.json and .claude/settings.json (backlog #0-194, ADR-0052).
+# .claude/settings.autopilot.json and .claude/settings.json (backlog #0-194, ADR-0052); its BASH_DEFAULT_TIMEOUT_MS or
+# BASH_MAX_TIMEOUT_MS is below 30 minutes (the test gate's answer, backlog #0-250).
 # The breaker and the audit trigger create .ai/STOP, so the owner has to clear them on purpose.
 # ============================================================
 set -uo pipefail
@@ -35,6 +36,22 @@ for limit in FACTORY_MAX_BLOCKED FACTORY_AUDIT_EVERY FACTORY_MAX_MERGES_PER_DAY;
     is_int "${!limit:-}" || add "$limit is not set to a number: settings.autopilot.json's env sets it, so the session was not started with that file (claude --settings .claude/settings.autopilot.json; backlog #0-194)"
 done
 LOCK_HOURS=${FACTORY_LOCK_HOURS:-3}
+
+# Fixed (backlog #0-250): Claude Code moves a foreground Bash command that reaches its timeout to the background
+# instead of stopping it (2.1.x, tools reference), and a call without its own `timeout` has 2 minutes. factory-ops
+# runs run-tests.sh with none and has one call per task (#0-169), so in the run of #0-58 (2026-11-15) the gate, a few
+# minutes long, went to the background, its JSON never came back and the item stopped BLOCKED "test gate returned no
+# result". settings.autopilot.json's env sets the default to 30 minutes, and the ceiling (BASH_MAX_TIMEOUT_MS, 10
+# minutes unless set) to the same: the docs do not say whether the default is bounded by the ceiling (review round 1
+# of #0-250), and with both set it does not matter. A session with less of either, or none, refuses here, before an
+# item is locked, not at the gate.
+GATE_TIMEOUT_MS=1800000
+for timeout_var in BASH_DEFAULT_TIMEOUT_MS BASH_MAX_TIMEOUT_MS; do
+    timeout_value=${!timeout_var:-}
+    if ! is_int "$timeout_value" || [ "$timeout_value" -lt "$GATE_TIMEOUT_MS" ]; then
+        add "$timeout_var is '$timeout_value', below $GATE_TIMEOUT_MS: a Bash call that reaches its timeout goes to the background and the test gate's answer is lost; settings.autopilot.json's env sets it, so start the session with that file (backlog #0-250)"
+    fi
+done
 
 # Fixed (backlog #0-194, ADR-0052): nothing checked where the run starts. On the host, with a clean main, Docker up
 # and no personal settings file, the autopilot started outside the firewall, with the owner's files, git identity and

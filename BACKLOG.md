@@ -158,6 +158,9 @@ Code, Javadoc, config comments and commits reference items as `backlog #N`.
 | [0-244](#0-244-no-review-rule-covers-the-build-vms-own-allow-list) | No review rule covers the build VM's own allow-list | security | Low | Open |
 | [0-245](#0-245-validation-errors-do-not-redact-apikey-and-privatekey-fields) | Validation errors do not redact `apiKey` and `privateKey` fields | bug | Medium | Open |
 | [0-246](#0-246-service-classes-below-60-coverage-found-with-0-57) | Service classes below 60% coverage, found with #0-57 | tech-debt | Low | Open |
+| [0-249](#0-249-claude-code-in-the-devcontainer-image-is-whatever-version-was-current-at-build-time) | Claude Code in the devcontainer image is whatever version was current at build time | ci | Medium | Open |
+| [0-250](#0-250-the-test-gate-goes-to-the-background-after-two-minutes-and-its-answer-is-lost) | The test gate goes to the background after two minutes, and its answer is lost | ci | High | In progress |
+| [0-251](#0-251-a-live-runs-lock-turns-stale-after-a-fixed-three-hours) | A live run's lock turns stale after a fixed three hours | ci | Low | Open |
 | [0-133](#0-133-incidentresolvedevent-carries-no-openedat) | `IncidentResolvedEvent` carries no `openedAt` | tech-debt | Low | Open |
 | [0-134](#0-134-diff-cover-is-installed-by-version-without-hashes) | `diff-cover` is installed by version, without hashes | ci | Low | Open |
 | [0-135](#0-135-kubectl-in-ci-is-downloaded-unverified) | kubectl in CI is downloaded unverified | ci | Low | Open |
@@ -3467,6 +3470,10 @@ AC3. The repository inside the VM is a clone of its own: no mount of the owner's
 owner's (#0-202's concern, checked in the VM).
 AC4. In the VM the devcontainer starts with its firewall and a test gate with Testcontainers passes (S3).
 AC5. Three autopilot items run on the VM with no environment problem (ADR-0055's exit), each named here with its run id.
+Runs so far: run 20261114-155647 (#0-58, PR #639, draft): BLOCKED by the environment, so not one of the three: its
+gate's Testcontainers pulls were refused on CloudFront addresses the VM's allow-list had not resolved (#0-247).
+Then #0-58 resumed on 2026-11-15, after #0-248: past the isolation check, BLOCKED at the gate ("test gate returned no
+result", #0-250): a factory problem, not the VM's, and not one of the three either.
 AC6. README "Infrastructure Hardening" and `docs/ai-factory.md` say where the autopilot runs and what isolates it;
 #0-202 and #0-225 point at what this stage settled for them, and #0-116 at what it did not.
 
@@ -3581,6 +3588,13 @@ line of defence must not parse the original, not where its consumer has no repos
 AC1. FAC-S02 names `VM_ONLY_DOMAINS` (or every egress allow-list of the factory) and both kinds of host to look for.
 AC2. FAC-S02 (or a new rule) covers every firewall of the factory, the build VM's `FACTORY-EGRESS` among them.
 AC3. FAC-A01 names a copy kept because its consumer has no repository at run time, with the check it then needs.
+AC4. The rule covers how the build VM matches a name too (#0-247): its resolver allows each entry with every subdomain,
+which whoever asks chooses, so an entry is a namespace nobody else can create names under (not an object-storage,
+user-content or other multi-tenant domain, such as `*.r2.cloudflarestorage.com` or `githubusercontent.com`), and the
+VM's copy of the devcontainer's list is judged by that meaning, not only by equal entries (review round 2 of #0-247).
+AC5. A FAC-A rule says a workflow's check of an agent (its type, its definition, its tools) asks for an answer the
+workflow's own prompt does not give it: #0-248 found `as()`'s preamble pointing the isolation check's agent at the
+file holding the expected answer (review round 1 of #0-248).
 
 ### 0-245. Validation errors do not redact `apiKey` and `privateKey` fields
 
@@ -3620,3 +3634,99 @@ auth-service's `SlackWorkspace` is next changed, the comment should say it carri
 change over time, and point to the criterion in `.ai/context/architecture.md` (#0-25 AC5). The same words in
 `V17__create_slack_workspaces.sql` stay: a migration on `main` is never edited.
 
+### 0-249. Claude Code in the devcontainer image is whatever version was current at build time
+
+**Type:** ci · **Priority:** Medium · **Status:** Open. Found with #0-248 (owner, 2026-11-14).
+**Autopilot:** human-only · **Risk:** medium · **Complexity:** low · **Depends on:** —
+**Touches:** factory (.devcontainer/Dockerfile, owner-only), docs (docs/ai-factory.md "Pinned versions"), root
+(.ai/decisions/ ADR-0039 amended, if the floor 2.1.295 becomes a pin)
+
+**Problem.** `.devcontainer/Dockerfile` installs Claude Code with `curl -fsSL https://claude.ai/install.sh | bash`, the
+newest release at the moment the image is built; `DISABLE_AUTOUPDATER` only stops it from moving afterwards. So two
+images built on different days run different versions, and nothing records which: the build VM's image (built
+2026-11-14) runs 2.1.325, the Mac's devcontainer an older one, and the isolation check that passed on the Mac failed
+on the VM (#0-248). `docs/ai-factory.md` "Pinned versions" says Claude Code "is pinned to the version the
+devcontainer image was built with", which is true of one image, not of the factory; a change of agent behaviour
+arrives with a rebuild, unreviewed, while every other tool of the factory is pinned and bumped in a PR (ADR-0033).
+
+**Approach.** Install an exact version (the native installer takes one: `bash -s <version>`), held in one place the
+Dockerfile reads, bumped in a PR like the other pins, with the seed-bugs benchmark run before a bump is trusted (as
+"Pinned versions" already asks); check it in the preflight (the floor of ADR-0039 becomes the pinned version, or the
+pin is checked beside it) and, if Renovate can read it, let it propose bumps. Decide whether the installer script
+itself, fetched from claude.ai at build time, is checked against a digest.
+
+AC1. Two images built from the same commit run the same Claude Code version, the one named in the repository.
+AC2. A bump is a change to that one place, in a PR; `docs/ai-factory.md` "Pinned versions" says how.
+AC3. The preflight refuses a Claude Code other than the pinned version (or below it, if the owner keeps a floor), and
+says which it found.
+
+
+### 0-250. The test gate goes to the background after two minutes, and its answer is lost
+
+**Type:** ci · **Priority:** High · **Status:** In progress, in the PR of `ci/0-250-gate-bash-timeout`. Found by the
+run of #0-58 in the build VM (#0-238's AC5; owner, 2026-11-15).
+**Autopilot:** human-only · **Risk:** medium · **Complexity:** low · **Depends on:** —
+**Touches:** factory (.claude/settings.autopilot.json, scripts/factory/preflight.sh, .github/scripts/test-preflight.sh,
+.claude/agents/implementer.md, .claude/hooks/foreground-bash.sh: owner-only), docs (docs/ai-factory.md preflight list
+and "Troubleshooting", ADR-0052's list of refusals)
+
+**Problem.** factory-ops ran `scripts/factory/run-tests.sh '0-58' '1-0' <base>` with no `timeout` and no
+`run_in_background` (its transcript). Claude Code 2.1.x gives such a call 2 minutes and, when a foreground command
+reaches its timeout, moves it to the background instead of stopping it (tools reference, "Foreground commands that
+move to the background"). The gate of a change to `shared` runs every module, 4 minutes on the Mac (#0-199's log),
+so it went to the background; factory-ops has one call per task (#0-169), its waits (`sleep`, `tail -f`) were
+refused, and it ended without the script's JSON. The workflow stopped the item BLOCKED, "test gate returned no
+result", before the panel. The gates of #0-199 and #0-200 (2026-11-03, on an older Claude Code) had passed.
+
+**Approach (decided by the owner).** `BASH_DEFAULT_TIMEOUT_MS` of 30 minutes (`1800000`) in
+`settings.autopilot.json`'s `env`: every Bash call of the autopilot without its own `timeout` waits that long, whatever
+the model sets, and the settings hash makes the session carry it; the preflight refuses a session whose value is unset
+or lower, before an item is locked. `BASH_MAX_TIMEOUT_MS` is set to the same (review round 1): the docs do not say
+whether the default is bounded by the ceiling (10 minutes unless set), and with both set it does not matter; it also
+lets the implementer give a long run up to 30 minutes, and its hints (`implementer.md`, `foreground-bash.sh`) say so.
+Both apply to every agent of the autopilot, so a command that hangs holds its agent up to 30 minutes, not 2. Not chosen: a `timeout` in the prompt of `ops()` (the model's choice, a ceiling of
+10 minutes); refusing `run_in_background` in factory-ops' hook (the call had none);
+`CLAUDE_CODE_DISABLE_BACKGROUND_TASKS` (it also stops Claude Code moving subagents to the background, untested with a
+Workflow's agents).
+
+AC1. `settings.autopilot.json`'s `env` sets `BASH_DEFAULT_TIMEOUT_MS` and `BASH_MAX_TIMEOUT_MS` to `1800000`, and
+`FACTORY_SETTINGS_SHA256` carries the new hash.
+AC2. The preflight refuses a session whose `BASH_DEFAULT_TIMEOUT_MS` or `BASH_MAX_TIMEOUT_MS` is unset, not a number
+or below `1800000`, and says so; tests in `test-preflight.sh` fail without the check, and its passing session takes
+both values from the repository's `settings.autopilot.json`.
+AC3. `docs/ai-factory.md` names the check in the preflight's list and "test gate returned no result" in
+"Troubleshooting".
+AC4. A resumed run of #0-58 in the build VM gets past the gate with its JSON (the gate passes or fails, but answers).
+It is also the check of the one assumption left unverified: that Claude Code applies a settings file's
+`env.BASH_DEFAULT_TIMEOUT_MS` to the Bash tool of a Workflow's agents, not only of the main session. The docs do not
+say; what speaks for it is that `FACTORY_SETTINGS_SHA256` from the same `env` reaches factory-ops' scripts, but that
+is the shell's environment, not the tool's own timeout. Counts only if the gate ran longer than 2 minutes (the
+`Total time` in its log under `.ai/runs/0-58/`); if it went to the background again, the variable did not reach the
+agent and the fix has to move into the workflow (a `timeout` the hook requires of factory-ops' call).
+
+
+### 0-251. A live run's lock turns stale after a fixed three hours
+
+**Type:** ci · **Priority:** Low · **Status:** Open. Found by the review of #0-250 (round 2, architecture; owner,
+2026-11-16).
+**Autopilot:** human-only · **Risk:** medium · **Complexity:** medium · **Depends on:** #0-250
+**Touches:** factory (scripts/factory/preflight.sh, scripts/factory/state.sh, .claude/workflows/, .github/scripts/
+tests: owner-only), docs (docs/ai-factory.md, ADR-0052 "Consequences")
+
+**Problem.** `preflight.sh` writes `.ai/runs/LOCK` once, when a run starts, and a later preflight treats it as stale
+once its mtime is older than `FACTORY_LOCK_HOURS` (default 3): nothing touches it while the run works
+(`state.sh branch` rewrites it once, early). The window is a guess about how long a run takes, and nothing ties it
+to the limits that bound that. Since #0-250 every Bash call of the autopilot may wait 30 minutes instead of 2 (10 at
+most before), so a run with a few hung commands across the implementer, the gate and the panel's rounds can pass three
+hours while it is still working, and a second session's preflight would take the lock over it: two runs on one
+checkout. Unlikely today (one session at a time, started by the owner), but nothing refuses it.
+
+**Approach (to decide at /ready).** Either the workflow refreshes the lock at each stage (`state.sh touch`, a factory-ops
+call between stages, so a lock older than the window means a run that stopped), or the window is derived from the
+limits (stages × rounds × the Bash ceiling) and checked against them, or both. A refreshed lock keeps the 3 hours
+meaningful and needs no arithmetic; a derived window needs none of the workflow's calls.
+
+AC1. A run that is still working is never taken over by another session's preflight, whatever its length within the
+factory's limits; a test shows it.
+AC2. A lock left by a run that stopped still turns stale and is taken over, as now.
+AC3. `docs/ai-factory.md` and ADR-0052 "Consequences" say what makes a lock stale.

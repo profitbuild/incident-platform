@@ -44,6 +44,10 @@ The preflight refuses, naming the missing signal, when:
    own `env`, so the session holds the value of the files it loaded.
 5. **a limit is missing**: `FACTORY_MAX_BLOCKED`, `FACTORY_AUDIT_EVERY` or `FACTORY_MAX_MERGES_PER_DAY` is not a
    number. They have no default; a check bounded by a missing limit is skipped, never run against nothing.
+6. **a short Bash timeout** (added by backlog #0-250, decided by the owner, recorded there): `BASH_DEFAULT_TIMEOUT_MS`
+   or `BASH_MAX_TIMEOUT_MS` is not a number of at least `1800000` (30 minutes), both set in the same `env`. Claude
+   Code moves a foreground command that reaches its timeout to the background, and factory-ops, with one call per
+   task, then loses the test gate's answer.
 
 Factory guards' "Autopilot settings carry their hash" (`check-settings-hash.sh`) fails a change to either file that
 leaves the field stale, and prints the value to put in.
@@ -90,3 +94,6 @@ leaves the field stale, and prints the value to put in.
   did not, the first run would refuse at the preflight (fail closed), not run unchecked.
 - A reviewer recognises a violation as a refusal removed or turned into a warning, a default given back to a limit,
   or a change to the settings file without its hash.
+- Refusal 6 (#0-250) lets every Bash call of the autopilot wait 30 minutes, so a run can last longer than before, while
+  the lock still turns stale `FACTORY_LOCK_HOURS` (3) after the run started: a run that long, still working, could be
+  taken over by another session's preflight. Backlog #0-251.

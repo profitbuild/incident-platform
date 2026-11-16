@@ -671,8 +671,11 @@ security boundary, so every rule that matters is also enforced outside the model
   apt key pinned by fingerprint), so root in any container a test starts is `factory` in the VM and cannot change the
   VM's firewall or `/etc`, nor read root's files. Root's chain `FACTORY-EGRESS`, matched on every uid from 1000 up
   (`factory`, its subordinate range, any later user; only system accounts are free), lets everything they send (the
-  daemon, every container, the devcontainer's included) reach DNS and an allow-list only, refreshed every 30 minutes,
-  rejects the gateway (the Mac's loopback services), the VM's network, link-local, the VM's own listeners but the
+  daemon, every container, the devcontainer's included) reach the VM's own resolver and an allow-list of names, **each with
+  its subdomains**, only, kept by that resolver (dnsmasq adds what it answers for a listed name, #0-247: a set resolved
+  every 30 minutes did not hold for a CDN; it runs as the user `dnsmasq` with `CAP_NET_ADMIN` alone, refuses private
+  answers, and a flaw in it is named in ADR-0057 as a way around the chain), rejects the gateway (the Mac's loopback
+  services), the VM's network, every private, shared and loopback network, link-local, the VM's own listeners but the
   ports Docker publishes, and IPv6;
   it is in place before `factory`'s session starts, which requires it, and fails closed. Root writes nothing under
   `factory`'s home (a link planted there would turn a root write into root for `factory`). `create.sh` checks all of it

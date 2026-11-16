@@ -77,7 +77,15 @@ git add -A && git -c user.name=t -c user.email=t@t commit -qm init
 settings_sha=$(scripts/factory/settings-hash.sh .claude/settings.autopilot.json .claude/settings.json)
 
 # The environment of a correct session: in the devcontainer, as the bot, started with this repository's
-# settings.autopilot.json over its settings.json (their hash and the three limits its env sets).
+# settings.autopilot.json over its settings.json (their hash, the three limits and the two Bash timeouts its env sets).
+# The two timeouts are read from this repository's own settings.autopilot.json, not written here (review round 1 of
+# #0-250): a change that lowered them there would pass this file and refuse only at the next run's preflight.
+real_settings="$SRC/.claude/settings.autopilot.json"
+for timeout_var in BASH_DEFAULT_TIMEOUT_MS BASH_MAX_TIMEOUT_MS; do
+    timeout_value=$(jq -r --arg v "$timeout_var" '.env[$v] // empty' "$real_settings") \
+        || { echo "::error::cannot read $timeout_var from $real_settings"; exit 1; }
+    export "$timeout_var=$timeout_value"
+done
 export FACTORY_DEVCONTAINER=1 FACTORY_BOT_LOGIN=bot GIT_AUTHOR_NAME=bot GIT_COMMITTER_NAME=bot \
     GIT_AUTHOR_EMAIL=1+bot@users.noreply.github.com GIT_COMMITTER_EMAIL=1+bot@users.noreply.github.com \
     FACTORY_MAX_BLOCKED=2 FACTORY_AUDIT_EVERY=10 FACTORY_MAX_MERGES_PER_DAY=5 FACTORY_SETTINGS_SHA256="$settings_sha"
@@ -201,6 +209,24 @@ for limit in FACTORY_MAX_BLOCKED FACTORY_AUDIT_EVERY FACTORY_MAX_MERGES_PER_DAY;
     out=$(unset "$limit"; run_preflight "$green")
     if printf '%s' "$out" | jq -e "$(has "$limit is not set to a number")" >/dev/null 2>&1; then ok "no $limit stops"
     else fail "no $limit: not refused: $(printf '%s' "$out" | head -c 400)"; fi
+done
+# The Bash timeouts (backlog #0-250): below 30 minutes the gate's command goes to the background and its answer is
+# lost. The green case above ran with this repository's own values, so they are not below it either.
+for timeout_var in BASH_DEFAULT_TIMEOUT_MS BASH_MAX_TIMEOUT_MS; do
+    out=$(unset "$timeout_var"; run_preflight "$green")
+    if printf '%s' "$out" | jq -e "$(has "$timeout_var is '', below 1800000")" >/dev/null 2>&1; then ok "no $timeout_var stops"
+    else fail "no $timeout_var: not refused: $(printf '%s' "$out" | head -c 400)"; fi
+    out=$(export "$timeout_var=120000"; run_preflight "$green")
+    if printf '%s' "$out" | jq -e "$(has "$timeout_var is '120000', below 1800000")" >/dev/null 2>&1
+    then ok "$timeout_var of 2 minutes (Claude Code's default Bash timeout) stops"
+    else fail "$timeout_var of 2 minutes: not refused: $(printf '%s' "$out" | head -c 400)"; fi
+    out=$(export "$timeout_var=30m"; run_preflight "$green")
+    if printf '%s' "$out" | jq -e "$(has "$timeout_var is '30m', below 1800000")" >/dev/null 2>&1
+    then ok "$timeout_var that is not a number of milliseconds stops"
+    else fail "$timeout_var of 30m: not refused: $(printf '%s' "$out" | head -c 400)"; fi
+    out=$(export "$timeout_var=3600000"; run_preflight "$green")
+    if printf '%s' "$out" | jq -e '.ok == true and .reasons == []' >/dev/null 2>&1; then ok "a longer $timeout_var passes"
+    else fail "a longer $timeout_var: refused: $(printf '%s' "$out" | head -c 400)"; fi
 done
 FACTORY_MAX_BLOCKED=two expect "a limit that is not a number stops" "$green" "$(has "FACTORY_MAX_BLOCKED is not set to a number")"
 if [ -f .ai/STOP ]; then fail "a missing limit wrote .ai/STOP (the breaker ran against no limit)"; rm -f .ai/STOP

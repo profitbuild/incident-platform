@@ -131,8 +131,11 @@ The VM's Docker is rootless (ADR-0057, #0-116, #0-240): its daemon runs as `fact
 the devcontainer's included, is `factory` in the VM, and root's chain `FACTORY-EGRESS` filters everything any uid
 from 1000 up sends, `factory` and its subordinate range among them (a copy of the devcontainer's allow-list plus the
 VM's own: image registries, Ubuntu's archive; nothing on the Mac, none of the VM's own listeners but the ports Docker
-publishes, no IPv6). A domain added to or removed from the devcontainer's `init-firewall.sh` changes the copy in
-`factory-egress.sh` in `provision.sh` too: Factory guards and `create.sh` refuse the two apart.
+publishes, no IPv6). Every DNS query of those uids goes to the VM's own resolver (dnsmasq,
+`factory-dns.service`), which adds the addresses it answers for a listed name, or a subdomain of one, to the filter's
+set before the asker gets them: a set resolved every 30 minutes failed the first autopilot run's image pulls on
+CloudFront's changing addresses (#0-247). A domain added to or removed from the devcontainer's `init-firewall.sh`
+changes the copy in `factory-egress.sh` in `provision.sh` too: Factory guards and `create.sh` refuse the two apart.
 
 1. **Create:** `scripts/factory-admin/build-vm/create.sh`. It refuses an instance that exists (`delete.sh` first),
    downloads Ubuntu's image once (Lima checks the pinned sha256), runs `provision.sh` (Docker CE rootless for user
@@ -216,6 +219,11 @@ what it missed:
   `settings.json`. A session reads its settings once, when it starts: after a change to either reaches `main`, even
   through the preflight's own fast-forward, start a new session. The three limits (`FACTORY_MAX_BLOCKED`, `FACTORY_AUDIT_EVERY`, `FACTORY_MAX_MERGES_PER_DAY`) have no
   default either.
+- **a short Bash timeout**: `BASH_DEFAULT_TIMEOUT_MS` or `BASH_MAX_TIMEOUT_MS` is unset or below 30 minutes
+  (`1800000`). Claude Code moves a foreground command that reaches its timeout to the background, and factory-ops,
+  with one call per task, would lose the test gate's answer (backlog #0-250). The ceiling is set too because the docs
+  do not say whether it bounds the default. Both apply to every agent of the autopilot: a command that hangs holds
+  its agent up to 30 minutes.
 
 After changing `settings.autopilot.json` or `settings.json`, put the value `scripts/factory/settings-hash.sh` prints
 into `settings.autopilot.json`'s `env.FACTORY_SETTINGS_SHA256`; Factory guards ("Autopilot settings carry their hash") fails the PR until you do.
@@ -335,7 +343,7 @@ The agents' instructions are not a boundary; these are, each with its limit:
 | Gates on commits (`changed-paths.sh` before review, CI "Factory guards" on the PR) | the same changes once committed, whatever produced them | — the PR is the last and most reliable line |
 | The ruleset of `main` (#0-113, ADR-0034, `.github/repository-settings/`) | a push to `main` without a PR (anyone's), a merge with a red or missing required check, without an approval of the last push, or of a code owner's path without the owner's (anyone's but the owner's) | the owner's token can merge any PR (the admin role's bypass, at merge; Claude Code sessions are denied it); a bypass actor or an admin added in the UI is seen only when the owner runs `repository-settings.rb check` |
 | Devcontainer + firewall | the agents' own commands: access to your host account, files and credentials; network beyond Anthropic, GitHub, Maven Central and the verifier's advisory hosts (OSV, Tomcat, Spring: open to the whole container, by IP, so also to other sites a CDN serves from those IPs) (IPv4; IPv6 only loopback; a failed setup blocks everything) | **code an agent runs** (a test): Testcontainers needs the host's Docker, and Docker access is root over the devcontainer itself, so such code can drop the firewall, start a container outside it, or read files the agents' tools may not (#0-116, accepted for shadow mode only); data through DNS the resolver forwards; GitHub itself as a channel |
-| Build VM (`factory-build`, Lima, ADR-0056 and ADR-0057; when the autopilot runs there, "Build VM") | the reach of that code to the Mac's files, the VM and the network: the Docker it uses is rootless, so root in any container it starts is the unprivileged `factory` in the VM (no change to the VM's firewall, `/etc` or root's files), and root's `FACTORY-EGRESS` lets every uid from 1000 up (`factory`, its subordinate range) reach only DNS, the ports Docker publishes on the VM's address and an allow-list: not the Mac (its loopback services, #0-240), not the VM's network, not a host outside the list, with `--network host` either; the VM mounts nothing of the Mac and holds a clone of its own (#0-202) | what `factory` holds: the devcontainer's volumes with the bot's token and Claude Code's login (stage 4 of ADR-0055); data through DNS, and through any site a shared front end in the list serves (Cloudflare, CloudFront: Docker Hub, download.docker.com, downloads.claude.ai), and the registries that take a push with the pusher's own credentials (Docker Hub, ghcr.io), as for the devcontainer's advisory hosts; a CDN address that changed since the last refresh (30 minutes) fails a download |
+| Build VM (`factory-build`, Lima, ADR-0056 and ADR-0057; when the autopilot runs there, "Build VM") | the reach of that code to the Mac's files, the VM and the network: the Docker it uses is rootless, so root in any container it starts is the unprivileged `factory` in the VM (no change to the VM's firewall, `/etc` or root's files), and root's `FACTORY-EGRESS` lets every uid from 1000 up (`factory`, its subordinate range) reach only the VM's own resolver, the ports Docker publishes on the VM's address and an allow-list of names (with their subdomains; no private, shared or loopback network), whose addresses the resolver adds as it answers them (#0-247): not the Mac (its loopback services, #0-240), not the VM's network, not a host outside the list, with `--network host` either; the VM mounts nothing of the Mac and holds a clone of its own (#0-202) | what `factory` holds: the devcontainer's volumes with the bot's token and Claude Code's login (stage 4 of ADR-0055); data through DNS, and through any site a shared front end in the list serves (Cloudflare, CloudFront: Docker Hub, download.docker.com, downloads.claude.ai), and the registries that take a push with the pusher's own credentials (Docker Hub, ghcr.io), as for the devcontainer's advisory hosts; a listed name allows its subdomains too; a flaw in the resolver, which holds `CAP_NET_ADMIN`, would reach the chain (ADR-0057) |
 
 ## Measuring the reviewers and the pipeline
 
@@ -443,13 +451,16 @@ file as the local VM (`provision.sh`, taken as cloud-init user-data, ADR-0056), 
 
 | Symptom | Likely cause |
 |---|---|
-| `NOT_STARTED: agent isolation check failed` | `AGENT_TYPE_OPTION` is wrong: reviewers ran as general-purpose agents |
+| `NOT_STARTED: agent isolation check failed: the reviewer can edit files` (or `did not list its tools`) | `AGENT_TYPE_OPTION` is wrong: reviewers ran as general-purpose agents (or the answer was malformed: run again) |
+| `NOT_STARTED: agent isolation check failed: the reviewer's instructions are not review-general's` | `AGENT_TYPE_OPTION` is wrong, or `REVIEW_GENERAL_OPENING` in the workflow no longer opens `.claude/agents/review-general.md` (its test says which) (#0-248) |
+| a resumed run stops at the pick: `no local branch <branch> to resume` | the branch is only on origin (a new VM's clone has `main` alone): in the devcontainer, `git fetch origin <branch>:<branch>` on `main`, then resume |
 | `NOT_STARTED: label '…' does not exist` | create the labels of #0-113 |
 | a hook says "factory scripts were changed on this branch" | `scripts/factory/` differs from the base commit in `.ai/runs/LOCK` (or `origin/main` without a run) — either the branch touched it (owner's decision) or `main` moved on: rebase the branch by hand |
 | every run `BLOCKED: test environment failure` | Docker not reachable from the container, or the firewall blocks Maven Central |
 | `permission denied while trying to connect to the docker API` inside the container | the container's main process must run as root (`"containerUser": "root"` in `devcontainer.json`) for the docker-outside-of-docker feature to proxy the socket to `dev`; rebuild with `devcontainer up --workspace-folder . --remove-existing-container` |
 | `mkdir: cannot create directory '/home/dev/.m2/wrapper': Permission denied` (or `gh` cannot store its login) | a volume created before the image made its mount point, so it is root's: remove it if it is empty (`docker volume rm incident-platform-m2` / `incident-platform-gh`) and start the container again; to keep its contents (a Maven cache, a login), give it to `dev` instead: `docker run --rm -v incident-platform-m2:/v alpine chown -R 1000:1000 /v` |
 | `FIREWALL SETUP FAILED: all traffic is blocked` at container start | a required domain did not resolve or GitHub's IP ranges could not be fetched; the message above it names the cause. Fix it and restart the container (an optional domain only warns) |
+| `BLOCKED: test gate returned no result` | factory-ops ended without `run-tests.sh`'s JSON. Its transcript shows whether the command was moved to the background: it reached the Bash timeout (`BASH_DEFAULT_TIMEOUT_MS` and `BASH_MAX_TIMEOUT_MS`, 30 minutes in the autopilot's settings since #0-250), so a gate that long needs a narrower module set or a higher timeout, an owner's change |
 | a reviewer "returned no valid verdict" | it answered prose instead of JSON; check its transcript; repeated → audit finding |
 | `BLOCKED: <agent> gave no answer (last agent call without an answer: <agent>: …)` | the agent ended without its JSON, usually its `maxTurns` spent (#0-206): the item is stopped like any block (draft PR when the run has a branch, state recorded with the stage, notification). Read its transcript for where the turns went, often refused commands (a hook names what to use instead); resume the branch once fixed |
 | `BLOCKED: picker failed: …` | a command of the picker was refused or failed (#0-206), not an empty queue: the reason quotes it. The picker creates no branch since #0-209; were one named anyway, the reason says so (`next-item.sh` skips the item while that branch exists: delete it, or resume it with `branch`). On resume the item is the one the branch names, so the stop is recorded against it |
