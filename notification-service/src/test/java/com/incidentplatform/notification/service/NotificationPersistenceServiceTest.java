@@ -3,28 +3,33 @@ package com.incidentplatform.notification.service;
 import com.incidentplatform.notification.domain.NotificationLog;
 import com.incidentplatform.notification.domain.NotificationLogStatus;
 import com.incidentplatform.notification.domain.NotificationQueueEntry;
-import com.incidentplatform.notification.domain.NotificationQueueStatus;
 import com.incidentplatform.notification.repository.NotificationLogRepository;
 import com.incidentplatform.notification.domain.UndeliverableReason;
 import com.incidentplatform.notification.repository.NotificationQueueRepository;
 import com.incidentplatform.shared.audit.AuditEventPublisher;
 import com.incidentplatform.shared.audit.AuditEventTypes;
 import com.incidentplatform.shared.domain.Severity;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.Instant;
 import java.util.Map;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
+import static org.mockito.Mockito.never;
 
 /**
  * Backlog #42. This class did not exist before — extracted from
@@ -47,10 +52,13 @@ class NotificationPersistenceServiceTest {
     private static final UUID INCIDENT_ID = UUID.randomUUID();
     private static final String EVENT_TYPE = "IncidentOpenedEvent";
 
+    private SimpleMeterRegistry meterRegistry;
+
     @BeforeEach
     void setUp() {
+        meterRegistry = new SimpleMeterRegistry();
         persistenceService = new NotificationPersistenceService(
-                queueRepository, logRepository, auditEventPublisher);
+                queueRepository, logRepository, auditEventPublisher, meterRegistry);
     }
 
     private NotificationQueueEntry buildEntry() {
@@ -58,26 +66,98 @@ class NotificationPersistenceServiceTest {
                 INCIDENT_ID, TENANT_ID, EVENT_TYPE, Severity.CRITICAL, "High CPU");
     }
 
+    private double staleWrites(String operation) {
+        return meterRegistry.counter("notification.queue.stale_write", "operation", operation).count();
+    }
+
+    // Backlog #0-25: the entry is no longer changed in memory and save()d; each
+    // transition is the repository's conditional UPDATE by id and tenant.
+
     @Test
-    @DisplayName("markSent marks the entry SENT and persists it")
+    @DisplayName("markSent marks the entry SENT through the conditional UPDATE of its id and tenant")
     void marksSentAndPersists() {
         final NotificationQueueEntry entry = buildEntry();
+        given(queueRepository.markSent(eq(entry.getId()), eq(TENANT_ID), any(Instant.class))).willReturn(1);
 
-        persistenceService.markSent(entry);
+        assertThat(persistenceService.markSent(entry)).isTrue();
 
-        assertThat(entry.getStatus()).isEqualTo(NotificationQueueStatus.SENT);
-        then(queueRepository).should().save(entry);
+        then(queueRepository).should().markSent(eq(entry.getId()), eq(TENANT_ID), any(Instant.class));
+        then(queueRepository).should(never()).save(any());
+        assertThat(staleWrites("sent")).isZero();
     }
 
     @Test
-    @DisplayName("markFailed marks the entry FAILED and persists it")
+    @DisplayName("markFailed marks the entry FAILED, with its error, through the conditional UPDATE")
     void marksFailedAndPersists() {
         final NotificationQueueEntry entry = buildEntry();
+        given(queueRepository.markFailed(eq(entry.getId()), eq(TENANT_ID), eq("oncall-service unreachable"),
+                any(Instant.class))).willReturn(1);
 
-        persistenceService.markFailed(entry, "oncall-service unreachable");
+        assertThat(persistenceService.markFailed(entry, "oncall-service unreachable")).isTrue();
 
-        assertThat(entry.getStatus()).isEqualTo(NotificationQueueStatus.FAILED);
-        then(queueRepository).should().save(entry);
+        then(queueRepository).should(never()).save(any());
+        assertThat(staleWrites("failed")).isZero();
+    }
+
+    @Test
+    @DisplayName("recordLookupFailure stores the first failed lookup through the conditional UPDATE")
+    void recordsLookupFailure() {
+        final NotificationQueueEntry entry = buildEntry();
+        given(queueRepository.recordLookupFailure(eq(entry.getId()), eq(TENANT_ID), any(Instant.class)))
+                .willReturn(1);
+
+        assertThat(persistenceService.recordLookupFailure(entry)).isTrue();
+
+        then(queueRepository).should(never()).save(any());
+        assertThat(staleWrites("lookup")).isZero();
+    }
+
+    /** Backlog #0-25 (AC3): 0 rows changed is false and counted with the operation's tag, 1 row is not. */
+    @ParameterizedTest(name = "{0}")
+    @ValueSource(strings = {"sent", "failed", "lookup"})
+    @DisplayName("a write that changes no row returns false and is counted per operation")
+    void staleWriteIsCountedPerOperation(String operation) {
+        final NotificationQueueEntry entry = buildEntry();
+        final java.util.function.Supplier<Boolean> write = switch (operation) {
+            case "sent" -> {
+                given(queueRepository.markSent(eq(entry.getId()), eq(TENANT_ID), any(Instant.class)))
+                        .willReturn(0, 1);
+                yield () -> persistenceService.markSent(entry);
+            }
+            case "failed" -> {
+                given(queueRepository.markFailed(eq(entry.getId()), eq(TENANT_ID), eq("boom"), any(Instant.class)))
+                        .willReturn(0, 1);
+                yield () -> persistenceService.markFailed(entry, "boom");
+            }
+            case "lookup" -> {
+                given(queueRepository.recordLookupFailure(eq(entry.getId()), eq(TENANT_ID), any(Instant.class)))
+                        .willReturn(0, 1);
+                yield () -> persistenceService.recordLookupFailure(entry);
+            }
+            default -> throw new IllegalArgumentException(operation);
+        };
+
+        assertThat(write.get()).as("0 rows").isFalse();
+        assertThat(staleWrites(operation)).isEqualTo(1.0);
+
+        assertThat(write.get()).as("1 row").isTrue();
+        assertThat(staleWrites(operation)).as("not counted again").isEqualTo(1.0);
+        assertThat(meterRegistry.find("notification.queue.stale_write").counters())
+                .as("no other operation's tag").hasSize(1);
+    }
+
+    /** Backlog #0-25 (AC3): an entry another writer already closed gets no NOTIFICATION_UNDELIVERABLE. */
+    @Test
+    @DisplayName("markUndeliverable on an entry no longer PENDING writes no audit event and counts the stale write")
+    void markUndeliverableOnAStaleRowWritesNoAuditEvent() {
+        final NotificationQueueEntry entry = buildEntry();
+        given(queueRepository.markUndeliverable(eq(entry.getId()), eq(TENANT_ID), eq("NO_ONCALL"),
+                any(Instant.class))).willReturn(0);
+
+        assertThat(persistenceService.markUndeliverable(entry, UndeliverableReason.NO_ONCALL)).isFalse();
+
+        then(auditEventPublisher).shouldHaveNoInteractions();
+        assertThat(staleWrites("undeliverable")).isEqualTo(1.0);
     }
 
     @Test
@@ -184,11 +264,13 @@ class NotificationPersistenceServiceTest {
     @DisplayName("markUndeliverable parks the entry and records NOTIFICATION_UNDELIVERABLE")
     void marksUndeliverableAndAudits() {
         final NotificationQueueEntry entry = buildEntry();
+        given(queueRepository.markUndeliverable(eq(entry.getId()), eq(TENANT_ID), eq("NO_ONCALL"),
+                any(Instant.class))).willReturn(1);
 
-        persistenceService.markUndeliverable(entry, UndeliverableReason.NO_ONCALL);
+        assertThat(persistenceService.markUndeliverable(entry, UndeliverableReason.NO_ONCALL)).isTrue();
 
-        assertThat(entry.getStatus()).isEqualTo(NotificationQueueStatus.UNDELIVERABLE);
-        then(queueRepository).should().save(entry);
+        then(queueRepository).should(never()).save(any());
+        assertThat(staleWrites("undeliverable")).isZero();
         then(auditEventPublisher).should().publishIncident(eq(INCIDENT_ID), eq(TENANT_ID),
                 eq(AuditEventTypes.NOTIFICATION_UNDELIVERABLE), eq("notification-service"), any(),
                 eq(Map.of("eventType", EVENT_TYPE, "reason", "NO_ONCALL")));

@@ -131,13 +131,14 @@ class NotificationEscalationSchemaIntegrationTest {
     @Test
     @DisplayName("queue: an UNDELIVERABLE entry is stored with its reason and is never picked up as PENDING (V6, backlog #0-18)")
     void queueStoresUndeliverableEntry() {
-        final NotificationQueueEntry undeliverable = entry(
-                UUID.randomUUID(), OPENED, 0, null);
-        undeliverable.markUndeliverable(UndeliverableReason.NO_ONCALL);
-        queueRepository.saveAndFlush(undeliverable);
-        // Without clearing, findById returns the very instance saved above from the first-level
-        // cache, and the assertions would check memory, not what Postgres stored.
-        entityManager.clear();
+        final NotificationQueueEntry undeliverable = queueRepository.saveAndFlush(entry(
+                UUID.randomUUID(), OPENED, 0, null));
+        // Backlog #0-25: the status is reached through the conditional UPDATE, the
+        // only way an existing entry changes (the entity has no mutators any more).
+        assertThat(queueRepository.markUndeliverable(undeliverable.getId(), TENANT_ID,
+                UndeliverableReason.NO_ONCALL.name(), Instant.now())).isEqualTo(1);
+        // The UPDATE clears the persistence context (clearAutomatically), so findById
+        // reads what Postgres stored, not the instance saved above.
 
         final NotificationQueueEntry reloaded =
                 queueRepository.findById(undeliverable.getId()).orElseThrow();
@@ -158,19 +159,18 @@ class NotificationEscalationSchemaIntegrationTest {
                 entry(UUID.randomUUID(), OPENED, 0, null));
         assertThat(pending.getFirstLookupFailureAt()).isNull();
 
-        pending.recordLookupFailure();
-        final Instant inMemory = pending.getFirstLookupFailureAt();
-        queueRepository.saveAndFlush(pending);
-        entityManager.clear();
+        // Backlog #0-25: recorded through the conditional UPDATE (the entity has no
+        // mutators any more), which also refuses to move a time already stored.
+        final Instant inMemory = Instant.now();
+        assertThat(queueRepository.recordLookupFailure(pending.getId(), TENANT_ID, inMemory)).isEqualTo(1);
 
         final NotificationQueueEntry reloaded = queueRepository.findById(pending.getId()).orElseThrow();
         final Instant stored = reloaded.getFirstLookupFailureAt();
         // read back from Postgres: TIMESTAMPTZ keeps microseconds, so compare with a tolerance
         assertThat(stored).isBetween(inMemory.minusSeconds(1), inMemory.plusSeconds(1));
 
-        reloaded.recordLookupFailure();
-        queueRepository.saveAndFlush(reloaded);
-        entityManager.clear();
+        assertThat(queueRepository.recordLookupFailure(pending.getId(), TENANT_ID,
+                inMemory.plusSeconds(60))).isZero();
 
         assertThat(queueRepository.findById(pending.getId()).orElseThrow()
                 .getFirstLookupFailureAt()).isEqualTo(stored);

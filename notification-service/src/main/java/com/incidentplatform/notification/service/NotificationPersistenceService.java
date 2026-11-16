@@ -8,9 +8,13 @@ import com.incidentplatform.notification.repository.NotificationQueueRepository;
 import com.incidentplatform.shared.audit.AuditEventPublisher;
 import com.incidentplatform.shared.audit.AuditEventTypes;
 import com.incidentplatform.shared.audit.AuditText;
+import io.micrometer.core.instrument.MeterRegistry;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
 import java.util.Map;
 import java.util.UUID;
 
@@ -61,23 +65,51 @@ import java.util.UUID;
  * event commit together or not at all. Before, the event was sent to Kafka
  * after the commit and without waiting, and was lost whenever Kafka was slow
  * or down. A failure to write it now fails the method, and the row with it.
+ *
+ * <h2>Queue writes are state-guarded (backlog #0-25, ADR-0059)</h2>
+ * {@link #markSent}, {@link #markFailed}, {@link #markUndeliverable} and
+ * {@link #recordLookupFailure} no longer change the entry and {@code save()}
+ * it: that merge wrote the columns as the caller had loaded them, so a stale
+ * writer (a run that outlived its ShedLock, an old pod in a rollout, the
+ * scheduler's catch-all {@code markFailed} after a committed
+ * {@code markUndeliverable}) overwrote a terminal status. Each is now one of
+ * {@code NotificationQueueRepository}'s conditional UPDATEs from PENDING,
+ * scoped by id and tenant, and returns whether it changed the row. A row that
+ * did not change is logged and counted ({@code notification.queue.stale_write}),
+ * and nothing else happens: no {@code NOTIFICATION_UNDELIVERABLE} event for an
+ * entry someone else closed. The in-memory entry keeps what was loaded: the
+ * scheduler's retry window, the one reader of a field written here, treats a
+ * missing first failure as "now".
  */
 @Service
 public class NotificationPersistenceService {
 
+    private static final Logger log =
+            LoggerFactory.getLogger(NotificationPersistenceService.class);
+
     private static final String SERVICE_NAME = "notification-service";
+
+    /** A queue write that changed nothing, by operation (backlog #0-25). */
+    static final String STALE_WRITE_METRIC = "notification.queue.stale_write";
+    static final String OPERATION_SENT = "sent";
+    static final String OPERATION_FAILED = "failed";
+    static final String OPERATION_UNDELIVERABLE = "undeliverable";
+    static final String OPERATION_LOOKUP = "lookup";
 
     private final NotificationQueueRepository queueRepository;
     private final NotificationLogRepository logRepository;
     private final AuditEventPublisher auditEventPublisher;
+    private final MeterRegistry meterRegistry;
 
     public NotificationPersistenceService(
             NotificationQueueRepository queueRepository,
             NotificationLogRepository logRepository,
-            AuditEventPublisher auditEventPublisher) {
+            AuditEventPublisher auditEventPublisher,
+            MeterRegistry meterRegistry) {
         this.queueRepository = queueRepository;
         this.logRepository = logRepository;
         this.auditEventPublisher = auditEventPublisher;
+        this.meterRegistry = meterRegistry;
     }
 
     /**
@@ -85,11 +117,14 @@ public class NotificationPersistenceService {
      * "no channels configured" early-return case and the normal
      * end-of-processing case in {@code NotificationService.processEntry} —
      * both are the exact same state transition.
+     *
+     * @return whether the entry was still PENDING and is now SENT (backlog
+     *         #0-25: {@code false} is logged and counted here)
      */
     @Transactional
-    public void markSent(NotificationQueueEntry entry) {
-        entry.markSent();
-        queueRepository.save(entry);
+    public boolean markSent(NotificationQueueEntry entry) {
+        return applied(queueRepository.markSent(
+                entry.getId(), entry.getTenantId(), Instant.now()), OPERATION_SENT, entry);
     }
 
     /**
@@ -98,33 +133,48 @@ public class NotificationPersistenceService {
      * {@code processEntry} itself throws an unexpected exception (as
      * opposed to an individual channel failure, which is recorded via
      * {@link #recordChannelFailed} and does not fail the whole entry).
+     *
+     * @return whether the entry was still PENDING and is now FAILED (backlog
+     *         #0-25: {@code false}, e.g. after an UNDELIVERABLE that already
+     *         committed, is logged and counted here and changes nothing)
      */
     @Transactional
-    public void markFailed(NotificationQueueEntry entry, String errorMessage) {
-        entry.markFailed(errorMessage);
-        queueRepository.save(entry);
+    public boolean markFailed(NotificationQueueEntry entry, String errorMessage) {
+        return applied(queueRepository.markFailed(
+                entry.getId(), entry.getTenantId(), errorMessage, Instant.now()), OPERATION_FAILED, entry);
     }
 
     /**
      * Records the first failed recipient lookup on {@code entry} and commits
      * immediately (backlog #0-19); later failures leave the timestamp alone.
+     *
+     * @return whether the entry was still PENDING with no failure recorded and
+     *         now has this one (backlog #0-25: {@code false} is logged and
+     *         counted here)
      */
     @Transactional
-    public void recordLookupFailure(NotificationQueueEntry entry) {
-        entry.recordLookupFailure();
-        queueRepository.save(entry);
+    public boolean recordLookupFailure(NotificationQueueEntry entry) {
+        return applied(queueRepository.recordLookupFailure(
+                entry.getId(), entry.getTenantId(), Instant.now()), OPERATION_LOOKUP, entry);
     }
 
     /**
      * Marks {@code entry} UNDELIVERABLE (backlog #0-18): nobody in the tenant
      * could be notified. Its {@code NOTIFICATION_UNDELIVERABLE} audit event is
-     * written in the same transaction (backlog #0-84).
+     * written in the same transaction (backlog #0-84), and only when the
+     * status changed (backlog #0-25): an entry another writer already closed
+     * gets no second outcome in the audit trail.
+     *
+     * @return whether the entry was still PENDING and is now UNDELIVERABLE
      */
     @Transactional
-    public void markUndeliverable(NotificationQueueEntry entry,
-                                  UndeliverableReason reason) {
-        entry.markUndeliverable(reason);
-        queueRepository.save(entry);
+    public boolean markUndeliverable(NotificationQueueEntry entry,
+                                     UndeliverableReason reason) {
+        if (!applied(queueRepository.markUndeliverable(
+                entry.getId(), entry.getTenantId(), reason.name(), Instant.now()),
+                OPERATION_UNDELIVERABLE, entry)) {
+            return false;
+        }
 
         auditEventPublisher.publishIncident(
                 entry.getIncidentId(), entry.getTenantId(),
@@ -132,6 +182,25 @@ public class NotificationPersistenceService {
                 "Notification undeliverable: nobody in the tenant could be "
                         + "notified (" + reason + ")",
                 Map.of("eventType", entry.getEventType(), "reason", reason.name()));
+        return true;
+    }
+
+    /**
+     * Whether the conditional UPDATE changed the entry (backlog #0-25). A 0
+     * means another writer closed it first, or for a lookup failure that one
+     * is already recorded: logged at INFO (ids and tenant only, never the
+     * error text) and counted in
+     * {@code notification.queue.stale_write{operation}}, a closed set of tags.
+     */
+    private boolean applied(int rows, String operation, NotificationQueueEntry entry) {
+        if (rows == 1) {
+            return true;
+        }
+        log.info("Notification queue entry not changed, no longer PENDING (or its lookup failure already "
+                        + "recorded): operation={}, entry={}, incidentId={}, tenant={}",
+                operation, entry.getId(), entry.getIncidentId(), entry.getTenantId());
+        meterRegistry.counter(STALE_WRITE_METRIC, "operation", operation).increment();
+        return false;
     }
 
     /**

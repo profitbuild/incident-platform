@@ -166,6 +166,14 @@ public class NotificationScheduler {
      * recording the failure must not prevent processing of the rest of
      * the batch — same reasoning as {@code EscalationScheduler}'s
      * {@code recordFailedAttemptSafely}, backlog #41).
+     *
+     * <h2>Backlog #0-25: the catch-all never overwrites a terminal status</h2>
+     * {@code processEntry} can throw after it has already closed the entry
+     * (an UNDELIVERABLE that committed, then a failing operator alert). The
+     * {@code markFailed} below is a conditional UPDATE from PENDING, so it
+     * then changes nothing: the entry stays UNDELIVERABLE with its reason and
+     * time, and the stale write is logged and counted
+     * ({@code notification.queue.stale_write}) by the persistence service.
      */
     @Scheduled(
             fixedDelayString = "${notification.scheduler.interval-ms:30000}",
@@ -301,8 +309,11 @@ public class NotificationScheduler {
                                             String dependency,
                                             UndeliverableReason giveUpReason) {
         // Only the first failure is recorded; the entry loaded on later cycles already
-        // has it, and writing again would cost a SELECT and a transaction per entry
-        // per cycle for nothing.
+        // has it, and writing again would cost a transaction per entry per cycle for
+        // nothing. The UPDATE itself also stores a time only where none is set and the
+        // entry is still PENDING (backlog #0-25), so a stale entry never moves the
+        // window. The entry in memory is not updated: the window below then runs from
+        // now, which a just-recorded failure would give too.
         if (entry.getFirstLookupFailureAt() == null) {
             try {
                 persistenceService.recordLookupFailure(entry);

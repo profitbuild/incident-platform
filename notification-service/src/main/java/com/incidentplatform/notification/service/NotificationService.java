@@ -194,6 +194,9 @@ public class NotificationService {
      *
      * <p>Also called by {@code NotificationScheduler} when oncall-service has
      * been unavailable for longer than the retry window (backlog #0-19).
+     *
+     * <p>Backlog #0-25: when the entry was no longer PENDING (the conditional
+     * UPDATE changed nothing), none of the above happens.
      */
     public void markUndeliverable(NotificationQueueEntry entry,
                                   UndeliverableReason reason) {
@@ -208,11 +211,19 @@ public class NotificationService {
         // content-free and rate-limited, so a retried entry does not repeat it.
         // A failed write is rethrown after the alert, never replaced by an
         // alert failure (found in review: a finally block could do that).
+        // Backlog #0-25: a write that changed nothing (the entry was no longer
+        // PENDING: another writer closed it first) is not an undeliverable
+        // notification of this run. No alert and no count; the persistence
+        // service has logged it and counted it in notification.queue.stale_write.
         RuntimeException writeFailure = null;
+        boolean parked = false;
         try {
-            persistenceService.markUndeliverable(entry, reason);
+            parked = persistenceService.markUndeliverable(entry, reason);
         } catch (RuntimeException e) {
             writeFailure = e;
+        }
+        if (writeFailure == null && !parked) {
+            return;
         }
         if (ACTIONABLE_EVENTS.contains(eventType)) {
             try {
@@ -288,6 +299,7 @@ public class NotificationService {
 
         if (channelRequests.isEmpty()) {
             log.debug("No channels configured for event: {}", eventType);
+            // Result ignored: a stale write is logged and counted there (backlog #0-25).
             persistenceService.markSent(entry);
             return;
         }
@@ -354,7 +366,9 @@ public class NotificationService {
 
         // Mark the queue entry as processed — all channels attempted.
         // Individual channel failures are recorded in notification_log
-        // but do not prevent the entry from being marked SENT here.
+        // but do not prevent the entry from being marked SENT here. Only a
+        // PENDING entry becomes SENT; a stale write is logged and counted by
+        // the persistence service (backlog #0-25).
         persistenceService.markSent(entry);
 
         log.info("Notification queue entry processed: eventType={}, " +

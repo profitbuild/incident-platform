@@ -9,6 +9,8 @@ import com.incidentplatform.shared.audit.AuditEventTypes;
 import com.incidentplatform.shared.audit.AuditOutbox;
 import com.incidentplatform.shared.domain.Severity;
 import com.incidentplatform.shared.security.TenantIds;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -18,6 +20,7 @@ import org.springframework.boot.autoconfigure.domain.EntityScan;
 import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 import org.springframework.core.env.Environment;
@@ -98,6 +101,12 @@ class AuditOutboxPersistenceIntegrationTest {
     @EntityScan("com.incidentplatform.notification.domain")
     @EnableJpaRepositories("com.incidentplatform.notification.repository")
     static class JpaSliceConfig {
+
+        /** {@link NotificationPersistenceService} counts stale queue writes (backlog #0-25). */
+        @Bean
+        MeterRegistry meterRegistry() {
+            return new SimpleMeterRegistry();
+        }
     }
 
     @Container
