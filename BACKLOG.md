@@ -161,6 +161,16 @@ Code, Javadoc, config comments and commits reference items as `backlog #N`.
 | [0-253](#0-253-a-run-stopped-by-the-factory-scripts-guard-keeps-its-lock) | A run stopped by the factory-scripts guard keeps its lock | ci | Medium | Open |
 | [0-254](#0-254-a-resumed-item-that-ships-keeps-its-draft-prs-blocked-title) | A resumed item that ships keeps its draft PR's "(BLOCKED)" title | ci | Low | Open |
 | [0-255](#0-255-an-approval-re-runs-the-whole-factory-guards-job) | An approval re-runs the whole Factory guards job | ci | Low | Open |
+| [0-256](#0-256-a-pr-description-opens-with-the-list-of-changes-not-the-problem) | A PR description opens with the list of changes, not the problem | ci | Low | Open |
+| [0-257](#0-257-an-agent-takes-a-handoff-from-an-earlier-run-as-fact) | An agent takes a handoff from an earlier run as fact | ci | Medium | Open |
+| [0-258](#0-258-a-change-to-the-factory-is-first-run-on-a-real-item) | A change to the factory is first run on a real item | ci | Medium | Open |
+| [0-259](#0-259-every-reviewer-of-the-panel-is-the-same-model-as-the-implementer) | Every reviewer of the panel is the same model as the implementer | ci | Medium | Open |
+| [0-260](#0-260-a-dispute-needs-no-evidence-and-the-pr-shows-no-ledger-of-findings) | A dispute needs no evidence, and the PR shows no ledger of findings | ci | Low | Open |
+| [0-261](#0-261-the-dispatcher-has-no-written-requirements-for-locks-state-retries-and-rate-limits) | The dispatcher has no written requirements for locks, state, retries and rate limits | ci | Medium | Open |
+| [0-262](#0-262-review-apps-comments-have-no-format) | review-app's comments have no format | ci | Low | Open |
+| [0-263](#0-263-nothing-runs-a-bug-fixs-test-on-the-code-before-the-fix) | Nothing runs a bug fix's test on the code before the fix | ci | Medium | Open |
+| [0-264](#0-264-a-green-pr-is-merged-on-a-base-that-moved-under-it) | A green PR is merged on a base that moved under it | ci | Medium | Open |
+| [0-265](#0-265-a-task-back-after-a-pause-is-resumed-without-asking-whether-it-still-makes-sense) | A task back after a pause is resumed without asking whether it still makes sense | ci | Low | Open |
 | [0-133](#0-133-incidentresolvedevent-carries-no-openedat) | `IncidentResolvedEvent` carries no `openedAt` | tech-debt | Low | Open |
 | [0-134](#0-134-diff-cover-is-installed-by-version-without-hashes) | `diff-cover` is installed by version, without hashes | ci | Low | Open |
 | [0-135](#0-135-kubectl-in-ci-is-downloaded-unverified) | kubectl in CI is downloaded unverified | ci | Low | Open |
@@ -1818,6 +1828,11 @@ target list), threshold start at 60% and raised later; informational for two wee
 AC1. A PR reports the mutation score of its changed classes in the job summary.
 AC2. Once required, a score under the threshold fails the check.
 
+**Also (the analysis of tstack, 2026-11-16).** It belongs with ADR-0055 stage 6b (deterministic gates), beside
+#0-263, which proves a bug fix's test on the old code; this generalises it to every type. The factory ships many
+items that only add tests (#0-58, PR #639: 100% of both classes' lines), where line coverage says nothing of what the
+assertions check; mutation score does. Scoped to the classes of the diff, as above, or it is slow and noisy.
+
 ---
 
 ### 0-116. The devcontainer firewall does not bind code an agent runs
@@ -3388,6 +3403,11 @@ On 2026-11-16, after #0-250: wf_24c48844-aa4 was refused by `guard-factory-scrip
 no environment problem; the gate built and tested all nine modules in 03:03 min (Testcontainers' pulls allowed,
 #0-247) and answered, the isolation probe was recorded as review-general, the panel approved in round 1 and the
 acceptance met AC1-AC13. Its PR kept the draft's title "(BLOCKED)" (#0-254).
+**2 of 3: run wf_5135023f-b7d (#0-25, PR #645, merged 2026-11-16)**, the queue's next item, started with no argument:
+through every stage with no environment problem; six reviewers approved in round 1, the acceptance accepted, ADR-0059.
+Its factory-ops relayed one `changed-paths.sh` answer with a file name garbled (`a35aa6ee/context/architecture.md`
+for `.ai/context/architecture.md`; the script's own output, in the transcript, was right): a model's copy, not the
+script, and nothing it decided was wrong (the relay of ADR-0058's Consequences).
 AC6. README "Infrastructure Hardening" and `docs/ai-factory.md` say where the autopilot runs and what isolates it;
 #0-202 and #0-225 point at what this stage settled for them, and #0-116 at what it did not.
 
@@ -3679,3 +3699,223 @@ approves its head commit, and passes after; an owner's pull request passes; a te
 AC3. Both checks are required in `rulesets/main.json`, and `repository-settings.rb check` passes after the owner's
 `apply`.
 AC4. `docs/ai-factory.md` and README "Infrastructure Hardening" name the new check.
+
+### 0-256. A PR description opens with the list of changes, not the problem
+
+**Type:** ci · **Priority:** Low · **Status:** Open. Source: the owner's analysis of tstack (github.com/t3dotgg/tstack, 2026-11-16, "Zapożyczenia z tstack"), change 7.
+**Autopilot:** human-only · **Risk:** low · **Complexity:** low · **Depends on:** — (with #0-254, the same files)
+**Touches:** factory (.claude/skills/ship-record/SKILL.md, .claude/agents/shipper.md: owner-only)
+
+**Problem.** `ship-record` opens the PR with "Summary: 2–5 bullets: what changed and why, from handoff.md \"Changed\"".
+The owner reads a PR to judge whether it does what the item asked, at review now and at the post-merge sample later
+(ADR-0055 stage 10); a list of changes makes him reconstruct the problem first.
+
+**Approach.** The first sentence states the problem as the item's "Problem" puts it, the second the solution in one
+or two sentences, then a "Proof:" line (the acceptance map, and `factory/proof` once #0-263 exists), then the
+sections as today. Done together with #0-254 (the title), in one PR. From ADR-0055 stage 4 the template moves to the
+dispatcher.
+
+AC1. A shipped PR's description opens with the problem, then the solution, then the proof line.
+AC2. Three PRs in a row in that format need no correction of their description by the owner.
+
+
+### 0-257. An agent takes a handoff from an earlier run as fact
+
+**Type:** ci · **Priority:** Medium · **Status:** Open. Source: the owner's analysis of tstack (github.com/t3dotgg/tstack, 2026-11-16, "Zapożyczenia z tstack"), change 8 (the `takeover` rule); observed on
+2026-11-16.
+**Autopilot:** human-only · **Risk:** low · **Complexity:** low · **Depends on:** —
+**Touches:** factory (.claude/agents/implementer.md, .claude/agents/architect.md, .claude/agents/shipper.md:
+owner-only)
+
+**Problem.** On 2026-11-16 the session in the build VM twice repeated `.ai/work/0-58/progress.md` and `handoff.md`
+of run 20261114-155647 as the current state ("it stopped at the review stage", "the new run needs a sandbox that
+can pull postgres:16-alpine"), although #0-247 had fixed the pulls and run 20261115-170407 had stopped at the gate,
+and told the owner to resolve a cause that no longer existed. An agent of a resumed run reads the same files.
+
+**Approach.** A rule in the definitions of the agents that read `.ai/work/<item>/`: what an earlier run wrote is
+context, not evidence; a claim about the state of the code, the environment or a run is checked before it is built
+on (the code, the gate's artifact, the run's record), and a stale one is named as stale in the handoff.
+
+AC1. The implementer's, the architect's and the shipper's definitions hold the rule.
+AC2. A resumed run's handoff names a claim of the earlier run it found stale, where there is one (the next resumed
+item shows it).
+
+
+### 0-258. A change to the factory is first run on a real item
+
+**Type:** ci · **Priority:** Medium · **Status:** Open. Proposed in the analysis of tstack (2026-11-16), from the
+runs of 2026-11-15/16.
+**Autopilot:** human-only · **Risk:** medium · **Complexity:** medium · **Depends on:** —
+**Touches:** factory (.claude/workflows/backlog-autopilot.js, scripts/factory/, .github/scripts/
+test-autopilot-workflow.mjs: owner-only), docs (docs/ai-factory.md)
+
+**Problem.** Four factory defects were found only by runs of real items in the build VM: #0-248's and #0-252's
+isolation check, #0-250's gate timeout, #0-253's lock. Each cost a run of #0-58, a count of the breaker and the
+owner's time, and stage 2's exit (ADR-0055: three items with no environment problem) waited for each.
+`test-autopilot-workflow.mjs` runs the workflow against a fake agent(), which cannot show what the runtime does
+(a model's refusal, a tool's timeout, a hook's input).
+
+**Approach.** A dry-run mode of the workflow (`/backlog-autopilot dry-run`): preflight, isolation check, pick of a
+fixed canary change (a no-op that every module builds), the gate, and stop before the panel, with the lock released
+and nothing pushed or recorded in the breaker. The owner runs it in the build VM after every change to `.claude/` or
+`scripts/factory/`. Superseded by the dispatcher (ADR-0055 stage 4), which needs its own canary.
+
+AC1. The dry run goes through preflight, isolation check, pick and gate in the build VM, and ends with the lock
+released, no branch pushed and the breaker's count unchanged.
+AC2. A dry run on a tree with one of the 2026-11-15/16 defects put back (the gate's timeout, the quoted prompt)
+stops at it, with the reason the real run gave.
+AC3. `docs/ai-factory.md` says when to run it.
+
+
+### 0-259. Every reviewer of the panel is the same model as the implementer
+
+**Type:** ci · **Priority:** Medium · **Status:** Open. Source: the owner's analysis of tstack (github.com/t3dotgg/tstack, 2026-11-16, "Zapożyczenia z tstack"), change 1, and the benchmark's correlation (proposal C).
+**Autopilot:** human-only · **Risk:** medium · **Complexity:** medium · **Depends on:** ADR-0055 stage 3 (#0-204,
+#0-205: the baseline it is measured against); adoption in stage 5 (the review VM)
+**Touches:** factory (scripts/factory/local-review.sh, .claude/skills/seed-bugs/, .ai/audit/benchmark/:
+owner-only), docs (docs/ai-factory.md)
+
+**Problem.** The panel's reviewers and the implementer are one family of models, so their misses are correlated: what
+one does not see, the others do not either. The benchmark that measures the panel is correlated too, as the
+defect-seeder that plants its defects is the same family. `local-review.sh` already gives a second opinion of
+another family (Ollama), advisory, `general` only and off by default; a 27B model does not fit the review VM.
+
+**Approach.** Measure first: a `codex` backend in `local-review.sh` (read-only, the same diff and rules on stdin, the
+panel's verdict JSON), for `general` and `security`; a `/seed-bugs` series with and without it, whose defects are
+partly the real escapes (`**Escaped from:**`, PR #572's removed positive control, ADR-0055 stage 3) and partly planted
+by the other model. Then decide: blocking, advisory or removed. The code goes to a second company: free of concern
+while the repository is public, a decision of its own before ADR-0055 stage 9.
+
+AC1. The second opinion runs on either backend, chosen by one variable, and answers the panel's verdict format.
+AC2. A benchmark series with and without it, on seeds that include real escapes and seeds of the other model, gives
+the number of defects only it caught and its false alarms on clean runs.
+AC3. The owner's decision (blocking, advisory, removed) and its thresholds are recorded in an ADR.
+
+
+### 0-260. A dispute needs no evidence, and the PR shows no ledger of findings
+
+**Type:** ci · **Priority:** Low · **Status:** Open. Source: the owner's analysis of tstack (github.com/t3dotgg/tstack, 2026-11-16, "Zapożyczenia z tstack"), change 4.
+**Autopilot:** human-only · **Risk:** low · **Complexity:** low · **Depends on:** ADR-0055 stage 3 (#0-204,
+#0-205), so that the panel's behaviour does not change before its baseline
+**Touches:** factory (.ai/rules/review/_common.md, .claude/agents/implementer.md, .claude/skills/ship-record/SKILL.md,
+scripts/factory/notify.sh: owner-only)
+
+**Problem.** The implementer may mark a finding `disputed` with any reason; the reviewer upholds or resolves it, and
+an upheld dispute stops the item for the owner, who then reads raw verdict JSON to decide. The PR shows the rounds
+as JSON blocks, with no table of what each finding became.
+
+**Approach.** A dispute carries evidence (`file:line`, a test and its result, or the ADR or rule it cites), or it
+counts as a finding not fixed; the reviewer answers the evidence in `upheldDisputes.why`; `ship-record` puts a ledger
+table above the JSON (id, dimension, severity, outcome: fixed, disputed then resolved, upheld, declined as follow-up
+#N); the stop's notification holds both sides in two or three lines each. First: how many disputes the audits saw.
+
+AC1. A dispute without evidence is treated as a finding not fixed; a test of the workflow shows it.
+AC2. A shipped PR has the ledger table; a stopped one's notification holds both sides of an upheld dispute.
+
+
+### 0-261. The dispatcher has no written requirements for locks, state, retries and rate limits
+
+**Type:** ci · **Priority:** Medium · **Status:** Open. Source: the owner's analysis of tstack (github.com/t3dotgg/tstack, 2026-11-16, "Zapożyczenia z tstack"), change 6 (`pr-wait`'s patterns), and #0-251, #0-253.
+**Autopilot:** human-only · **Risk:** low · **Complexity:** low · **Depends on:** ADR-0055 stage 4 (#0-212): written
+into its brief, built with it
+**Touches:** docs (the brief of ADR-0055 stage 4, in the `factory` repository)
+
+**Problem.** The dispatcher (ADR-0055 stage 4) will run from a timer around the clock and poll GitHub, Projects v2
+only through GraphQL (stage 7). Today's autopilot already showed the failures it must not repeat: a lock that turns
+stale under a live run (#0-251) and a lock left by a run its own guard stopped (#0-253).
+
+**Approach.** Requirements in the stage's brief, each with its test: a lock per task (`flock`) that a stopped run
+always releases and a live one renews; state per task with a baseline (the first pass records what exists, later ones
+react to new events only), surviving a restart; transient errors (5xx, 429, timeout, DNS) retried with backoff and
+not counted as attempts, ten in a row a block with the reason; the GraphQL rate limit read before each pass, reads of
+PRs and checks over REST when it is low; a pass with no new event writes nothing.
+
+AC1. The stage 4 brief holds each requirement with the test that shows it.
+AC2. A restart of the build VM in the middle of a task loses no event and opens no second PR; a simulated GraphQL
+limit does not stop it (stage 4's exit).
+
+
+### 0-262. review-app's comments have no format
+
+**Type:** ci · **Priority:** Low · **Status:** Open. Source: the owner's analysis of tstack (github.com/t3dotgg/tstack, 2026-11-16, "Zapożyczenia z tstack"), change 9.
+**Autopilot:** human-only · **Risk:** low · **Complexity:** low · **Depends on:** ADR-0055 stage 5 (review-app)
+**Touches:** factory (the review dispatcher's comment template, in the `factory` repository)
+
+**Problem.** Today the factory writes only the PR's description. From stage 5 review-app comments on findings, and
+the owner reads those comments at the post-merge sample and on the high-risk lane.
+
+**Approach.** One template: the conclusion first ("Blocks: …", "For the owner: …"), then id, rule, `file:line`, the
+failure and the smallest fix; what the verifier confirmed apart from the reviewer's judgement; a declined finding
+always with its reason; a thread resolved only once GitHub returned the reply's URL; a secret scan of the text before
+it is posted, with the tool CI uses.
+
+AC1. review-app's comments follow the template; a test of the dispatcher shows each part.
+AC2. The first five comments pass the owner's reading with no change of format.
+
+
+### 0-263. Nothing runs a bug fix's test on the code before the fix
+
+**Type:** ci · **Priority:** Medium · **Status:** Open. Source: the owner's analysis of tstack (github.com/t3dotgg/tstack, 2026-11-16, "Zapożyczenia z tstack"), change 2.
+**Autopilot:** human-only · **Risk:** medium · **Complexity:** medium · **Depends on:** ADR-0055 stage 6b
+(deterministic gates, one at a time)
+**Touches:** factory (.github/workflows/ci.yml or the `factory` repository's gate contract, the `spring-boot`
+profile's adapter, .github/repository-settings/rulesets/main.json, .ai/rules/review/general.md: owner-only)
+
+**Problem.** GEN-06 ("a fix comes with a test that fails without it") is judged by `review-general` only: it names a
+test that would fail on the old code, and nothing runs it there. A test that always passes looks in a diff like one
+that catches the bug.
+
+**Approach.** A check `factory/proof`, for items of type `bug` (later the task's field): check out the base commit,
+put the PR's added or changed test files on it, run those classes (the adapter's command, `./mvnw -pl <modules> -am
+test -Dtest=…` for Spring); at least one must fail there (a compile failure counted apart, as weaker evidence); the
+head's green is the existing build. Other types pass with "not applicable", so it can be required. GEN-06 gets
+"Backed by: factory/proof". In incident-platform few items are bugs (3 of 124 open); the new application gains more.
+
+AC1. On a bug fix the check fails when the PR's tests pass on the base, and passes when one fails there; a test shows
+both, and a compile failure is reported apart.
+AC2. Not required for five bug PRs with no false red, then required in the ruleset.
+AC3. `general.md`'s GEN-06 names the check.
+
+
+### 0-264. A green PR is merged on a base that moved under it
+
+**Type:** ci · **Priority:** Medium · **Status:** Open. Source: the owner's analysis of tstack (github.com/t3dotgg/tstack, 2026-11-16, "Zapożyczenia z tstack"), change 3; corrected: a merge queue is available.
+**Autopilot:** human-only · **Risk:** medium · **Complexity:** medium · **Depends on:** ADR-0055 stages 9 and 10
+(private repository, auto-merge): decided before auto-merge starts
+**Touches:** factory (.github/repository-settings/rulesets/main.json, the workflows' `merge_group` trigger, or the
+review dispatcher: owner-only)
+
+**Problem.** `main`'s ruleset has `strict_required_status_checks_policy: false` and no merge queue: two PRs can each
+be green and `main` red after both. Today the owner approves every PR, the lock lets one run at a time and CI runs on
+`main`, so the risk is small; with parallel PRs and auto-merge (stage 10) nobody looks before the merge.
+
+**Approach (to decide).** While the repository is public in the organisation, GitHub's merge queue is available: it
+tests the merged result, so it also catches a semantic conflict in other files; it needs a `merge_group` trigger on
+every required workflow and runs CI once more per PR. On GitHub Team with a private repository (stage 9) there is no
+merge queue: then the check of the tstack analysis, the files changed on `main` since the green run intersected with
+the PR's, `pending` and an update of the branch (by the bot's token: a push by `GITHUB_TOKEN` starts no workflow)
+when they meet, blind to a semantic conflict. `strict: true` is the third option, a full run per PR per merge.
+
+AC1. The owner's choice, and why, is in an ADR before auto-merge is on.
+AC2. Two PRs green alone and conflicting together are not both merged; a test or a staged pair shows it.
+
+
+### 0-265. A task back after a pause is resumed without asking whether it still makes sense
+
+**Type:** ci · **Priority:** Low · **Status:** Open. Source: the owner's analysis of tstack (github.com/t3dotgg/tstack, 2026-11-16, "Zapożyczenia z tstack"), change 8 (`modernize`).
+**Autopilot:** human-only · **Risk:** low · **Complexity:** medium · **Depends on:** ADR-0055 stage 7 (the queue in
+Issues), #0-257
+**Touches:** factory (the build dispatcher and a read-only agent, in the `factory` repository)
+
+**Problem.** A resumed item continues on its branch; a clean rebase says only that git sees no conflict, not that the
+change still fits a `main` that moved. Today the owner resumes by hand and judges; from stage 7 the dispatcher
+resumes on its own.
+
+**Approach.** A read-only agent, run when a task goes from Blocked to Ready, when its PR waits in "Changes requested"
+for more than a few days, or when `main` changed the task's files many times since the branch: it states the task's
+goal, reads what changed and the PRs of the same area, and answers MODERNIZE (rebase and continue), REWORK (a new
+branch from `main`, the old one as context) or CLOSE (to the owner, never closed on its own), each with its evidence.
+Thresholds to decide.
+
+AC1. The dispatcher runs the agent in the three cases and acts on MODERNIZE and REWORK; CLOSE reaches the owner.
+AC2. On three resumed tasks the disposition agrees with the owner's.
