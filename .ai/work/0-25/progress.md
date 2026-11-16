@@ -13,3 +13,5 @@ autopilot reads the last `NEXT:` line to resume an interrupted run.
 NEXT: <stage>
 - [start] started by start-item.sh; branch `refactor/0-25-notification-queue-stale-write-guard`; base `84f86049282cde6081dc1bf560bcde9b2ecafcc2`
 NEXT: architect
+- [architect] plan: four tenant-scoped conditional UPDATEs from PENDING in NotificationQueueRepository (AuthEmailOutboxRepository precedent), persistence methods return boolean, 0 rows logged and counted in notification.queue.stale_write{operation}, no audit/alert on a stale markUndeliverable, entity mutators removed, architecture.md criterion; ADR: 0059 (Proposed); modules: notification-service, root; rules: GEN-01, GEN-02, GEN-04, GEN-05, GEN-07, GEN-08, GEN-20, GEN-32, ARC-02, ARC-26, ARC-29, ARC-22, SEC-06, SEC-31, DOC-01, DOC-10, DOC-11, DOC-30
+NEXT: implementer
