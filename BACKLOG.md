@@ -85,7 +85,6 @@ Code, Javadoc, config comments and commits reference items as `backlog #N`.
 | [0-48](#0-48-user-pii-lives-on-the-users-row-erasure-is-in-place-anonymization) | User PII lives on the `users` row; erasure is in-place anonymization | design | Low | Open |
 | [0-55](#0-55-auth-email-failures-do-not-tell-an-smtp-outage-from-a-rejected-address) | Auth email failures do not tell an SMTP outage from a rejected address | design | Low | Open |
 | [0-56](#0-56-forgot-password-leaks-whether-an-account-exists-through-response-time) | forgot-password leaks whether an account exists through response time | design | Medium | Open |
-| [0-58](#0-58-globalexceptionhandler-and-unauthorizedentrypoint-have-no-tests-of-their-own-in-shared) | `GlobalExceptionHandler` and `UnauthorizedEntryPoint` have no tests of their own in `shared` | tech-debt | Medium | Open |
 | [0-62](#0-62-any-github-action-from-the-marketplace-is-allowed-to-run) | Any GitHub Action from the Marketplace is allowed to run | ci | Low | Open |
 | [0-64](#0-64-kubernetes-pods-run-without-a-securitycontext) | Kubernetes pods run without a `securityContext` | design | Medium | Open |
 | [0-65](#0-65-no-networkpolicy-every-pod-can-reach-every-other-pod) | No NetworkPolicy: every pod can reach every other pod | design | Medium | Open |
@@ -958,57 +957,6 @@ not the account exists; a scheduled job (ShedLock) resolves the user, invalidate
 one and writes the email outbox entry. `WorkSimulator` then goes away. Needs a table (and a retention rule for
 requests about unknown emails, which hold an email address). (D) Rate limit per IP and per email with bucket4j on
 Redis, the pattern ingestion-service already uses (#67), answering 202 either way.
-
----
-
-### 0-58. `GlobalExceptionHandler` and `UnauthorizedEntryPoint` have no tests of their own in `shared`
-
-**Type:** tech-debt · **Priority:** Medium · **Status:** Open (found with #0-57; narrowed in `/ready`, 2026-11-14)
-**Autopilot:** ready · **Risk:** low · **Complexity:** medium · **Depends on:** —
-**Touches:** shared (src/test: com.incidentplatform.shared.exception, com.incidentplatform.shared.security)
-
-**Problem.** Once the JaCoCo agent attached (#0-57), `shared`'s own tests turned out to cover none or little of its
-Kafka tenant classes, `GlobalExceptionHandler` and `UnauthorizedEntryPoint`. #0-91/#0-92 gave the Kafka classes
-their own tests (`TenantKafkaRecordResolverTest`, the interceptors' tests, `DeadLetterPublisherTest`; and
-`AuditEventKafkaSenderTest` exists). Left: `GlobalExceptionHandler` (`shared/exception`) and `UnauthorizedEntryPoint`
-(`shared/security`) have no test class in `shared`: services' security tests exercise them, and the
-`SharedSecurityAutoConfiguration*Test`s only construct the entry point, but JaCoCo counts only a module's own tests.
-Both are on the error path of every service: the body of every 4xx/5xx answer and of every 401.
-
-**Work.** Unit tests of each class's contract in `shared`: JUnit 5 and Mockito, no Spring context (as
-`JwtAuthFilterTest`), `GlobalExceptionHandlerTest` in `shared/src/test/java/com/incidentplatform/shared/exception/`
-and `UnauthorizedEntryPointTest` in `.../shared/security/`. The response is a Mockito `HttpServletResponse` over a
-`StringWriter` (or `spring-test`'s `MockHttpServletResponse` if it is already on `shared`'s test classpath): no new
-dependency in `shared/pom.xml`. Test code only: a test that would need a production change is not written here.
-Out of scope: `GlobalExceptionHandler` does not redact `apiKey` and `privateKey` fields (#0-245), and the service
-classes below 60% (#0-246).
-
-**Acceptance criteria.**
-AC1. `GlobalExceptionHandlerTest`: `handleResourceNotFound` returns 404 with `RESOURCE_NOT_FOUND` and the
-exception's message.
-AC2. `GlobalExceptionHandlerTest`: `handleBusinessException` returns the exception's own `httpStatus` and `errorCode`.
-AC3. `GlobalExceptionHandlerTest`: `handleValidationErrors` returns 400 `VALIDATION_FAILED` with one `ValidationError`
-per field error; the rejected value of a field whose lower-cased name contains `password`, `secret`, `token` or
-`api_key` is `[REDACTED]` (`userPassword` among them); a normal field keeps its value; a null rejected value stays
-null. (`apiKey` and `privateKey` are not redacted today: #0-245, not asserted here.)
-AC4. `GlobalExceptionHandlerTest`: `handleConstraintViolation` returns 400 with the property path and message of each
-violation, and a null rejected value.
-AC5. `GlobalExceptionHandlerTest`: `handleTypeMismatch` returns 400 `INVALID_PARAMETER_TYPE`, its message naming the
-parameter only.
-AC6. `GlobalExceptionHandlerTest`: `handleAuthenticationException` returns 401 `UNAUTHORIZED` with a fixed body that
-holds no text of the exception; `handleAccessDenied` returns 403 `FORBIDDEN` with a fixed body.
-AC7. `GlobalExceptionHandlerTest`: `handleOptimisticLocking` returns 409 `OPTIMISTIC_LOCK_CONFLICT`.
-AC8. `GlobalExceptionHandlerTest`: `handleUnexpectedException` returns 500 `INTERNAL_SERVER_ERROR` with no internal
-message in the body, and rethrows a `NoResourceFoundException` instead of answering 500.
-AC9. `GlobalExceptionHandlerTest`: the `requestId` of every body is the MDC's `requestId`, or `"unknown"` when the MDC
-has none; the MDC is cleared after each test.
-AC10. `UnauthorizedEntryPointTest`: `commence` sets status 401, content type `application/json` and UTF-8, and writes
-an `ErrorResponse` with `errorCode` `UNAUTHORIZED` and `status` 401, read back with a real `ObjectMapper`.
-AC11. `UnauthorizedEntryPointTest`: `requestId` comes from the response's `X-Request-Id` header when it is set and not
-blank, else from the MDC, else `"unknown"`: all three paths and a blank header.
-AC12. `UnauthorizedEntryPointTest`: the body holds no text of the `AuthenticationException` passed in.
-AC13. Both classes are above 60% LINE in `shared`'s JaCoCo report (`./mvnw verify -pl shared`), and the change passes
-the existing `jacoco:check` and `diff-cover`; no new CI check.
 
 ---
 
