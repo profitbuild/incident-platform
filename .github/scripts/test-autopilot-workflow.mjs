@@ -96,7 +96,8 @@ const BASE = SHA('a'), HEAD = SHA('c')
 // A run that goes through: every agent and script answers as on a good day (low risk and complexity, one round).
 const DEFAULTS = {
   'ops:preflight.sh': { ok: true, reasons: [], baseSha: BASE, runId: 'run-1' },
-  isolation: { tools: ['Read', 'Grep', 'Glob', 'Bash'], opening: 'You are the general reviewer: correctness, tests and conventions.' },
+  isolation: { ran: true },
+  'ops:isolation.sh': { agentType: 'review-general' },
   'ops:next-item.sh': { ok: true, item: '#0-1', source: 'queue', position: 1, eligible: true, modules: ['incident-service'],
     risk: 'low', complexity: 'low', type: 'bug', branchPrefix: 'fix' },
   picker: { none: false, itemId: '#0-1', title: 'An item', slug: 'an-item', branch: 'fix/0-1-an-item', workDir: '.ai/work/0-1',
@@ -334,20 +335,21 @@ test('preflight: no answer, a refusal or no base commit stops before anything st
   assert.deepEqual(noBase.outcome.reasons, ['preflight returned no base commit'])
 })
 
-test('isolation: a reviewer that can edit files, or without its definition, stops the run', async () => {
-  const own = 'You are the general reviewer: correctness, tests and conventions.'
-  for (const [iso, why] of [
-    [{ tools: ['Read', 'Edit'], opening: own }, /can edit files/],
-    [{ tools: ['Read'], opening: 'You are a helpful assistant.' }, /instructions are not review-general's/],
-    [{ tools: ['Read'], opening: '' }, /instructions are not review-general's/],
-    [{ tools: ['Read'] }, /instructions are not review-general's/],
-    [{ tools: 'Read, Edit', opening: own }, /did not list its tools/],
-    [{ tools: [1, 2], opening: own }, /did not list its tools/],
-    [{ opening: own }, /did not list its tools/],
-    [null, /no answer/],
+test('isolation: a probe recorded for another agent type, or for none, stops the run (backlog #0-252)', async () => {
+  for (const [record, why] of [
+    [{ agentType: 'workflow-subagent' }, /the probe came from agent type workflow-subagent, not review-general/],
+    [{ agentType: 'general-purpose' }, /not review-general: the custom agent type did not apply/],
+    [{ agentType: null, reason: 'no isolation probe was recorded for run run-1' }, /no isolation probe was recorded for run run-1: the reviewer did not send it/],
+    [{ agentType: null }, /no probe was recorded: the reviewer did not send it/],
+    [{}, /no probe was recorded/],
+    [{ error: 'the isolation record .ai/runs/isolation/run-1 is not a symlink' }, /isolation\.sh: the isolation record .* is not a symlink/],
+    [null, /isolation\.sh returned no result/],
+    // Review round 1: a type next to factory-ops' error, or next to _common.sh's failure, is not the script's answer.
+    [{ agentType: 'review-general', error: 'factory-ops could not run it' }, /isolation\.sh: factory-ops could not run it/],
+    [{ agentType: 'review-general', ok: false, reasons: ['no jq'] }, /isolation\.sh: no jq/],
   ]) {
-    const { outcome, calls } = await run({ answers: { isolation: iso } })
-    assert.equal(outcome.outcome, 'NOT_STARTED')
+    const { outcome, calls } = await run({ answers: { 'ops:isolation.sh': record } })
+    assert.equal(outcome.outcome, 'NOT_STARTED', JSON.stringify(record))
     assert.match(outcome.reasons[0], /agent isolation check failed/)
     assert.match(outcome.reasons[0], why)
     assert.ok(keys(calls).includes('ops:state.sh'), 'the lock is released')
@@ -355,33 +357,40 @@ test('isolation: a reviewer that can edit files, or without its definition, stop
   }
 })
 
-test('isolation: a reviewer quoting its own definition goes on, after a runtime preamble too', async () => {
-  for (const opening of [
-    '  You are the general reviewer: correctness, tests and conventions. ',
-    "You are a Claude agent, built on Anthropic's Claude Agent SDK.You are the general reviewer: correctness, tests and conventions.",
-  ]) {
-    const { calls } = await run({ answers: { isolation: { tools: ['Read', 'Bash', 'StructuredOutput'], opening } } })
-    assert.ok(keys(calls).includes('picker'), `the run went past the isolation check (${opening.slice(0, 40)})`)
+test('isolation: the reviewer\'s own answer decides nothing, the record does (backlog #0-252)', async () => {
+  // wf_71cca984-ef4: the model declined the question; a refusal, a "no" or no answer at all is not read.
+  for (const answer of [null, { ran: false }, { ran: true }]) {
+    const { calls } = await run({ answers: { isolation: answer } })
+    assert.ok(keys(calls).includes('picker'), `the run went past the isolation check with the answer ${JSON.stringify(answer)}`)
   }
+  const refused = await run({ answers: { isolation: { ran: true }, 'ops:isolation.sh': { agentType: null } } })
+  assert.equal(refused.outcome.outcome, 'NOT_STARTED', 'a "ran: true" with no record does not pass')
 })
 
-test('isolation: the question does not point the reviewer at its definition file (review round 1 of #0-248)', async () => {
+test('isolation: the probe is the exact command the hook records, for this run, asked without the preamble', async () => {
   const { calls } = await run({})
   const iso = calls.find((c) => c.key === 'isolation')
   assert.ok(iso, 'the isolation check was asked')
+  assert.equal(iso.type, 'review-general')
+  assert.ok(iso.prompt.includes('git rev-parse --verify --quiet isolation-probe-run-1\n'), `the probe names the preflight's run: ${iso.prompt}`)
   assert.ok(!/review-general\.md|\.claude\/agents/.test(iso.prompt), `its prompt names no definition file: ${iso.prompt}`)
-  assert.ok(!iso.prompt.includes('You are the general reviewer'), 'its prompt does not hold the phrase it looks for')
   assert.ok(!('bare' in iso.opts), 'as() does not pass its own option on to agent()')
+  const rec = calls.find((c) => c.key === 'ops:isolation.sh')
+  assert.match(rec.prompt, /Run exactly: scripts\/factory\/isolation\.sh 'run-1'/)
+  assert.ok(calls.indexOf(iso) < calls.indexOf(rec), 'the record is read after the probe')
   const other = calls.find((c) => c.key === 'picker')
   assert.match(other.prompt, /\.claude\/agents\/picker\.md/, 'other agents keep the preamble')
 })
 
-test('isolation: REVIEW_GENERAL_OPENING is how review-general.md begins (backlog #0-248)', () => {
-  const opening = SRC.match(/const REVIEW_GENERAL_OPENING = '([^']+)'/)?.[1]
-  assert.ok(opening, 'REVIEW_GENERAL_OPENING is a single-quoted string in the workflow')
-  const md = readFileSync(join(dirname(FILE), '..', 'agents', 'review-general.md'), 'utf8')
-  const body = md.split(/^---$/m).slice(2).join('---').split('\n').find((l) => l.trim() !== '')
-  assert.ok(body?.startsWith(opening), `review-general.md's body begins "${body}", not "${opening}"`)
+test('isolation: the workflow\'s probe is the one isolation-probe.sh records (backlog #0-252)', () => {
+  const hook = readFileSync(join(dirname(FILE), '..', 'hooks', 'isolation-probe.sh'), 'utf8')
+  const pattern = hook.match(/^probe='\^([^']+)\$'$/m)?.[1]
+  assert.ok(pattern, "isolation-probe.sh holds its probe as probe='^…$'")
+  const form = SRC.match(/const ISOLATION_PROBE = \(run\) => `([^`]+)`/)?.[1]
+  assert.ok(form, 'ISOLATION_PROBE is a template of one run id in the workflow')
+  for (const run of ['20261116-171355', 'run-1']) {
+    assert.match(form.replace('${run}', run), new RegExp(`^${pattern}$`), `the hook records the workflow's probe of ${run}`)
+  }
 })
 
 test('args: acceptUnverifiable without branch, a malformed item, malformed claim ids', async () => {
@@ -1766,7 +1775,7 @@ test('the jq key scan reads nested objects, strings and interpolations as a scri
 test('every key a factory script prints is in the schema its workflow reads it with (#0-175, PR 2)', async () => {
   // A closed schema refuses an answer with a key it does not name: a field added to a script and not to the schema
   // would stop every run. So the keys are read from the scripts' own jq objects, not from examples written here.
-  const auto = await schemasNamed(['PREFLIGHT', 'TESTS', 'PATHS', 'NEXT', 'STARTED', 'RESUMED', 'BACK_TO_MAIN'])
+  const auto = await schemasNamed(['PREFLIGHT', 'TESTS', 'PATHS', 'NEXT', 'STARTED', 'RESUMED', 'BACK_TO_MAIN', 'ISOLATION_RECORD'])
   const { AUDIT_DATA } = await auditSchemas(['AUDIT_DATA'])
   const script = (name) => readFileSync(join(dirname(FILE), '../../scripts/factory', name), 'utf8')
   for (const [name, anchors, schema, label] of [
@@ -1774,6 +1783,7 @@ test('every key a factory script prints is in the schema its workflow reads it w
     ['changed-paths.sh', ['base', 'error'], auto.PATHS, 'PATHS'], ['next-item.sh', ['ok', 'skipped'], auto.NEXT, 'NEXT'],
     ['start-item.sh', ['ok'], auto.STARTED, 'STARTED'], ['resume-item.sh', ['ok'], auto.RESUMED, 'RESUMED'],
     ['return-to-main.sh', ['onMain'], auto.BACK_TO_MAIN, 'BACK_TO_MAIN'], ['audit-data.sh', ['file'], AUDIT_DATA, 'AUDIT_DATA'],
+    ['isolation.sh', ['agentType', 'error'], auto.ISOLATION_RECORD, 'ISOLATION_RECORD'],   // backlog #0-252, review round 2
   ]) {
     const printed = jqObjectKeys(script(name), anchors)
     assert.ok(printed.size >= 3, `${name}: the scan found ${printed.size} keys: it no longer reads the script`)

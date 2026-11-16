@@ -475,7 +475,7 @@ security boundary, so every rule that matters is also enforced outside the model
   (`.github/scripts/check-protected-paths.sh`; it runs the hook against every entry rather than reading its
   regex), and, the other way (#0-168), when the deny rules or the hook protect a path the list lacks: a copy
   cannot claim a protection the code reading the list does not apply. The list also names the autopilot's
-  runtime state (`.git/`, `.ai/runs/LOCK`, `.ai/runs/state.json`, `.ai/runs/ops-calls/`, `.ai/STOP`), so
+  runtime state (`.git/`, `.ai/runs/LOCK`, `.ai/runs/state.json`, `.ai/runs/ops-calls/`, `.ai/runs/isolation/`, `.ai/STOP`), so
   dropping its deny or hook entry fails too.
 - **The next item is chosen by code** (`scripts/factory/next-item.sh`), from the files on the run's base
   commit: only `ready` items, dependencies done, no open PR or branch, in the order of the owner-approved
@@ -514,7 +514,11 @@ security boundary, so every rule that matters is also enforced outside the model
   whose `tools:` hold Bash or a file tool with no guard of that kind in its frontmatter (rule 6, backlog #0-186);
   the autopilot's implementer, implementer-light and shipper are its named exceptions, bounded by the
   autopilot session's denies and session-wide guards instead (the two implementers also run `foreground-bash.sh`,
-  which refuses a command in the background, backlog #0-206: a budget guard, not a scope). The workflow starts an
+  which refuses a command in the background, backlog #0-206: a budget guard, not a scope). Before any work the
+  autopilot checks that its agents run as their custom types: review-general runs one probe command, the session-level
+  hook `isolation-probe.sh` records the `agent_type` Claude Code gives that call, and the run stops `NOT_STARTED`
+  unless it is review-general's (backlog #0-252, ADR-0058; before, the check read the agent's own answers, which the
+  model could decline, #0-248). The workflow starts an
   item in code (`scripts/factory/start-item.sh`, backlog #0-209) and switches a resumed run to the owner's branch in
   code (`scripts/factory/resume-item.sh`, #0-215), so the picker writes nothing: it has no file-writing tool, the
   `mkdir -p .ai/work/*` and `cp .ai/work/_template/* .ai/work/*` allow rules are gone, and its Bash is
@@ -592,7 +596,8 @@ security boundary, so every rule that matters is also enforced outside the model
   (`guard-factory-scripts.sh`, on `agent_type`), one command per task: `factory-ops-bash.sh` refuses every call of a
   factory-ops run after its first allowed one (keyed on `agent_id`, backlog #0-169, ADR-0053), so text a script
   printed from the branch cannot steer it into `state.sh unlock`, `branch` or `record`; and the autopilot refuses an
-  agent's writes to the lock itself and to the factory-ops runs' marks (`.ai/runs/ops-calls/`, #0-233) (the denies,
+  agent's writes to the lock itself, to the factory-ops runs' marks (`.ai/runs/ops-calls/`, #0-233) and to the isolation
+  probe's records (`.ai/runs/isolation/`, #0-252) (the denies,
   `guard-protected-bash.sh`, git's `--output` included); not covered: code run through `./mvnw` (#0-116), a command
   shaped past the shell guard's text match, such as a quoted or spliced option word (#0-167, frozen until ADR-0055
   stage 6a), git's commands on the working tree, where the gitignored state lives (`git add` once `.gitignore` no

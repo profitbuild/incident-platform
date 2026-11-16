@@ -320,6 +320,10 @@ expect 2 "delete the marks' directory"    "$P" -- "$(bash_call 'rm -rf .ai/runs/
 expect 2 "repoint a factory-ops mark"     "$P" -- "$(bash_call 'ln -sfn tu9 .ai/runs/ops-calls/a1')"
 expect 2 "a directory at a mark's name"   "$P" -- "$(bash_call 'mkdir -p .ai/runs/ops-calls/a1')"
 expect 0 "the implementer's run directory" "$P" -- "$(bash_call 'mkdir -p .ai/runs/0-25')"
+# Backlog #0-252: the isolation records — an agent that made or replaced one would choose the agent type the
+# isolation check reads.
+expect 2 "make an isolation record"       "$P" -- "$(bash_call 'ln -sn review-general .ai/runs/isolation/R1')"
+expect 2 "delete the isolation records"   "$P" -- "$(bash_call 'rm -rf .ai/runs/isolation')"
 # Backlog #0-235 (sec-4a1d): git's own way to the ignored runtime state, without naming a protected path. `git add -f`
 # stages ignored files (then `git rm -r -f` deletes them); `git mv` of a tracked ancestor moves them with it.
 expect 2 "git add -f of the run state"     "$P" -- "$(bash_call 'git add -f .ai/runs')"
@@ -948,6 +952,54 @@ expect 2 "no record: the seeder writes nothing"       "$W" --seed -- "$(seeder E
 expect 2 "no record: main's base (P-19's refusal)"    env FACTORY_BASE_REF=refs/heads/seedmain "$M" -- "$(seeder Edit "$MIG/V3__s.sql")"
 (cd "$WORK/repo" && git switch -q feat/x)
 
+echo "isolation-probe (backlog #0-252)"
+IP="$HOOKS/isolation-probe.sh"
+# probe_call <agent_type, "" for none> <command> — a Bash call as the session-level hook sees it.
+probe_call() {
+    if [ -n "$1" ]; then jq -cn --arg a "$1" --arg c "$2" '{agent_type: $a, agent_id: "ag1", tool_use_id: "tu1", tool_name: "Bash", tool_input: {command: $c}}'
+    else jq -cn --arg c "$2" '{tool_name: "Bash", tool_input: {command: $c}}'; fi
+}
+PROBE='git rev-parse --verify --quiet isolation-probe-R7'
+record() { readlink "$WORK/repo/.ai/runs/isolation/R7" 2>/dev/null || echo "-"; }
+# The hook's message, read into a variable: under pipefail a pipe into grep would take the hook's exit 2 as its own.
+said() { local out; out=$(cd "$WORK/repo" && printf '%s' "$2" | "$IP" 2>&1 >/dev/null); case "$out" in *"$1"*) return 0 ;; esac; return 1; }
+ok() { echo "  ok: $1"; }
+fail() { echo "::error::$1"; failures=$((failures+1)); }
+(cd "$WORK/repo" && mkdir -p .ai/runs && rm -rf .ai/runs/isolation && echo "R7 $(git rev-parse HEAD)" > .ai/runs/LOCK)
+expect 0 "another command passes"               "$IP" -- "$(probe_call review-general 'git status')"
+expect 0 "a reviewer's git grep for the probe passes" "$IP" -- "$(probe_call review-general 'git grep -n isolation-probe -- .claude/')"
+expect 0 "not the exact probe passes, unrecorded" "$IP" -- "$(probe_call review-general "$PROBE; true")"
+if [ "$(record)" = "-" ]; then ok "... and records nothing"; else fail "a command that is not the exact probe recorded $(record)"; fi
+expect 2 "the probe without agent_type is refused" "$IP" -- "$(probe_call "" "$PROBE")"
+if [ "$(record)" = "-" ]; then ok "... and records nothing (the main session)"; else fail "a probe without agent_type recorded $(record)"; fi
+expect 2 "a probe naming another run is refused" "$IP" -- "$(probe_call review-general 'git rev-parse --verify --quiet isolation-probe-R6')"
+# -L, not -e: a record links to a type name, not a file, so -e follows it to nothing and reads "absent" (a mutation
+# that dropped the lock check passed this test with -e).
+if [ ! -L "$WORK/repo/.ai/runs/isolation/R6" ]; then ok "... and records nothing for it"; else fail "a probe of a run that holds no lock was recorded"; fi
+expect 2 "the probe is refused, so it never runs" "$IP" -- "$(probe_call review-general "$PROBE")"
+if [ "$(record)" = review-general ]; then ok "... and records the agent type Claude Code named"; else fail "the probe recorded $(record), not review-general"; fi
+if said "recorded (agent type: review-general)" "$(probe_call review-general "$PROBE")"; then ok "... and tells the agent it was recorded"
+else fail "the probe's refusal does not say it was recorded"; fi
+expect 2 "a second probe of the run is refused"  "$IP" -- "$(probe_call workflow-subagent "$PROBE")"
+if [ "$(record)" = review-general ]; then ok "... and does not replace the first record"; else fail "a second probe replaced the record with $(record)"; fi
+(cd "$WORK/repo" && rm -rf .ai/runs/isolation)
+expect 2 "an agent of another type is recorded as itself" "$IP" -- "$(probe_call workflow-subagent "$PROBE")"
+if [ "$(record)" = workflow-subagent ]; then ok "... as workflow-subagent, which the check refuses"; else fail "recorded $(record), not workflow-subagent"; fi
+(cd "$WORK/repo" && rm -rf .ai/runs/isolation && mkdir -p .ai/runs/isolation/R7)
+expect 2 "a directory at the record's name refuses" "$IP" -- "$(probe_call review-general "$PROBE")"
+if [ -z "$(ls -A "$WORK/repo/.ai/runs/isolation/R7")" ]; then ok "... and nothing is linked inside it"; else fail "the probe linked inside a directory at the record's name"; fi
+(cd "$WORK/repo" && rm -rf .ai/runs/isolation && mkdir -p "$WORK/iso-elsewhere" && ln -s "$WORK/iso-elsewhere" .ai/runs/isolation)
+expect 2 "a symlink at the records' directory refuses" "$IP" -- "$(probe_call review-general "$PROBE")"
+if [ -z "$(ls -A "$WORK/iso-elsewhere")" ]; then ok "... and nothing is recorded where it points"; else fail "the probe was recorded through a symlinked directory"; fi
+(cd "$WORK/repo" && rm -rf .ai/runs/isolation && printf 'R7' > .ai/runs/LOCK)
+expect 2 "a lock without its newline still names the run" "$IP" -- "$(probe_call review-general "$PROBE")"
+if [ "$(record)" = review-general ]; then ok "... and the probe is recorded"; else fail "a lock without a newline: recorded $(record)"; fi
+(cd "$WORK/repo" && rm -rf .ai/runs/isolation .ai/runs/LOCK)
+expect 2 "no lock: the probe is refused"         "$IP" -- "$(probe_call review-general "$PROBE")"
+if [ "$(record)" = "-" ]; then ok "... and records nothing"; else fail "a probe without a lock recorded $(record)"; fi
+expect 2 "an argument is refused"                "$IP" --agent x -- "$(probe_call review-general 'git status')"
+(cd "$WORK/repo" && rm -rf .ai/runs/isolation)
+
 echo "every hook fails closed (backlog #0-162)"
 # Claude Code runs the call after any exit status but 2, so each way a hook can fail must end in 2. One row per
 # hook in this directory: its arguments and a call it allows, so that a 2 below can only come from the failure.
@@ -965,6 +1017,7 @@ FAILS_CLOSED=(
     "webfetch-allowlist.sh||$(fetch_call verifier https://osv.dev/vulnerability/x)"
     "read-scope.sh|.ai/runs/|$(file_call Read .ai/runs/x.json)"
     "foreground-bash.sh||$(bash_call './mvnw test -pl shared')"
+    "isolation-probe.sh||$(bash_call 'git status')"
 )
 # Three broken copies of the directory: no helper; a helper that aborts the hook while it loads (an unset variable
 # under set -u ends the shell, which `|| exit 2` on the load line cannot see: only the EXIT trap turns it into 2);

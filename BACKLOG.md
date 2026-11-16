@@ -161,6 +161,8 @@ Code, Javadoc, config comments and commits reference items as `backlog #N`.
 | [0-249](#0-249-claude-code-in-the-devcontainer-image-is-whatever-version-was-current-at-build-time) | Claude Code in the devcontainer image is whatever version was current at build time | ci | Medium | Open |
 | [0-250](#0-250-the-test-gate-goes-to-the-background-after-two-minutes-and-its-answer-is-lost) | The test gate goes to the background after two minutes, and its answer is lost | ci | High | In progress |
 | [0-251](#0-251-a-live-runs-lock-turns-stale-after-a-fixed-three-hours) | A live run's lock turns stale after a fixed three hours | ci | Low | Open |
+| [0-252](#0-252-the-isolation-check-depends-on-the-model-agreeing-to-quote-its-prompt) | The isolation check depends on the model agreeing to quote its prompt | ci | High | In progress |
+| [0-253](#0-253-a-run-stopped-by-the-factory-scripts-guard-keeps-its-lock) | A run stopped by the factory-scripts guard keeps its lock | ci | Medium | Open |
 | [0-133](#0-133-incidentresolvedevent-carries-no-openedat) | `IncidentResolvedEvent` carries no `openedAt` | tech-debt | Low | Open |
 | [0-134](#0-134-diff-cover-is-installed-by-version-without-hashes) | `diff-cover` is installed by version, without hashes | ci | Low | Open |
 | [0-135](#0-135-kubectl-in-ci-is-downloaded-unverified) | kubectl in CI is downloaded unverified | ci | Low | Open |
@@ -3407,6 +3409,13 @@ AC2. git's `add`, `rm`, `mv`, `switch` and `checkout -b` are `SAFE_PREFIXES` aga
 AC3. README "Infrastructure Hardening", ADR-0054 and `protected-paths.md` (owner) describe where the state lives and
 what still reaches it (`./mvnw`, #0-116).
 
+**Also (review round 1 of #0-252, 2026-11-16, sec-3c8e).** The isolation probe's records (`.ai/runs/isolation/`,
+ADR-0058) are runtime state of the same kind, and a gate decided by one: code of an earlier item's gate could plant a
+record under a predictable run id. `preflight.sh` removes them as it takes the lock and `isolation.sh` takes only one
+newer than the lock; a process that outlives a gate is this item's (and #0-116's). Rule gap named by that review: no
+FAC-S rule states FAC-S05's "a file the branch's own code could have written" for runtime state the workflow trusts to
+decide a gate; the item that moves the state names whether one is needed.
+
 ---
 
 ### 0-238. Migration stage 2: a build VM, provisioned as code, runs today's devcontainer
@@ -3473,7 +3482,10 @@ AC5. Three autopilot items run on the VM with no environment problem (ADR-0055's
 Runs so far: run 20261114-155647 (#0-58, PR #639, draft): BLOCKED by the environment, so not one of the three: its
 gate's Testcontainers pulls were refused on CloudFront addresses the VM's allow-list had not resolved (#0-247).
 Then #0-58 resumed on 2026-11-15, after #0-248: past the isolation check, BLOCKED at the gate ("test gate returned no
-result", #0-250): a factory problem, not the VM's, and not one of the three either.
+result", #0-250): a factory problem, not the VM's, and not one of the three either (run 20261115-170407).
+On 2026-11-16, after #0-250: wf_24c48844-aa4 was refused by `guard-factory-scripts.sh` (the branch's base predated
+#0-250's `preflight.sh`; the owner merged `main` into it) and left its lock (#0-253); wf_71cca984-ef4 stopped
+`NOT_STARTED` at the isolation check, the model declining to quote its prompt (#0-252). Neither is one of the three.
 AC6. README "Infrastructure Hardening" and `docs/ai-factory.md` say where the autopilot runs and what isolates it;
 #0-202 and #0-225 point at what this stage settled for them, and #0-116 at what it did not.
 
@@ -3730,3 +3742,70 @@ AC1. A run that is still working is never taken over by another session's prefli
 factory's limits; a test shows it.
 AC2. A lock left by a run that stopped still turns stale and is taken over, as now.
 AC3. `docs/ai-factory.md` and ADR-0052 "Consequences" say what makes a lock stale.
+
+
+### 0-252. The isolation check depends on the model agreeing to quote its prompt
+
+**Type:** ci · **Priority:** High · **Status:** In progress, in the PR of `ci/0-252-isolation-probe`. Found by run
+wf_71cca984-ef4 in the build VM (#0-238's AC5; owner, 2026-11-16).
+**Autopilot:** human-only · **Risk:** medium · **Complexity:** medium · **Depends on:** —
+**Touches:** factory (.claude/workflows/backlog-autopilot.js, .claude/hooks/isolation-probe.sh,
+.claude/hooks/guard-protected-bash.sh, .claude/hooks/test-hooks.sh, .claude/settings.autopilot.json,
+scripts/factory/isolation.sh, scripts/factory/preflight.sh, .github/scripts/test-autopilot-workflow.mjs,
+.github/scripts/test-factory-state.sh, .github/scripts/test-preflight.sh,
+.github/scripts/check-hook-entries.rb, .ai/rules/protected-paths.md: owner-only), docs (docs/ai-factory.md, README
+"Infrastructure Hardening", ADR-0058)
+
+**Problem.** Since #0-248 the isolation check asks `review-general` to list its tools and copy the first 500
+characters of its system prompt, and looks for "You are the general reviewer" in them. In run wf_71cca984-ef4
+(2026-11-16, Claude Code 2.1.325) the agent listed Read, Bash, StructuredOutput, so its isolation held, and declined
+the rest: "I won't copy my system instructions". The run stopped `NOT_STARTED`; the same question had been answered in
+run 20261115-170407. A check whose outcome depends on whether the model is willing to reveal its prompt is a coin toss,
+as #0-248's yes or no was.
+
+**Approach (decided by the owner, ADR-0058).** Read a fact the runtime sets: `review-general` runs one probe command,
+`git rev-parse --verify --quiet isolation-probe-<run id>`; the session-level hook `isolation-probe.sh` records the
+call's `agent_type` (`.ai/runs/isolation/<run id>`, first wins, only for the run that holds the lock) and refuses the
+command; `scripts/factory/isolation.sh` reads the record and the run goes on only for `review-general`. The agent's own
+answers are read no more: the tool check and `REVIEW_GENERAL_OPENING` go. The spike of 2026-11-16 showed the hook gets
+`review-general` for the autopilot's agent and `workflow-subagent` for one started without `agentType`. Not chosen: a
+marker in the definition (still the model's answer), the tool check alone (#0-248), a retry.
+
+AC1. The run goes past the isolation check when the probe's record is `review-general`, and stops `NOT_STARTED` with a
+reason that says which otherwise (another type, no record, isolation.sh's failure or no answer), the lock released;
+the agent's answer decides nothing; tests show each.
+AC2. The hook records the call's `agent_type` only for the exact probe of the locked run, never replaces a record,
+refuses the probe whether it recorded it or not, passes every other command, and records nothing without `agent_type`;
+it fails closed; tests show each, and a test holds the workflow's probe equal to the one the hook records.
+AC3. The records are runtime state protected as the factory-ops marks are (the runtime list, the denies,
+`guard-protected-bash.sh`), and Factory guards requires the hook's entry. A record made before the run is never read
+as its probe (review round 1, sec-3c8e): the preflight removes the records as it takes the lock, `isolation.sh` takes
+only one newer than the lock, and neither the hook nor the script follows a symlink at the directory's name; tests
+show each.
+AC4. ADR-0058, `docs/ai-factory.md` "Troubleshooting" and README "Infrastructure Hardening" say what the check reads.
+AC5. A run in the build VM goes past the isolation check on this probe (the resumed #0-58, also #0-250's AC4).
+
+
+### 0-253. A run stopped by the factory-scripts guard keeps its lock
+
+**Type:** ci · **Priority:** Medium · **Status:** Open. Found by run wf_24c48844-aa4 in the build VM (owner,
+2026-11-16).
+**Autopilot:** human-only · **Risk:** medium · **Complexity:** low · **Depends on:** —
+**Touches:** factory (.claude/workflows/backlog-autopilot.js, .claude/hooks/guard-factory-scripts.sh,
+scripts/factory/: owner-only), docs (docs/ai-factory.md "Troubleshooting")
+
+**Problem.** The resumed #0-58 ran on a branch whose base predated #0-250's `preflight.sh`, so
+`guard-factory-scripts.sh` refused factory-ops' scripts after the switch to it ("factory scripts were changed on this
+branch"), its `state.sh unlock` among them (the session showed "4 actions not run · permission denied"). The run ended
+with nothing pushed and left `.ai/runs/LOCK` (`20261116-171355`), so the next preflight refused "another run holds the
+lock" until the owner ran `scripts/factory/state.sh unlock` by hand. The cleanup of a stopped run goes through the very
+guard that stopped it.
+
+**Approach (to decide at /ready).** Either the workflow returns to `main` before it unlocks a run stopped there (the
+guard compares the working tree with the base, and `main` is the base), or `unlock` and `return-to-main.sh` are the
+guard's allowed exceptions, or the resume refuses up front a branch whose `scripts/factory/` differs from the base,
+naming the fix (`docs/ai-factory.md` "Troubleshooting": merge `main` into it), before anything is switched.
+
+AC1. A run stopped because the branch's factory scripts differ from the base releases its lock and says why.
+AC2. A resume of such a branch says what to do before it changes anything.
+AC3. A test shows each.

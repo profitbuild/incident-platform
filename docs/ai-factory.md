@@ -116,7 +116,8 @@ describes the factory as it runs. Hook hardening that a stage removes is frozen 
    `.claude/workflows/backlog-autopilot.js` (and the same constant in `audit.js`, `docs-audit.js`,
    `seed-bugs.js`): `AGENT_TYPE_OPTION`, the `agent()` option that selects a custom agent (not in the
    public docs we checked), and the call shape of `parallel()` in `runAll()`. The preflight's isolation
-   check stops the run if the first is wrong.
+   check stops the run if the first is wrong: it reads the agent type Claude Code gave review-general's probe
+   command (backlog #0-252).
 5. Optional: export `FACTORY_NTFY_TOPIC` (a long random string) on the host before starting the
    container, for phone notifications; the container passes it on and the firewall then allows the ntfy
    host (`FACTORY_NTFY_SERVER`, default ntfy.sh). Only event names and item/PR numbers are sent.
@@ -451,8 +452,9 @@ file as the local VM (`provision.sh`, taken as cloud-init user-data, ADR-0056), 
 
 | Symptom | Likely cause |
 |---|---|
-| `NOT_STARTED: agent isolation check failed: the reviewer can edit files` (or `did not list its tools`) | `AGENT_TYPE_OPTION` is wrong: reviewers ran as general-purpose agents (or the answer was malformed: run again) |
-| `NOT_STARTED: agent isolation check failed: the reviewer's instructions are not review-general's` | `AGENT_TYPE_OPTION` is wrong, or `REVIEW_GENERAL_OPENING` in the workflow no longer opens `.claude/agents/review-general.md` (its test says which) (#0-248) |
+| `NOT_STARTED: agent isolation check failed: the probe came from agent type <type>, not review-general` | the custom agent type did not apply: `AGENT_TYPE_OPTION` is wrong (an agent started without it is `workflow-subagent`). The type is the one Claude Code gave the probe's call, recorded by `.claude/hooks/isolation-probe.sh` (#0-252, ADR-0058) |
+| `NOT_STARTED: agent isolation check failed: no isolation probe was recorded for run <id>` | the reviewer did not send the probe (`git rev-parse --verify --quiet isolation-probe-<id>`; its transcript shows its calls), or the hook did not record it: it is not wired in `settings.autopilot.json` (Factory guards would fail), the session was not started with that file, or Claude Code sent the hook no `agent_type`. `ls -l .ai/runs/isolation/` shows the records of the last day |
+| `NOT_STARTED: agent isolation check failed: the isolation record of run <id> is older than the lock` | a record was there before the run took its lock, so it is not this run's probe: the preflight removes every record as it takes the lock, so something wrote one in between, or the removal did not happen. Read what made it (`ls -l --time-style=full-iso .ai/runs/isolation/`); a planted record is what this refuses (#0-252, review round 1) |
 | a resumed run stops at the pick: `no local branch <branch> to resume` | the branch is only on origin (a new VM's clone has `main` alone): in the devcontainer, `git fetch origin <branch>:<branch>` on `main`, then resume |
 | `NOT_STARTED: label '…' does not exist` | create the labels of #0-113 |
 | a hook says "factory scripts were changed on this branch" | `scripts/factory/` differs from the base commit in `.ai/runs/LOCK` (or `origin/main` without a run) — either the branch touched it (owner's decision) or `main` moved on: rebase the branch by hand |

@@ -73,6 +73,7 @@ and `check-protected-paths.sh` checks that they do (backlog #0-168).
 - `.ai/runs/LOCK` — the lock that keeps a second autopilot run away
 - `.ai/runs/state.json` — the run state and the breaker's count
 - `.ai/runs/ops-calls/` — one mark per factory-ops run, which gives it its one call (backlog #0-169, ADR-0053; protected since #0-233)
+- `.ai/runs/isolation/` — which agent type sent a run's isolation probe, as Claude Code named it (backlog #0-252, ADR-0058)
 - `.ai/STOP` — the autopilot's stop switch (set by the breaker, the audit trigger or the owner)
 <!-- runtime:end -->
 

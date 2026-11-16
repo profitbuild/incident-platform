@@ -6,7 +6,7 @@
 # CODEOWNERS on the PR and the autopilot's changed-paths check before review.
 #
 # Protected: the paths of .ai/rules/protected-paths.md (their one list), its runtime-state list among them (.git/,
-#            .ai/runs/LOCK and state.json, .ai/runs/ops-calls/, .ai/STOP). This copy stays a literal regex, so the last line does not
+#            .ai/runs/LOCK and state.json, .ai/runs/ops-calls/, .ai/runs/isolation/, .ai/STOP). This copy stays a literal regex, so the last line does not
 #            depend on parsing that file; .github/scripts/check-protected-paths.sh fails CI when it misses an
 #            entry, and when it holds one the list lacks (backlog #0-168): it reads `protected=` below as a flat
 #            alternation, one path per alternative, so keep it on one line with no group inside.
@@ -15,6 +15,8 @@
 #            (#0-169, ADR-0053), was not protected, so another agent's Bash could delete a mark and give a running
 #            factory-ops a second call. Matched without its trailing `/`, so `rm -rf .ai/runs/ops-calls` counts
 #            too. The marks themselves are made by factory-ops-bash.sh, a hook, which this guard does not see.
+#            Backlog #0-252: .ai/runs/isolation/, the record of which agent type sent a run's isolation probe
+#            (isolation-probe.sh, a hook, makes it), the same way: an agent's Bash must not make or replace one.
 # A command that only reads (git diff/log/show, cat, grep, ls, head, tail, wc) passes.
 # Also refused, whatever the verb: commands naming a secret (docker/.env, docker/secrets, application-local,
 # credentials files, gh/ssh config) and `git diff --no-index`, which reads any file around the Read denies.
@@ -58,7 +60,7 @@ if finds "$cmd" '(>|[[:space:]]tee[[:space:]]|sed[[:space:]]+(-[a-zA-Z]*i|--in-p
     block "the command may write to the Maven wrapper (mvnw), which every verification runs"
 fi
 
-protected='(\.ai/rules|\.ai/plan/|\.ai/audit/decisions\.md|\.claude/|\.github/|architecture-tests|AGENTS\.md|scripts/factory|\.devcontainer|\.mvn/|\.ruby-version|\.node-version|\.git/|\.ai/runs/LOCK|\.ai/runs/state\.json|\.ai/runs/ops-calls|\.ai/STOP)'
+protected='(\.ai/rules|\.ai/plan/|\.ai/audit/decisions\.md|\.claude/|\.github/|architecture-tests|AGENTS\.md|scripts/factory|\.devcontainer|\.mvn/|\.ruby-version|\.node-version|\.git/|\.ai/runs/LOCK|\.ai/runs/state\.json|\.ai/runs/ops-calls|\.ai/runs/isolation|\.ai/STOP)'
 # The paths are matched as text, after the spellings a path resolves through without changing (review round 3 of
 # #0-235): `//` is `/`, `/./` is `/`. Without it `git log --output=.ai/runs//LOCK`, an allowed read, overwrote the lock
 # with a branch and a base the agent chose, and `mkdir -p .ai/runs//ops-calls/<id>` blocked a factory-ops run. `..`

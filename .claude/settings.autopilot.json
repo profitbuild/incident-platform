@@ -91,6 +91,8 @@
       "Write(./.ai/runs/state.json)",
       "Edit(./.ai/runs/ops-calls/**)",
       "Write(./.ai/runs/ops-calls/**)",
+      "Edit(./.ai/runs/isolation/**)",
+      "Write(./.ai/runs/isolation/**)",
       "Edit(./.ai/STOP)",
       "Write(./.ai/STOP)",
       "Edit(./.ai/audit/decisions.md)",
@@ -161,6 +163,11 @@
           {
             "type": "command",
             "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/guard-factory-scripts.sh",
+            "onFailure": "block"
+          },
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/isolation-probe.sh",
             "onFailure": "block"
           }
         ]
@@ -268,6 +275,6 @@
     "FACTORY_AUDIT_EVERY": "10",
     "FACTORY_MAX_BLOCKED": "2",
     "FACTORY_MAX_MERGES_PER_DAY": "5",
-    "FACTORY_SETTINGS_SHA256": "9ed0a8fc8940fcb4cc3efca4a802d7623f5cb011477cdc2110ab1b5afad4ca14"
+    "FACTORY_SETTINGS_SHA256": "c82053a97dfb82a842764e42b47cc7ccbf3336c36fc9b25a7a5c836d83f1aba2"
   }
 }
