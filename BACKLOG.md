@@ -158,10 +158,10 @@ Code, Javadoc, config comments and commits reference items as `backlog #N`.
 | [0-245](#0-245-validation-errors-do-not-redact-apikey-and-privatekey-fields) | Validation errors do not redact `apiKey` and `privateKey` fields | bug | Medium | Open |
 | [0-246](#0-246-service-classes-below-60-coverage-found-with-0-57) | Service classes below 60% coverage, found with #0-57 | tech-debt | Low | Open |
 | [0-249](#0-249-claude-code-in-the-devcontainer-image-is-whatever-version-was-current-at-build-time) | Claude Code in the devcontainer image is whatever version was current at build time | ci | Medium | Open |
-| [0-250](#0-250-the-test-gate-goes-to-the-background-after-two-minutes-and-its-answer-is-lost) | The test gate goes to the background after two minutes, and its answer is lost | ci | High | In progress |
 | [0-251](#0-251-a-live-runs-lock-turns-stale-after-a-fixed-three-hours) | A live run's lock turns stale after a fixed three hours | ci | Low | Open |
-| [0-252](#0-252-the-isolation-check-depends-on-the-model-agreeing-to-quote-its-prompt) | The isolation check depends on the model agreeing to quote its prompt | ci | High | In progress |
 | [0-253](#0-253-a-run-stopped-by-the-factory-scripts-guard-keeps-its-lock) | A run stopped by the factory-scripts guard keeps its lock | ci | Medium | Open |
+| [0-254](#0-254-a-resumed-item-that-ships-keeps-its-draft-prs-blocked-title) | A resumed item that ships keeps its draft PR's "(BLOCKED)" title | ci | Low | Open |
+| [0-255](#0-255-an-approval-re-runs-the-whole-factory-guards-job) | An approval re-runs the whole Factory guards job | ci | Low | Open |
 | [0-133](#0-133-incidentresolvedevent-carries-no-openedat) | `IncidentResolvedEvent` carries no `openedAt` | tech-debt | Low | Open |
 | [0-134](#0-134-diff-cover-is-installed-by-version-without-hashes) | `diff-cover` is installed by version, without hashes | ci | Low | Open |
 | [0-135](#0-135-kubectl-in-ci-is-downloaded-unverified) | kubectl in CI is downloaded unverified | ci | Low | Open |
@@ -3434,6 +3434,10 @@ result", #0-250): a factory problem, not the VM's, and not one of the three eith
 On 2026-11-16, after #0-250: wf_24c48844-aa4 was refused by `guard-factory-scripts.sh` (the branch's base predated
 #0-250's `preflight.sh`; the owner merged `main` into it) and left its lock (#0-253); wf_71cca984-ef4 stopped
 `NOT_STARTED` at the isolation check, the model declining to quote its prompt (#0-252). Neither is one of the three.
+**1 of 3: run wf_207ec85e-4ad (#0-58, PR #639, merged 2026-11-16)**, after #0-250 and #0-252: through every stage with
+no environment problem; the gate built and tested all nine modules in 03:03 min (Testcontainers' pulls allowed,
+#0-247) and answered, the isolation probe was recorded as review-general, the panel approved in round 1 and the
+acceptance met AC1-AC13. Its PR kept the draft's title "(BLOCKED)" (#0-254).
 AC6. README "Infrastructure Hardening" and `docs/ai-factory.md` say where the autopilot runs and what isolates it;
 #0-202 and #0-225 point at what this stage settled for them, and #0-116 at what it did not.
 
@@ -3621,50 +3625,6 @@ AC3. The preflight refuses a Claude Code other than the pinned version (or below
 says which it found.
 
 
-### 0-250. The test gate goes to the background after two minutes, and its answer is lost
-
-**Type:** ci · **Priority:** High · **Status:** In progress, in the PR of `ci/0-250-gate-bash-timeout`. Found by the
-run of #0-58 in the build VM (#0-238's AC5; owner, 2026-11-15).
-**Autopilot:** human-only · **Risk:** medium · **Complexity:** low · **Depends on:** —
-**Touches:** factory (.claude/settings.autopilot.json, scripts/factory/preflight.sh, .github/scripts/test-preflight.sh,
-.claude/agents/implementer.md, .claude/hooks/foreground-bash.sh: owner-only), docs (docs/ai-factory.md preflight list
-and "Troubleshooting", ADR-0052's list of refusals)
-
-**Problem.** factory-ops ran `scripts/factory/run-tests.sh '0-58' '1-0' <base>` with no `timeout` and no
-`run_in_background` (its transcript). Claude Code 2.1.x gives such a call 2 minutes and, when a foreground command
-reaches its timeout, moves it to the background instead of stopping it (tools reference, "Foreground commands that
-move to the background"). The gate of a change to `shared` runs every module, 4 minutes on the Mac (#0-199's log),
-so it went to the background; factory-ops has one call per task (#0-169), its waits (`sleep`, `tail -f`) were
-refused, and it ended without the script's JSON. The workflow stopped the item BLOCKED, "test gate returned no
-result", before the panel. The gates of #0-199 and #0-200 (2026-11-03, on an older Claude Code) had passed.
-
-**Approach (decided by the owner).** `BASH_DEFAULT_TIMEOUT_MS` of 30 minutes (`1800000`) in
-`settings.autopilot.json`'s `env`: every Bash call of the autopilot without its own `timeout` waits that long, whatever
-the model sets, and the settings hash makes the session carry it; the preflight refuses a session whose value is unset
-or lower, before an item is locked. `BASH_MAX_TIMEOUT_MS` is set to the same (review round 1): the docs do not say
-whether the default is bounded by the ceiling (10 minutes unless set), and with both set it does not matter; it also
-lets the implementer give a long run up to 30 minutes, and its hints (`implementer.md`, `foreground-bash.sh`) say so.
-Both apply to every agent of the autopilot, so a command that hangs holds its agent up to 30 minutes, not 2. Not chosen: a `timeout` in the prompt of `ops()` (the model's choice, a ceiling of
-10 minutes); refusing `run_in_background` in factory-ops' hook (the call had none);
-`CLAUDE_CODE_DISABLE_BACKGROUND_TASKS` (it also stops Claude Code moving subagents to the background, untested with a
-Workflow's agents).
-
-AC1. `settings.autopilot.json`'s `env` sets `BASH_DEFAULT_TIMEOUT_MS` and `BASH_MAX_TIMEOUT_MS` to `1800000`, and
-`FACTORY_SETTINGS_SHA256` carries the new hash.
-AC2. The preflight refuses a session whose `BASH_DEFAULT_TIMEOUT_MS` or `BASH_MAX_TIMEOUT_MS` is unset, not a number
-or below `1800000`, and says so; tests in `test-preflight.sh` fail without the check, and its passing session takes
-both values from the repository's `settings.autopilot.json`.
-AC3. `docs/ai-factory.md` names the check in the preflight's list and "test gate returned no result" in
-"Troubleshooting".
-AC4. A resumed run of #0-58 in the build VM gets past the gate with its JSON (the gate passes or fails, but answers).
-It is also the check of the one assumption left unverified: that Claude Code applies a settings file's
-`env.BASH_DEFAULT_TIMEOUT_MS` to the Bash tool of a Workflow's agents, not only of the main session. The docs do not
-say; what speaks for it is that `FACTORY_SETTINGS_SHA256` from the same `env` reaches factory-ops' scripts, but that
-is the shell's environment, not the tool's own timeout. Counts only if the gate ran longer than 2 minutes (the
-`Total time` in its log under `.ai/runs/0-58/`); if it went to the background again, the variable did not reach the
-agent and the fix has to move into the workflow (a `timeout` the hook requires of factory-ops' call).
-
-
 ### 0-251. A live run's lock turns stale after a fixed three hours
 
 **Type:** ci · **Priority:** Low · **Status:** Open. Found by the review of #0-250 (round 2, architecture; owner,
@@ -3692,48 +3652,6 @@ AC2. A lock left by a run that stopped still turns stale and is taken over, as n
 AC3. `docs/ai-factory.md` and ADR-0052 "Consequences" say what makes a lock stale.
 
 
-### 0-252. The isolation check depends on the model agreeing to quote its prompt
-
-**Type:** ci · **Priority:** High · **Status:** In progress, in the PR of `ci/0-252-isolation-probe`. Found by run
-wf_71cca984-ef4 in the build VM (#0-238's AC5; owner, 2026-11-16).
-**Autopilot:** human-only · **Risk:** medium · **Complexity:** medium · **Depends on:** —
-**Touches:** factory (.claude/workflows/backlog-autopilot.js, .claude/hooks/isolation-probe.sh,
-.claude/hooks/guard-protected-bash.sh, .claude/hooks/test-hooks.sh, .claude/settings.autopilot.json,
-scripts/factory/isolation.sh, scripts/factory/preflight.sh, .github/scripts/test-autopilot-workflow.mjs,
-.github/scripts/test-factory-state.sh, .github/scripts/test-preflight.sh,
-.github/scripts/check-hook-entries.rb, .ai/rules/protected-paths.md: owner-only), docs (docs/ai-factory.md, README
-"Infrastructure Hardening", ADR-0058)
-
-**Problem.** Since #0-248 the isolation check asks `review-general` to list its tools and copy the first 500
-characters of its system prompt, and looks for "You are the general reviewer" in them. In run wf_71cca984-ef4
-(2026-11-16, Claude Code 2.1.325) the agent listed Read, Bash, StructuredOutput, so its isolation held, and declined
-the rest: "I won't copy my system instructions". The run stopped `NOT_STARTED`; the same question had been answered in
-run 20261115-170407. A check whose outcome depends on whether the model is willing to reveal its prompt is a coin toss,
-as #0-248's yes or no was.
-
-**Approach (decided by the owner, ADR-0058).** Read a fact the runtime sets: `review-general` runs one probe command,
-`git rev-parse --verify --quiet isolation-probe-<run id>`; the session-level hook `isolation-probe.sh` records the
-call's `agent_type` (`.ai/runs/isolation/<run id>`, first wins, only for the run that holds the lock) and refuses the
-command; `scripts/factory/isolation.sh` reads the record and the run goes on only for `review-general`. The agent's own
-answers are read no more: the tool check and `REVIEW_GENERAL_OPENING` go. The spike of 2026-11-16 showed the hook gets
-`review-general` for the autopilot's agent and `workflow-subagent` for one started without `agentType`. Not chosen: a
-marker in the definition (still the model's answer), the tool check alone (#0-248), a retry.
-
-AC1. The run goes past the isolation check when the probe's record is `review-general`, and stops `NOT_STARTED` with a
-reason that says which otherwise (another type, no record, isolation.sh's failure or no answer), the lock released;
-the agent's answer decides nothing; tests show each.
-AC2. The hook records the call's `agent_type` only for the exact probe of the locked run, never replaces a record,
-refuses the probe whether it recorded it or not, passes every other command, and records nothing without `agent_type`;
-it fails closed; tests show each, and a test holds the workflow's probe equal to the one the hook records.
-AC3. The records are runtime state protected as the factory-ops marks are (the runtime list, the denies,
-`guard-protected-bash.sh`), and Factory guards requires the hook's entry. A record made before the run is never read
-as its probe (review round 1, sec-3c8e): the preflight removes the records as it takes the lock, `isolation.sh` takes
-only one newer than the lock, and neither the hook nor the script follows a symlink at the directory's name; tests
-show each.
-AC4. ADR-0058, `docs/ai-factory.md` "Troubleshooting" and README "Infrastructure Hardening" say what the check reads.
-AC5. A run in the build VM goes past the isolation check on this probe (the resumed #0-58, also #0-250's AC4).
-
-
 ### 0-253. A run stopped by the factory-scripts guard keeps its lock
 
 **Type:** ci · **Priority:** Medium · **Status:** Open. Found by run wf_24c48844-aa4 in the build VM (owner,
@@ -3757,3 +3675,57 @@ naming the fix (`docs/ai-factory.md` "Troubleshooting": merge `main` into it), b
 AC1. A run stopped because the branch's factory scripts differ from the base releases its lock and says why.
 AC2. A resume of such a branch says what to do before it changes anything.
 AC3. A test shows each.
+
+
+### 0-254. A resumed item that ships keeps its draft PR's "(BLOCKED)" title
+
+**Type:** ci · **Priority:** Low · **Status:** Open. Found by run wf_207ec85e-4ad (#0-58, PR #639; owner, 2026-11-16).
+**Autopilot:** human-only · **Risk:** low · **Complexity:** low · **Depends on:** —
+**Touches:** factory (.claude/agents/shipper.md: owner-only)
+
+**Problem.** A BLOCKED item gets a draft PR (`shipper.md`, "Blocked", step 3), whose title the definition does not
+state: #0-58's draft was titled "test(shared): cover GlobalExceptionHandler and UnauthorizedEntryPoint (BLOCKED)".
+When the resumed item ships, step 5 reuses the draft with `gh pr edit <number> --body-file <file> --remove-label
+blocked --add-label autopilot` and `gh pr ready <number>`, and sets no title, so PR #639 went ready for review, and
+would have merged, titled "(BLOCKED)"; the owner retitled it by hand. The title becomes the merge commit's subject
+line on `main`.
+
+**Approach.** Step 5 sets the conventional subject on a reused draft too (`gh pr edit <number> --title "<subject>"
+--body-file …`, the form `gh pr create` already takes), and step 3 names the draft's title (the same subject; the
+`blocked` label and the body's first line say it is blocked, not the title). The definition's `commands:` list
+holds the new form, which `check-agent-commands.rb` runs (ADR-0050).
+
+AC1. A resumed item that ships has its PR titled with the conventional subject, not the draft's.
+AC2. A BLOCKED item's draft PR is titled with the conventional subject; the label and the body say it is blocked.
+AC3. The new command form is in `shipper.md`'s `commands:` list and passes `check-agent-commands.rb`.
+
+
+### 0-255. An approval re-runs the whole Factory guards job
+
+**Type:** ci · **Priority:** Low · **Status:** Open. Found merging PR #639 (owner, 2026-11-16).
+**Autopilot:** human-only · **Risk:** medium · **Complexity:** low · **Depends on:** —
+**Touches:** factory (.github/workflows/factory-guards.yml, a new workflow under .github/workflows/,
+.github/repository-settings/rulesets/main.json, the tests of the workflow lint and `ci-local.sh`: owner-only), docs
+(docs/ai-factory.md, README "Infrastructure Hardening")
+
+**Problem.** Factory guards runs on `pull_request_review` (`submitted`, `dismissed`) because one of its steps, "Changes
+that need the owner" (#0-113, #0-237), passes a bot's pull request with a sensitive change only once the owner approved
+its head commit: without the review event the check would stay red after the approval. But the event re-runs the
+whole job, about three minutes of hook, workflow, preflight and agent-command tests, of which only that step depends
+on a review. Merging PR #639, whose first run had passed (no sensitive change), the owner's approval started a new run
+and the merge was refused ("the base branch policy prohibits the merge") until it ended. On a public repository any
+review starts one, and cancels the run in progress (#0-231's shared group, accepted there).
+
+**Approach (to decide at /ready).** Move "Changes that need the owner" into a small workflow of its own (for example
+"Owner approval"), on `pull_request` and `pull_request_review`, a required check of `main`'s ruleset; Factory guards
+keeps `pull_request` and `push` only. An approval then re-runs seconds, not minutes. The ruleset change is the owner's
+(`repository-settings.rb plan`, then `apply`). Not chosen: dropping the step and relying on `CODEOWNERS` (`*` needs the
+owner's review today, but ADR-0055's later stages merge by the ruleset alone, where the step is the only gate on these
+changes).
+
+AC1. An approval of a pull request runs the owner-approval check only, not Factory guards' tests.
+AC2. A bot's pull request with a change of `check-factory-guards.sh`'s kinds still fails that check until the owner
+approves its head commit, and passes after; an owner's pull request passes; a test shows each.
+AC3. Both checks are required in `rulesets/main.json`, and `repository-settings.rb check` passes after the owner's
+`apply`.
+AC4. `docs/ai-factory.md` and README "Infrastructure Hardening" name the new check.

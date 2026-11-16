@@ -148,6 +148,8 @@ resolvable.
 | 0-247 | The build VM's allow-list is kept by its own resolver: every DNS query of a uid from 1000 up is sent to dnsmasq on the VM, which adds what it answers for a listed name (with its subdomains) to `factory-dns`; private, shared and reserved networks rejected, dnsmasq unprivileged and sandboxed; `create.sh` checks it from a container (ADR-0057 amended); details in [the section](#0-247-the-build-vms-allow-list-of-addresses-does-not-hold-for-a-cdn) | PR #640 |
 | 0-248 | The autopilot's isolation check compares a fact, not the agent's yes or no: `review-general` quotes the opening of its instructions, asked without the preamble that points at its file, and the workflow looks for `REVIEW_GENERAL_OPENING` in it (a test holds the phrase equal to the definition); each failure has its own reason; details in [the section](#0-248-the-autopilots-isolation-check-trusts-the-agents-own-yes-or-no) | PR #641 |
 | 0-58 | `GlobalExceptionHandlerTest` (12 tests) and `UnauthorizedEntryPointTest` (6) in `shared`, test code only: statuses, error codes, fixed bodies, redaction, requestId resolution; both classes at 100% of their lines; details in [the section](#0-58-globalexceptionhandler-and-unauthorizedentrypoint-have-no-tests-of-their-own-in-shared) | PR #639 |
+| 0-250 | Every Bash call of the autopilot waits 30 minutes (`BASH_DEFAULT_TIMEOUT_MS` and `BASH_MAX_TIMEOUT_MS` in `settings.autopilot.json`'s `env`), and the preflight refuses a session with less, so a test gate longer than two minutes is not moved to the background and its answer reaches the workflow (ADR-0052 refusal 6); details in [the section](#0-250-the-test-gate-goes-to-the-background-after-two-minutes-and-its-answer-is-lost) | PR #642 |
+| 0-252 | The isolation check reads the agent type Claude Code gives review-general's probe command: the session-level hook `isolation-probe.sh` records it under `.ai/runs/isolation/` for the locked run, `isolation.sh` reads it, the preflight clears the records as it takes the lock; the model's answers are read no more (ADR-0058); details in [the section](#0-252-the-isolation-check-depends-on-the-model-agreeing-to-quote-its-prompt) | PR #643 |
 
 Items completed before `BACKLOG.md` existed are not listed.
 
@@ -3397,3 +3399,87 @@ blank, else from the MDC, else `"unknown"`: all three paths and a blank header.
 AC12. `UnauthorizedEntryPointTest`: the body holds no text of the `AuthenticationException` passed in.
 AC13. Both classes are above 60% LINE in `shared`'s JaCoCo report (`./mvnw verify -pl shared`), and the change passes
 the existing `jacoco:check` and `diff-cover`; no new CI check.
+
+### 0-250. The test gate goes to the background after two minutes, and its answer is lost
+
+**Type:** ci · **Priority:** High · **Status:** Done, PR #642 (2026-11-16); AC4 shown by run wf_207ec85e-4ad in the build VM (the gate ran 03:03 min and answered). Found by the
+run of #0-58 in the build VM (#0-238's AC5; owner, 2026-11-15).
+**Autopilot:** human-only · **Risk:** medium · **Complexity:** low · **Depends on:** —
+**Touches:** factory (.claude/settings.autopilot.json, scripts/factory/preflight.sh, .github/scripts/test-preflight.sh,
+.claude/agents/implementer.md, .claude/hooks/foreground-bash.sh: owner-only), docs (docs/ai-factory.md preflight list
+and "Troubleshooting", ADR-0052's list of refusals)
+
+**Problem.** factory-ops ran `scripts/factory/run-tests.sh '0-58' '1-0' <base>` with no `timeout` and no
+`run_in_background` (its transcript). Claude Code 2.1.x gives such a call 2 minutes and, when a foreground command
+reaches its timeout, moves it to the background instead of stopping it (tools reference, "Foreground commands that
+move to the background"). The gate of a change to `shared` runs every module, 4 minutes on the Mac (#0-199's log),
+so it went to the background; factory-ops has one call per task (#0-169), its waits (`sleep`, `tail -f`) were
+refused, and it ended without the script's JSON. The workflow stopped the item BLOCKED, "test gate returned no
+result", before the panel. The gates of #0-199 and #0-200 (2026-11-03, on an older Claude Code) had passed.
+
+**Approach (decided by the owner).** `BASH_DEFAULT_TIMEOUT_MS` of 30 minutes (`1800000`) in
+`settings.autopilot.json`'s `env`: every Bash call of the autopilot without its own `timeout` waits that long, whatever
+the model sets, and the settings hash makes the session carry it; the preflight refuses a session whose value is unset
+or lower, before an item is locked. `BASH_MAX_TIMEOUT_MS` is set to the same (review round 1): the docs do not say
+whether the default is bounded by the ceiling (10 minutes unless set), and with both set it does not matter; it also
+lets the implementer give a long run up to 30 minutes, and its hints (`implementer.md`, `foreground-bash.sh`) say so.
+Both apply to every agent of the autopilot, so a command that hangs holds its agent up to 30 minutes, not 2. Not chosen: a `timeout` in the prompt of `ops()` (the model's choice, a ceiling of
+10 minutes); refusing `run_in_background` in factory-ops' hook (the call had none);
+`CLAUDE_CODE_DISABLE_BACKGROUND_TASKS` (it also stops Claude Code moving subagents to the background, untested with a
+Workflow's agents).
+
+AC1. `settings.autopilot.json`'s `env` sets `BASH_DEFAULT_TIMEOUT_MS` and `BASH_MAX_TIMEOUT_MS` to `1800000`, and
+`FACTORY_SETTINGS_SHA256` carries the new hash.
+AC2. The preflight refuses a session whose `BASH_DEFAULT_TIMEOUT_MS` or `BASH_MAX_TIMEOUT_MS` is unset, not a number
+or below `1800000`, and says so; tests in `test-preflight.sh` fail without the check, and its passing session takes
+both values from the repository's `settings.autopilot.json`.
+AC3. `docs/ai-factory.md` names the check in the preflight's list and "test gate returned no result" in
+"Troubleshooting".
+AC4. A resumed run of #0-58 in the build VM gets past the gate with its JSON (the gate passes or fails, but answers).
+It is also the check of the one assumption left unverified: that Claude Code applies a settings file's
+`env.BASH_DEFAULT_TIMEOUT_MS` to the Bash tool of a Workflow's agents, not only of the main session. The docs do not
+say; what speaks for it is that `FACTORY_SETTINGS_SHA256` from the same `env` reaches factory-ops' scripts, but that
+is the shell's environment, not the tool's own timeout. Counts only if the gate ran longer than 2 minutes (the
+`Total time` in its log under `.ai/runs/0-58/`); if it went to the background again, the variable did not reach the
+agent and the fix has to move into the workflow (a `timeout` the hook requires of factory-ops' call).
+
+### 0-252. The isolation check depends on the model agreeing to quote its prompt
+
+**Type:** ci · **Priority:** High · **Status:** Done, PR #643 (2026-11-16); AC5 shown by run wf_207ec85e-4ad in the build VM (`.ai/runs/isolation/20261116-184153 -> review-general`). Found by run
+wf_71cca984-ef4 in the build VM (#0-238's AC5; owner, 2026-11-16).
+**Autopilot:** human-only · **Risk:** medium · **Complexity:** medium · **Depends on:** —
+**Touches:** factory (.claude/workflows/backlog-autopilot.js, .claude/hooks/isolation-probe.sh,
+.claude/hooks/guard-protected-bash.sh, .claude/hooks/test-hooks.sh, .claude/settings.autopilot.json,
+scripts/factory/isolation.sh, scripts/factory/preflight.sh, .github/scripts/test-autopilot-workflow.mjs,
+.github/scripts/test-factory-state.sh, .github/scripts/test-preflight.sh,
+.github/scripts/check-hook-entries.rb, .ai/rules/protected-paths.md: owner-only), docs (docs/ai-factory.md, README
+"Infrastructure Hardening", ADR-0058)
+
+**Problem.** Since #0-248 the isolation check asks `review-general` to list its tools and copy the first 500
+characters of its system prompt, and looks for "You are the general reviewer" in them. In run wf_71cca984-ef4
+(2026-11-16, Claude Code 2.1.325) the agent listed Read, Bash, StructuredOutput, so its isolation held, and declined
+the rest: "I won't copy my system instructions". The run stopped `NOT_STARTED`; the same question had been answered in
+run 20261115-170407. A check whose outcome depends on whether the model is willing to reveal its prompt is a coin toss,
+as #0-248's yes or no was.
+
+**Approach (decided by the owner, ADR-0058).** Read a fact the runtime sets: `review-general` runs one probe command,
+`git rev-parse --verify --quiet isolation-probe-<run id>`; the session-level hook `isolation-probe.sh` records the
+call's `agent_type` (`.ai/runs/isolation/<run id>`, first wins, only for the run that holds the lock) and refuses the
+command; `scripts/factory/isolation.sh` reads the record and the run goes on only for `review-general`. The agent's own
+answers are read no more: the tool check and `REVIEW_GENERAL_OPENING` go. The spike of 2026-11-16 showed the hook gets
+`review-general` for the autopilot's agent and `workflow-subagent` for one started without `agentType`. Not chosen: a
+marker in the definition (still the model's answer), the tool check alone (#0-248), a retry.
+
+AC1. The run goes past the isolation check when the probe's record is `review-general`, and stops `NOT_STARTED` with a
+reason that says which otherwise (another type, no record, isolation.sh's failure or no answer), the lock released;
+the agent's answer decides nothing; tests show each.
+AC2. The hook records the call's `agent_type` only for the exact probe of the locked run, never replaces a record,
+refuses the probe whether it recorded it or not, passes every other command, and records nothing without `agent_type`;
+it fails closed; tests show each, and a test holds the workflow's probe equal to the one the hook records.
+AC3. The records are runtime state protected as the factory-ops marks are (the runtime list, the denies,
+`guard-protected-bash.sh`), and Factory guards requires the hook's entry. A record made before the run is never read
+as its probe (review round 1, sec-3c8e): the preflight removes the records as it takes the lock, `isolation.sh` takes
+only one newer than the lock, and neither the hook nor the script follows a symlink at the directory's name; tests
+show each.
+AC4. ADR-0058, `docs/ai-factory.md` "Troubleshooting" and README "Infrastructure Hardening" say what the check reads.
+AC5. A run in the build VM goes past the isolation check on this probe (the resumed #0-58, also #0-250's AC4).
