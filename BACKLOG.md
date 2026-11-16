@@ -471,7 +471,7 @@ Related: #0-20 (tenant-owned fallback contact).
 
 ### 0-25. A stale `notification_queue` write can overwrite a terminal status
 
-**Type:** tech-debt · **Priority:** Medium · **Status:** Open (approach decided in `/ready`, 2026-11-14: state-guarded
+**Type:** tech-debt · **Priority:** Medium · **Status:** In progress — autopilot run 20261116-191910 (approach decided in `/ready`, 2026-11-14: state-guarded
 conditional UPDATEs, not `@Version`)
 **Autopilot:** ready · **Risk:** low · **Complexity:** medium · **Depends on:** —
 **Touches:** notification-service (domain, repository, service, scheduler; src/test), root (.ai/context/architecture.md)
