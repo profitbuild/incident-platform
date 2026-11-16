@@ -57,8 +57,9 @@ HOOKS_DIR = File.join(ROOT, '.claude', 'hooks')
 ARG = %r{(?:[A-Za-z0-9_./=,-]|'[A-Za-z0-9_./*= -]*')+}.freeze
 COMMAND = %r{\A"\$CLAUDE_PROJECT_DIR"/\.claude/hooks/([A-Za-z0-9_-]+\.sh)(?: #{ARG})*\z}.freeze
 
-# The session-level guards each settings file must run (#0-164 AC4): file => [[hook and its arguments, the tools
-# its matcher must cover]]. The one list of them; the settings files are what it checks. webfetch-allowlist.sh is
+# The session-level guards each settings file must run (#0-164 AC4), and isolation-probe.sh, which guards nothing but
+# records the fact the isolation check reads (#0-252): file => [[hook and its arguments, the tools its matcher must
+# cover]]. The one list of them; the settings files are what it checks. webfetch-allowlist.sh is
 # not here: check-web-access.sh holds its wiring, both files and both modes (one list per control, FAC-A01).
 REQUIRED = {
   'settings.json' => [
@@ -69,6 +70,7 @@ REQUIRED = {
     ['guard-protected-bash.sh', %w[Bash]],
     ['guard-git-push.sh', %w[Bash]],
     ['guard-factory-scripts.sh', %w[Bash]],
+    ['isolation-probe.sh', %w[Bash]],
     ['guard-write-in-repo.sh', %w[Edit Write MultiEdit NotebookEdit]],
     ['guard-migrations.sh', %w[Edit Write MultiEdit NotebookEdit]]
   ]

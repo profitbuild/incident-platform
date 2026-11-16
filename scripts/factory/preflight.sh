@@ -14,6 +14,7 @@
 # bot's, or example.com is not refused (no firewall); the session was not started with main's
 # .claude/settings.autopilot.json and .claude/settings.json (backlog #0-194, ADR-0052); its BASH_DEFAULT_TIMEOUT_MS or
 # BASH_MAX_TIMEOUT_MS is below 30 minutes (the test gate's answer, backlog #0-250).
+# Taking the lock, it removes the isolation probe's records of earlier runs (backlog #0-252).
 # The breaker and the audit trigger create .ai/STOP, so the owner has to clear them on purpose.
 # ============================================================
 set -uo pipefail
@@ -233,8 +234,17 @@ docker info >/dev/null 2>&1 || add "Docker is not reachable (Testcontainers test
 
 ok=true
 [ "${#reasons[@]}" -eq 0 ] || ok=false
+# Fixed (backlog #0-252, review round 1, sec-3c8e): the isolation check trusts the record .ai/runs/isolation/<run id>
+# that isolation-probe.sh makes, first one wins, and a run id is a time anyone can predict. A record made before this run
+# (by code of an earlier item's gate under ./mvnw, which no shell guard sees, #0-116) would win over the real probe. No
+# other run is alive once the lock is taken, so every record goes before it is: whatever is there then is this run's
+# probe. `rm -rf` removes a symlink planted at the directory's own name, not what it points to. isolation.sh also takes
+# only a record newer than the lock.
 if [ "$ok" = true ]; then
-    if [ -n "$base_sha" ]; then echo "$run_id $base_sha" > "$lock"; else ok=false; reasons+=("could not resolve the base commit"); fi
+    if [ -z "$base_sha" ]; then ok=false; reasons+=("could not resolve the base commit")
+    elif ! rm -rf "$RUNS_DIR/isolation" || [ -e "$RUNS_DIR/isolation" ] || [ -L "$RUNS_DIR/isolation" ]; then
+        ok=false; reasons+=("cannot clear $RUNS_DIR/isolation, the isolation probe's records, before the run (backlog #0-252)")
+    else echo "$run_id $base_sha" > "$lock"; fi
 fi
 
 jq -n --argjson ok "$ok" --arg base "$base" --arg sha "$base_sha" --arg run "$run_id" --arg today "$today" \

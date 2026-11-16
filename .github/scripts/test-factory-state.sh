@@ -2,7 +2,8 @@
 # ============================================================
 # Tests for scripts/factory/state.sh, in a temporary repository (the real .ai/runs/state.json is never
 # touched). Covers the breaker and audit counters and the history entry of each outcome, including the
-# stop stage and the "-" placeholder for "no PR" of a blocked item (backlog #0-122).
+# stop stage and the "-" placeholder for "no PR" of a blocked item (backlog #0-122). And scripts/factory/isolation.sh,
+# the reader of the isolation probe's record, the other runtime state a script reads for the workflow (#0-252).
 # Run: .github/scripts/test-factory-state.sh   (also run by .github/workflows/factory-guards.yml)
 # ============================================================
 set -uo pipefail
@@ -20,7 +21,7 @@ expect_jq() {
 }
 
 mkdir -p "$WORK/repo/scripts/factory"
-cp "$SRC"/scripts/factory/_common.sh "$SRC"/scripts/factory/state.sh "$WORK/repo/scripts/factory/"
+cp "$SRC"/scripts/factory/_common.sh "$SRC"/scripts/factory/state.sh "$SRC"/scripts/factory/isolation.sh "$WORK/repo/scripts/factory/"
 cd "$WORK/repo" || exit 1
 git init -q -b main
 ST=scripts/factory/state.sh
@@ -75,6 +76,41 @@ rm -f .ai/runs/LOCK
 
 echo '{not json' > .ai/runs/state.json
 expect_jq "an unreadable state trips the breaker" "$($ST get)" '.consecutiveBlocked == 99'
+
+echo "isolation.sh (backlog #0-252)"
+IS=scripts/factory/isolation.sh
+rm -rf .ai/runs/isolation .ai/runs/LOCK
+out=$($IS R7); rc=$?
+expect_refused "no lock: refused" "$out" "$rc" "no run holds .ai/runs/LOCK"
+# The lock is older than the records made below, as a run's lock is older than its probe.
+echo "R7 x" > .ai/runs/LOCK && touch -t 202001010000 .ai/runs/LOCK
+expect_jq "no record: no agent type, and why" "$($IS R7)" '.agentType == null and (.reason | contains("no isolation probe was recorded for run R7"))'
+mkdir -p .ai/runs/isolation && ln -sn review-general .ai/runs/isolation/R7
+expect_jq "the probe's record: its agent type" "$($IS R7)" '. == {agentType: "review-general"}'
+expect_jq "another run's record is not this run's" "$($IS R8)" '.agentType == null'
+ln -sn workflow-subagent .ai/runs/isolation/R9
+expect_jq "another agent type is answered as it is" "$($IS R9)" '.agentType == "workflow-subagent"'
+ln -sn 'not a type' .ai/runs/isolation/R10
+out=$($IS R10); rc=$?
+expect_refused "a record that holds no agent type: refused" "$out" "$rc" "holds no agent type"
+mkdir -p .ai/runs/isolation/R11
+out=$($IS R11); rc=$?
+expect_refused "a record that is not a symlink: refused" "$out" "$rc" "is not a symlink"
+for bad in '' '../R7' 'R7 R8' 'a/b'; do
+    out=$($IS "$bad"); rc=$?
+    expect_refused "a run id '$bad': refused" "$out" "$rc" "usage: isolation.sh <run id>"
+done
+out=$($IS R7 R8); rc=$?
+expect_refused "two run ids: refused" "$out" "$rc" "usage: isolation.sh <run id>"
+# Review round 1 (sec-3c8e): a record planted before the run, under the run id it would get, is not this run's probe.
+# The link's own time counts (touch -h): it points to a type name, so a test that followed it would read nothing.
+ln -sn review-general .ai/runs/isolation/R12 && touch -h -t 201901010000 .ai/runs/isolation/R12
+expect_jq "a record older than the lock: not this run's" "$($IS R12)" \
+    '.agentType == null and (.reason | contains("older than the lock, so it is not this run'"'"'s probe"))'
+rm -rf .ai/runs/isolation && mkdir -p "$WORK/elsewhere" && ln -sn review-general "$WORK/elsewhere/R7" && ln -s "$WORK/elsewhere" .ai/runs/isolation
+out=$($IS R7); rc=$?
+expect_refused "the records' directory is a symlink: refused" "$out" "$rc" "is a symlink, so its records are not the probe's"
+rm -rf .ai/runs/isolation .ai/runs/LOCK
 
 if [ "$failures" -gt 0 ]; then echo "$failures state test(s) failed"; exit 1; fi
 echo "All state tests passed."

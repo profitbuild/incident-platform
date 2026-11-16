@@ -162,6 +162,22 @@ echo "preflight.sh: where and how the session was started (backlog #0-194)"
 # has <text> — a jq expression: preflight refused, and one of its reasons contains <text>.
 has() { printf '.ok == false and any(.reasons[]; contains("%s"))' "$1"; }
 expect "a correct session passes" "$green" '.ok == true and .reasons == []'
+# Backlog #0-252 (review round 1, sec-3c8e): taking the lock removes every isolation record, so a record planted before
+# the run, under the run id it gets (a time), cannot be read as its probe; a symlink at the directory's own name goes,
+# not what it points to.
+mkdir -p .ai/runs/isolation && ln -sn review-general .ai/runs/isolation/20990101-000000
+expect "a passing session with an earlier isolation record passes" "$green" '.ok == true and .reasons == []'
+if [ ! -e .ai/runs/isolation ] && [ ! -L .ai/runs/isolation ]; then ok "... and removed the isolation records"
+else fail "a passing preflight left .ai/runs/isolation: $(find .ai/runs/isolation -maxdepth 1 2>&1 | head -3)"; fi
+mkdir -p "$WORK/planted" && ln -sn review-general "$WORK/planted/r" && ln -s "$WORK/planted" .ai/runs/isolation
+expect "a symlink at the records' directory passes" "$green" '.ok == true and .reasons == []'
+if [ ! -L .ai/runs/isolation ] && [ -L "$WORK/planted/r" ]; then ok "... and removed the link, not what it points to"
+else fail "the records' symlinked directory: $(find .ai/runs/isolation "$WORK/planted" -maxdepth 1 2>&1 | head -4)"; fi
+mkdir -p .ai/runs/isolation && ln -sn review-general .ai/runs/isolation/20990101-000001
+FACTORY_DEVCONTAINER='' expect "a refused session takes no lock" "$green" "$(has "not in the devcontainer")"
+if [ -L .ai/runs/isolation/20990101-000001 ]; then ok "... and leaves the records alone (no run started)"
+else fail "a refused preflight removed the isolation records"; fi
+rm -rf .ai/runs/isolation
 FACTORY_DEVCONTAINER='' expect "outside the devcontainer stops" "$green" "$(has "not in the devcontainer")"
 FACTORY_BOT_LOGIN='' expect "no bot login stops" "$green" "$(has "FACTORY_BOT_LOGIN is not set")"
 GIT_AUTHOR_NAME=owner expect "the owner's git author stops" "$green" "$(has "GIT_AUTHOR_NAME is 'owner', not the bot 'bot'")"

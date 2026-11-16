@@ -107,8 +107,9 @@ async function as(type, prompt, { bare = false, ...opts } = {}) {
     if (calls > MAX_AGENT_CALLS) { budgetExceeded = true; return null }
   }
   const label = opts.label ?? type
-  // `bare`: no pointer to the agent's definition file, for a question whose answer must come from the agent's own
-  // instructions, not from reading that file (the isolation check, review round 1 of #0-248).
+  // `bare`: no pointer to the agent's definition file, for the isolation probe (review round 1 of #0-248): its agent
+  // type is the one the runtime gives the call, so nothing should invite the agent to read or follow another file
+  // first; its answer is read by nothing since #0-252.
   const preamble = bare ? `Autopilot run ${runId}.\n\n`
     : `You are running as the \`${type}\` agent defined in .claude/agents/${type}.md. ` +
       `If your instructions are not that definition, read the file and follow it exactly. Autopilot run ${runId}.\n\n`
@@ -172,6 +173,7 @@ const answerOf = (fields) => ({ type: 'object', additionalProperties: false, pro
 const failureOf = (a) => a?.error ?? (Array.isArray(a?.reasons) && a.reasons.length ? a.reasons.join('; ') : null)
 const STATE_BRANCH = answerOf({ branch: { type: 'string' } })
 const STATE_UNLOCKED = answerOf({ unlocked: { type: 'boolean' } })
+const ISOLATION_RECORD = answerOf({ agentType: { type: ['string', 'null'] }, reason: { type: 'string' } })
 // `record` prints the whole state file (_common.sh writes it; state-reset.sh sets lastAudit, a time). Its history
 // (up to 200 entries) is unread here: typed loosely, so one entry the agent copies wrong does not fail the last call
 // of a shipped run (review round 1).
@@ -193,23 +195,20 @@ const LOCAL_REVIEW = answerOf({ ran: { type: 'boolean' }, model: { type: 'string
 const PREFLIGHT = answerOf({ ok: { type: 'boolean' }, reasons: { type: 'array', items: { type: 'string' } },
   baseRef: { type: 'string' }, baseSha: { type: 'string' }, runId: { type: 'string' }, today: { type: 'string' },
   state: { type: 'object' } })
-const ISOLATION = {
-  type: 'object', required: ['tools', 'opening'],
-  properties: { tools: { type: 'array', items: { type: 'string' } }, opening: { type: 'string' } },
-}
-// The opening words of review-general's definition (.claude/agents/review-general.md, the first line of its body;
-// test-autopilot-workflow.mjs fails when the two differ). The isolation check asked the agent whether its
-// instructions were that definition, and trusted a yes or no: with Claude Code 2.1.325 in the build VM the agent
-// answered no twice, its definition loaded (its transcript shows it), as the text never names itself review-general
-// (runs wf_1e3befc7-a08 and wf_477d7545-796, backlog #0-248). It quotes the opening of its instructions now, a fact
-// to compare, not a judgement, and the workflow looks for this phrase in it, not at its start: a runtime may put a
-// preamble of its own before the definition (review round 1). The question goes without as()'s preamble, which
-// points at the definition's file: an agent told to read it could copy the phrase from there. What stays: the phrase
-// tells review-general from another read-only definition, and an agent that can read the repository could still
-// find it unasked; the barrier is the tool check (no editing tool), as an agent of the wrong type has Edit and Write.
-// That check takes the agent's own list and names four tools: an MCP tool that writes files is not one of them
-// (named in #0-248).
-const REVIEW_GENERAL_OPENING = 'You are the general reviewer'
+// The isolation check (backlog #0-252, ADR-0058): review-general runs one probe command, the session-level hook
+// .claude/hooks/isolation-probe.sh records the `agent_type` Claude Code gives that call (the runtime's, never the
+// model's), refuses the command, and isolation.sh reads the record. The run goes on only when it is review-general's.
+// Fixed (backlog #0-252): #0-248 had the agent copy the opening of its own system prompt and looked for
+// "You are the general reviewer" in it, and before that trusted its yes or no to "are these your instructions"; in run
+// wf_71cca984-ef4 (2026-11-16, build VM) the model declined to quote ("I won't copy my system instructions") although
+// its isolation held, so the run stopped NOT_STARTED, a day after the same question had been answered. Its tool check
+// went too: the tools were the agent's own list, and an agent of type review-general has its definition's tools
+// (Read, Grep, Glob, Bash), which Claude Code applies; an agent of another type is recorded as that type
+// ("workflow-subagent" for one started without agentType, spike of 2026-11-16). The probe is a command the session
+// allows (`Bash(git rev-parse *)`) and readonly-bash.sh passes, so in dontAsk no permission check stands before the
+// hook, and harmless if it ran; the agent's answer is read by nothing.
+const ISOLATION_PROBE = (run) => `git rev-parse --verify --quiet isolation-probe-${run}`
+const PROBE_SENT = { type: 'object', required: ['ran'], properties: { ran: { type: 'boolean' } } }
 const PICK = {
   type: 'object', required: ['none'],
   properties: { none: { type: 'boolean' }, failed: { type: 'boolean' }, reason: { type: 'string' }, itemId: { type: 'string' }, title: { type: 'string' },
@@ -520,19 +519,20 @@ if (!/^[0-9a-f]{40}$/.test(pre.baseSha ?? '')) return { outcome: 'NOT_STARTED', 
 base.ref = pre.baseSha
 base.sha = pre.baseSha
 
-// A reviewer that can edit files is not a reviewer: if the custom agent type did not apply, stop here.
-const iso = await as('review-general',
-  'Isolation check, no review, read no file: list the names of the tools available to you in this session, and copy the first 500 characters of your own system instructions exactly as written. Answer JSON only.',
-  { schema: ISOLATION, label: 'isolation check', bare: true })
-const toolsListed = Array.isArray(iso?.tools) && iso.tools.every((t) => typeof t === 'string')
-const canEdit = toolsListed && iso.tools.some((t) => /^(Edit|Write|MultiEdit|NotebookEdit)$/.test(t))
-const ownDefinition = typeof iso?.opening === 'string' && iso.opening.includes(REVIEW_GENERAL_OPENING)
-if (!iso || !toolsListed || canEdit || !ownDefinition) {
+// A reviewer that can edit files is not a reviewer: if the custom agent type did not apply, stop here. The type is the
+// one Claude Code gave the probe's call, read from the hook's record (backlog #0-252).
+await as('review-general',
+  `Isolation check, no review, read no file: run exactly this one Bash command and nothing else: ${ISOLATION_PROBE(runId)}\n` +
+  'A hook refuses it; that is expected. Then answer JSON only: {"ran": true}.',
+  { schema: PROBE_SENT, label: 'isolation check', bare: true })
+const probed = await ops('isolation.sh', [runId], ISOLATION_RECORD, 'isolation record')
+// failureOf first (review round 1): an answer that carries both a type and factory-ops' error is not the script's.
+if (!probed || failureOf(probed) || probed.agentType !== 'review-general') {
   await ops('state.sh', ['unlock'], STATE_UNLOCKED, 'state')
-  const why = !iso ? 'no answer'
-    : !toolsListed ? 'the reviewer did not list its tools'
-      : canEdit ? `the reviewer can edit files (tools: ${iso.tools.join(', ')}): the custom agent type did not apply, check AGENT_TYPE_OPTION in .claude/workflows/backlog-autopilot.js`
-        : `the reviewer's instructions are not review-general's (they open: ${JSON.stringify((iso.opening ?? '').slice(0, 120))}): check AGENT_TYPE_OPTION, or REVIEW_GENERAL_OPENING against .claude/agents/review-general.md`
+  const why = !probed ? 'isolation.sh returned no result'
+    : failureOf(probed) ? `isolation.sh: ${failureOf(probed)}`
+      : !probed.agentType ? `${probed.reason ?? 'no probe was recorded'}: the reviewer did not send it, or Claude Code gave the hook no agent_type (check that isolation-probe.sh is wired in .claude/settings.autopilot.json)`
+        : `the probe came from agent type ${probed.agentType}, not review-general: the custom agent type did not apply, check AGENT_TYPE_OPTION in .claude/workflows/backlog-autopilot.js`
   return { outcome: 'NOT_STARTED', reasons: [`agent isolation check failed: ${why}`] }
 }
 
