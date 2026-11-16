@@ -1,6 +1,6 @@
 # ADR-0059: The outcome of an irreversible step on a one-way state machine is a state-guarded conditional UPDATE; a row changed over time from several places carries `@Version`
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Backlog:** #0-25
 - **Date:** 2026-11-16
 - **Author:** architect agent (autopilot run 20261116-191910)
@@ -32,7 +32,8 @@ The criterion, written into `.ai/context/architecture.md` ("Patterns already dec
   true, clearAutomatically = true)`, returning the row count. A count of 0 means another writer got there first: the
   caller does nothing more (no audit event, no alert) and the case is logged and counted. A field the write sets only
   once is guarded too (`... AND first_lookup_failure_at IS NULL`).
-- A row that **several places change over time** (a timer, a level, edited fields) carries an uninitialised
+- A row that **several places change over time**, other than by such outcome writes (a timer, a level, edited
+  fields), carries an uninitialised
   `@Version Long`, and a bulk UPDATE of it bumps `version` (`EscalationTaskRepository.resumePendingTimers`).
 
 For `notification_queue`: `markSent`, `markFailed`, `markUndeliverable` and `recordLookupFailure` are such UPDATEs from
@@ -61,7 +62,10 @@ Neither guard prevents a duplicate *send* (detected after the fact); ShedLock st
   outbox row is a finding.
 - The auth email outbox, `AuthToken.markUsedIfUnused`, `mfa_recovery_requests` and `notification_queue` are the
   conditional-UPDATE cases; `EscalationTask` (and auth-service's `SlackWorkspace`) the `@Version` cases.
-- `.ai/rules/review/architecture.md` ARC-29 still says "An outbox row has one writer after its INSERT"; aligning its
-  text with this criterion is the owner's (level A), proposed in the item's handoff.
+- `.ai/rules/review/architecture.md` ARC-29 said "An outbox row has one writer after its INSERT"; the owner reworded it
+  to this criterion (2026-11-16, the text proposed in the item's handoff), and the benchmark's clean pattern C-02 with
+  it. A row can be both: `notification_queue`'s outcomes are guarded UPDATEs, and the tenant resumption's
+  `restartLookupRetryWindows` changes it too; "other than by such outcome writes" says which case decides (review of
+  the rewording, 2026-11-16).
 - auth-service's `SlackWorkspace` Javadoc still cites #0-25 as a `@Version` case; corrected when that class is next
   changed (backlog #0-246).

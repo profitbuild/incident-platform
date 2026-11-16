@@ -89,8 +89,8 @@ the platform decided for it (`.ai/context/architecture.md`, "Patterns already de
   without acknowledging is no retry: the next record's acknowledgement commits the offset past it. The tenant of a
   record is SEC-04's. Check: a new or changed listener, every path out of it, and what each path acknowledges.
 - **ARC-25 A mutable entity has an uninitialised `@Version Long`.** `= 0L` makes Spring Data treat a new entity as
-  existing, so `save()` merges instead of persisting (#0-47). A row with one writer that uses a state-guarded
-  conditional UPDATE instead is ARC-29's. Check: a new entity or version field, and its initialiser.
+  existing, so `save()` merges instead of persisting (#0-47). A row whose outcome writes are state-guarded
+  conditional UPDATEs instead is ARC-29's. Check: a new entity or version field, and its initialiser.
 - **ARC-26 A bulk update that clears the context also flushes it.** `@Modifying(clearAutomatically = true)` comes
   with `flushAutomatically = true`, or an earlier change to another table in the same transaction is silently
   discarded (ADR-0010, #0-83). Check: a new or changed `@Modifying` query.
@@ -100,11 +100,17 @@ the platform decided for it (`.ai/context/architecture.md`, "Patterns already de
 - **ARC-28 A retried send is bounded by a deadline.** Retries of an outbound send stop at how long the request is
   worth sending, not after an attempt count: a backoff list whose last step repeats, the last attempt moved to the
   deadline (`AuthEmailRetryPolicy`, #0-52). Check: a new retry, and what ends it.
-- **ARC-29 An outbox row has one writer after its INSERT.** The scheduler is that writer, and a request path never
-  updates an existing row; with one writer, a state-guarded conditional UPDATE (`WHERE id = ? AND status IN (...)`,
-  row count checked) replaces `@Version` (the auth email outbox, `AuthToken.markUsedIfUnused`). A row with several
-  writers changes only by such an UPDATE from one state, so the first to commit wins (`mfa_recovery_requests`,
-  #0-90). Check: a new UPDATE of an outbox or a state-machine row, who else writes it, and its guard.
+- **ARC-29 The outcome of an irreversible step on a one-way state machine is a state-guarded conditional UPDATE.** A
+  write that records such an outcome (an email sent, a token used, a notification delivered or given up) is
+  `UPDATE ... WHERE id = :id AND <tenant> AND status IN (<the states it may leave>)`, row count checked, never a
+  `save()` of a loaded entity; a count of 0 means another writer got there first and is logged and counted, nothing
+  else (the auth email outbox, `AuthToken.markUsedIfUnused`, `mfa_recovery_requests` #0-90, `notification_queue`
+  #0-25). A row that several places change over time, other than by such outcome writes, carries `@Version`, and a
+  bulk UPDATE of it bumps `version` (`EscalationTask`, `resumePendingTimers`); ADR-0059. Check: a new UPDATE or `save()` of an outbox or a
+  state-machine row, who else writes it, and its guard. (Reworded 2026-11-16, ADR-0059: it said "an outbox row has
+  one writer after its INSERT", which #0-25's `notification_queue`, written by the scheduler and the tenant
+  resumption, did not fit; its "a request path never updates an existing row" is now this rule's guard: every writer,
+  a request path included, changes such a row only by the guarded UPDATE.)
 
 ## 4. Platform configuration
 

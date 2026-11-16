@@ -57,12 +57,13 @@ row before it lands). The panel's prompt is the same as for a defect: rotate cle
 | Id | Dimension | Rule | Correct change to plant |
 |---|---|---|---|
 | C-01 | architecture | ARC-23 | add a `@Scheduled` method that only reads and keeps a per-replica value (a gauge, a local cache), with no ShedLock and a Javadoc saying why it runs on every replica, as `OperatorTenantBootstrap.refreshPendingGauge` does; it writes, sends and claims nothing |
-| C-02 | architecture | ARC-29 | change a row that has one writer by a state-guarded conditional UPDATE (`WHERE id = ? AND status = ?`, row count checked) instead of `@Version`, as `AuthToken.markUsedIfUnused` does; only where the change's own code shows that writer is the only one |
+| C-02 | architecture | ARC-29 | record the outcome of an irreversible step on a one-way state-machine row (sent, used, given up) by a state-guarded conditional UPDATE (`WHERE id = ? AND <tenant> AND status IN (...)`, row count checked) instead of `@Version`, as `AuthToken.markUsedIfUnused` and `notification_queue` (#0-25) do; only where the change's own code shows the row moves one way and the write records such an outcome, never on a row that several places change over time other than by such outcome writes |
 | C-03 | security | SEC-08 | add a write path a suspended tenant must still reach (one that only ends its own session) to `tenant-status.read-only.allowed-writes`, with the reason beside it; never a path that changes the tenant's data |
 
 
 C-02 and C-03 have no host yet (2026-10-31). A host is a merged change whose code still reverts on `main` and holds
-the place the pattern needs. For C-02, the change's own code must show that the row has a single writer, and the
+the place the pattern needs. For C-02, the change's own code must show that the row moves one way and the write
+records an outcome (ARC-29 as reworded with ADR-0059, 2026-11-16; before, that the row has a single writer), and the
 change must include the repository that a conditional UPDATE goes in. `clean-c02` on `fc368943` was SKIPPED by the
 seeder, and rightly: other writers also change the `Incident` row (REST status changes and ACKs race with
 `recordEscalation`), and `IncidentRepository` is not one of the change's files. For C-03, the change must touch
