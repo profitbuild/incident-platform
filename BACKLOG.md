@@ -3361,6 +3361,11 @@ through every stage with no environment problem; six reviewers approved in round
 Its factory-ops relayed one `changed-paths.sh` answer with a file name garbled (`a35aa6ee/context/architecture.md`
 for `.ai/context/architecture.md`; the script's own output, in the transcript, was right): a model's copy, not the
 script, and nothing it decided was wrong (the relay of ADR-0058's Consequences).
+**3 of 3: run wf_e5a616a0-073 (#0-23, PR #649, merged 2026-11-17)**, the queue's next item, started with no argument,
+after #0-266 had moved factory-ops to Sonnet 5.5: through every stage with no environment problem; the gate built and
+tested shared and notification-service (943 tests), five reviewers approved in round 1, the acceptance met AC1-AC6,
+and the owner approved the bot's PR and merged it without the bypass. ADR-0055's exit for stage 2 is met (owner,
+2026-11-17); the devcontainer on the Mac stays the rollback, so #0-116, #0-202 and #0-225 keep their stage 2 notes.
 AC6. README "Infrastructure Hardening" and `docs/ai-factory.md` say where the autopilot runs and what isolates it;
 #0-202 and #0-225 point at what this stage settled for them, and #0-116 at what it did not.
 
@@ -3782,6 +3787,9 @@ always releases and a live one renews; state per task with a baseline (the first
 react to new events only), surviving a restart; transient errors (5xx, 429, timeout, DNS) retried with backoff and
 not counted as attempts, ten in a row a block with the reason; the GraphQL rate limit read before each pass, reads of
 PRs and checks over REST when it is low; a pass with no new event writes nothing.
+Where the dispatcher takes `run-tests.sh`'s answer, its `summary` on a `pass` is up to 60 green lines (the
+`Tests run:.*Fail` pattern of `run-tests.sh` matches "Failures: 0" too): kept to the totals there, and to the failing
+lines on a failure, it is what the implementer should be given (#0-266's run 3, where the relay shortened it).
 
 AC1. The stage 4 brief holds each requirement with the test that shows it.
 AC2. A restart of the build VM in the middle of a task loses no event and opens no second PR; a simulated GraphQL
@@ -3901,3 +3909,18 @@ the digest is the fix.
 AC1. `factory-ops.md` runs on `claude-sonnet-5-5`, with the reason beside the field.
 AC2. In the next autopilot run every answer of factory-ops equals the script's output in its transcript (the same
 comparison as wf_5135023f-b7d's: the `files` lists, escaped and not).
+
+**Result (run wf_e5a616a0-073, #0-23, PR #649; owner, 2026-11-17).** Each factory-ops transcript of the run was read
+by a script outside the repository: the agent type from its `agent-*.meta.json`, the script's output from the tool's
+result of its one Bash call, the answer from the input of its `StructuredOutput` call, compared as JSON. On
+wf_5135023f-b7d, the control, it found the known garbling and more: 9 of 11 Haiku answers differed from the script's
+output (`a35aa6ee/context/…`, fields the script never printed, `exitCode: 0` and `ok: true`, and empty arrays
+dropped). On wf_e5a616a0-073, 10 of 11 Sonnet answers equal the script's output, every field of every
+`changed-paths.sh`, `state.sh`, `next-item.sh`, `start-item.sh`, `preflight.sh`, `isolation.sh` and `notify.sh`
+answer included. The eleventh, `run-tests.sh`'s, has the same `status`, `exitCode`, `head` and `artifact` but a
+shortened `summary`: the last 2 of the script's 60 lines, against the definition's "Do not summarise it". So AC2 is
+not met to the letter: every field that decides a gate arrived unchanged, the one that only informs did not. A
+`summary` matters when the gate fails (the implementer is given it, `backlog-autopilot.js`'s test gate), and the cost
+of a shortened one there is a fix attempt with less to go on, which ends BLOCKED at worst, not a merge. The owner
+closed the item on that result (2026-11-17), since stage 4 removes the relay, and left the cause, a `pass` summary of
+green lines, to #0-261.
