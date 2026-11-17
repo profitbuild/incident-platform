@@ -150,6 +150,7 @@ resolvable.
 | 0-58 | `GlobalExceptionHandlerTest` (12 tests) and `UnauthorizedEntryPointTest` (6) in `shared`, test code only: statuses, error codes, fixed bodies, redaction, requestId resolution; both classes at 100% of their lines; details in [the section](#0-58-globalexceptionhandler-and-unauthorizedentrypoint-have-no-tests-of-their-own-in-shared) | PR #639 |
 | 0-250 | Every Bash call of the autopilot waits 30 minutes (`BASH_DEFAULT_TIMEOUT_MS` and `BASH_MAX_TIMEOUT_MS` in `settings.autopilot.json`'s `env`), and the preflight refuses a session with less, so a test gate longer than two minutes is not moved to the background and its answer reaches the workflow (ADR-0052 refusal 6); details in [the section](#0-250-the-test-gate-goes-to-the-background-after-two-minutes-and-its-answer-is-lost) | PR #642 |
 | 0-252 | The isolation check reads the agent type Claude Code gives review-general's probe command: the session-level hook `isolation-probe.sh` records it under `.ai/runs/isolation/` for the locked run, `isolation.sh` reads it, the preflight clears the records as it takes the lock; the model's answers are read no more (ADR-0058); details in [the section](#0-252-the-isolation-check-depends-on-the-model-agreeing-to-quote-its-prompt) | PR #643 |
+| 0-23 | The `oncall` and `slack-workspace` `@Retry` (which never fired: a circuit-breaker fallback answered every failure first) removed from notification-service, with both `resilience4j.retry.instances`; breakers and fallbacks unchanged; `OncallClientResilienceTest` runs the client through its real proxies (one request per 503, fallback metric +1), `SlackWorkspaceClientResilienceTest` uses the shipped `application.yml`; Javadoc, comments, README and ADR-0016 say the scheduler's PENDING window is the retry; details in [the section](#0-23-the-oncall-and-slack-workspace-retry-never-fires) | PR #pending |
 | 0-25 | Every `notification_queue` transition after the INSERT is a conditional UPDATE from PENDING (`markSent`, `markFailed`, `markUndeliverable`, `recordLookupFailure`, scoped by id and tenant, row count returned); the entity's mutators are gone; a stale write is logged at info and counted in `notification.queue.stale_write` with no audit event and no operator alert; `.ai/context/architecture.md` states the criterion for a state-guarded UPDATE versus `@Version` (ADR-0059); details in [the section](#0-25-a-stale-notification_queue-write-can-overwrite-a-terminal-status) | PR #645 |
 
 Items completed before `BACKLOG.md` existed are not listed.
@@ -3530,4 +3531,51 @@ with the criterion above (outcome of an irreversible step on a one-way state mac
 UPDATE; a row changed over time from several places: `@Version`), names the notification queue next to the auth email
 outbox, `AuthToken.markUsedIfUnused` and `mfa_recovery_requests`, and `EscalationTask` as the `@Version` case with a
 bulk UPDATE that bumps `version`.
+AC6. `./mvnw verify -pl notification-service -am` passes, with the 60% JaCoCo and `diff-cover` thresholds.
+
+---
+
+### 0-23. The `oncall` and `slack-workspace` `@Retry` never fires
+
+**Type:** tech-debt · **Priority:** Low · **Status:** Done, PR #pending (2026-11-17) (premise confirmed and approach decided in `/ready`, 2026-11-14:
+remove both retries)
+**Autopilot:** ready · **Risk:** low · **Complexity:** low · **Depends on:** —
+**Touches:** notification-service (client; src/main/resources/application.yml; src/test), root (README.md "Resilience" row, .ai/decisions/0016)
+
+**Problem.** `OncallClientImpl`'s three lookups (`getCurrentOncall`, `findBySlackUserId`, `findCurrentByUserId`) carry
+`@Retry(name = "oncall")` outside a `@CircuitBreaker` whose fallback answers every failure: `getCurrentOncall` and
+`findCurrentByUserId` throw `OncallLookupUnavailableException`, which is not in the retry's `retry-exceptions` (a
+whitelist), and `findBySlackUserId` returns `Optional.empty()`, a success to the retry. So the retry never runs, and
+its `ignore-exceptions` (4xx) has no effect either. `SlackWorkspaceClientImpl`'s `@Retry(name = "slack-workspace")`
+has the same shape and the same defect; its `application.yml` comment points here, and
+`SlackWorkspaceClientResilienceTest` pins `max-attempts=1`, which hides it. No test runs the oncall client through
+its proxies (`OncallClientImplTest` calls it directly). The retry that does run is the scheduler's: an entry whose
+lookup failed stays PENDING and is tried again every cycle (30 s) until `lookup-retry-window` (10 min).
+
+**Approach (decided).** Remove both retries, the way escalation-service's `OncallServiceClient` and notification's
+`IncidentAckClient` work: a circuit breaker with a fail-open fallback that calls `ClientFallbackMetrics.record`, and no
+retry, because the scheduler retries with a deadline (the repository's convention for retries, #0-52). Behaviour does
+not change, as the retries never ran. Not chosen: making them fire the Slack Web API's way (`fallbackMethod` on
+`@Retry`), which doubles the worst case of each lookup on the scheduler thread (8 s to about 16 s, about 32 s for an
+escalated entry) and leaves about 7 s under the 4-minute lock; and listing the fallback's exception in
+`retry-exceptions` (ingestion's way), which would retry 4xx and an open breaker too. The ACK path's invented actor when
+`findBySlackUserId` fails (`UUID.nameUUIDFromBytes`) is #0-15's, not this item's. Left as it is: ingestion-service's
+`application.yml` comment "(unlike notification-service's oncall retry, backlog #0-23)" stays true as history and is
+another service.
+
+**Acceptance criteria.**
+AC1. `OncallClientImpl` carries no `@Retry`, and `application.yml` has no `resilience4j.retry.instances.oncall`; its
+`@CircuitBreaker`s and fallbacks are unchanged.
+AC2. `SlackWorkspaceClientImpl` carries no `@Retry`, and `application.yml` has no
+`resilience4j.retry.instances.slack-workspace`; its `@CircuitBreaker` and fallback are unchanged.
+AC3. A test runs `OncallClientImpl` through its Spring proxies (AOP, `CircuitBreakerAutoConfiguration`,
+`RetryAutoConfiguration`, WireMock, as `SlackWorkspaceClientResilienceTest`): a 503 on each of the three lookups makes
+exactly one request and ends as today (`OncallLookupUnavailableException` for `getCurrentOncall` and
+`findCurrentByUserId`, `Optional.empty()` for `findBySlackUserId`), and `service_client_fallback_total{client="oncall"}`
+goes up by one per call.
+AC4. `SlackWorkspaceClientResilienceTest` no longer sets `max-attempts`, and shows one request on a 503 with the
+service's own configuration.
+AC5. The comments of both clients and of `application.yml`, README's "Resilience" row and ADR-0016 (its lines on
+`@Retry(name = "oncall")` being "probably inactive" and on "the #0-23 problem") say the lookups have no retry of their
+own and the scheduler's PENDING window is their retry; nothing calls them "probably inactive" or "unverified".
 AC6. `./mvnw verify -pl notification-service -am` passes, with the 60% JaCoCo and `diff-cover` thresholds.
