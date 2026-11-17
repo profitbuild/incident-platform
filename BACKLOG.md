@@ -417,7 +417,7 @@ The alert is sent synchronously on the scheduler thread, and the SMTP timeouts b
 
 ### 0-23. The `oncall` and `slack-workspace` `@Retry` never fires
 
-**Type:** tech-debt · **Priority:** Low · **Status:** Open (premise confirmed and approach decided in `/ready`, 2026-11-14:
+**Type:** tech-debt · **Priority:** Low · **Status:** In progress — autopilot run 20261117-165658 (premise confirmed and approach decided in `/ready`, 2026-11-14:
 remove both retries)
 **Autopilot:** ready · **Risk:** low · **Complexity:** low · **Depends on:** —
 **Touches:** notification-service (client; src/main/resources/application.yml; src/test), root (README.md "Resilience" row, .ai/decisions/0016)
