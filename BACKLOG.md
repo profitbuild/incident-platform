@@ -171,6 +171,7 @@ Code, Javadoc, config comments and commits reference items as `backlog #N`.
 | [0-263](#0-263-nothing-runs-a-bug-fixs-test-on-the-code-before-the-fix) | Nothing runs a bug fix's test on the code before the fix | ci | Medium | Open |
 | [0-264](#0-264-a-green-pr-is-merged-on-a-base-that-moved-under-it) | A green PR is merged on a base that moved under it | ci | Medium | Open |
 | [0-265](#0-265-a-task-back-after-a-pause-is-resumed-without-asking-whether-it-still-makes-sense) | A task back after a pause is resumed without asking whether it still makes sense | ci | Low | Open |
+| [0-266](#0-266-factory-ops-a-small-model-garbles-the-scripts-answers-it-relays) | factory-ops, a small model, garbles the scripts' answers it relays | ci | High | In progress |
 | [0-133](#0-133-incidentresolvedevent-carries-no-openedat) | `IncidentResolvedEvent` carries no `openedAt` | tech-debt | Low | Open |
 | [0-134](#0-134-diff-cover-is-installed-by-version-without-hashes) | `diff-cover` is installed by version, without hashes | ci | Low | Open |
 | [0-135](#0-135-kubectl-in-ci-is-downloaded-unverified) | kubectl in CI is downloaded unverified | ci | Low | Open |
@@ -3919,3 +3920,32 @@ Thresholds to decide.
 
 AC1. The dispatcher runs the agent in the three cases and acts on MODERNIZE and REWORK; CLOSE reaches the owner.
 AC2. On three resumed tasks the disposition agrees with the owner's.
+
+
+### 0-266. factory-ops, a small model, garbles the scripts' answers it relays
+
+**Type:** ci · **Priority:** High · **Status:** In progress, in the PR of `ci/0-266-factory-ops-model`. Found by run
+wf_5135023f-b7d (#0-25, PR #645; owner, 2026-11-16).
+**Autopilot:** human-only · **Risk:** medium · **Complexity:** low · **Depends on:** —
+**Touches:** factory (.claude/agents/factory-ops.md: owner-only)
+
+**Problem.** The workflow cannot run a shell, so factory-ops (`claude-haiku-4-5-20251001`, two generations older than
+every other agent of the factory) runs each factory script and returns its JSON "unchanged". In run wf_5135023f-b7d
+it returned one `changed-paths.sh` answer with `"a35aa6ee/context/architecture.md"` for
+`".ai/context/architecture.md"`: the start of the head's sha, which the agent had in its context, in place of `.ai`.
+The script's own output, in the transcript as the tool's result, was right; the same call was right before and after.
+Nothing it decided was wrong that time, but the relay carries the fields that decide gates (`needsHuman`,
+`migrationTouched`, a gate's `status`, the isolation record of ADR-0058), and a model that rewrites a path can
+rewrite a boolean.
+
+**Approach (decided by the owner).** The model of the panel's Sonnet reviewers, `claude-sonnet-5-5`, for factory-ops,
+until the dispatcher (ADR-0055 stage 4, #0-261) removes the relay. Enough because, until then, every PR needs the
+owner's approval (`CODEOWNERS: *`) and CI's required checks, which do not read the relay: a garbled answer can weaken
+a run's review, not merge unread. Not chosen: a digest of each answer that the workflow checks (it detects every
+garbling, but it is code in every script and the workflow that stage 4 removes), two calls compared (twice the cost,
+and one model can err twice alike). If auto-merge (stage 10) or a narrower `CODEOWNERS` came before the dispatcher,
+the digest is the fix.
+
+AC1. `factory-ops.md` runs on `claude-sonnet-5-5`, with the reason beside the field.
+AC2. In the next autopilot run every answer of factory-ops equals the script's output in its transcript (the same
+comparison as wf_5135023f-b7d's: the `files` lists, escaped and not).
