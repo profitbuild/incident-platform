@@ -6,7 +6,6 @@ import com.incidentplatform.shared.observability.ClientFallbackMetrics;
 import com.incidentplatform.shared.security.ServiceNames;
 import com.incidentplatform.shared.security.ServiceTokenProvider;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
-import io.github.resilience4j.retry.annotation.Retry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -23,7 +22,9 @@ import java.util.UUID;
  * #0-21/#0-30) — the first client in this codebase that calls auth-service.
  * Same shape as {@link OncallClientImpl#getCurrentOncall}: service token minted
  * for the <em>target's</em> audience ({@link ServiceNames#AUTH_SERVICE}),
- * {@code @Retry} + {@code @CircuitBreaker}, and a fallback that records
+ * a {@code @CircuitBreaker} with no retry of its own (backlog #0-23: the
+ * scheduler's PENDING window is the lookup's retry, as in
+ * {@link OncallClientImpl}), and a fallback that records
  * {@link ClientFallbackMetrics} and throws instead of pretending to have an
  * answer.
  *
@@ -74,7 +75,6 @@ public class SlackWorkspaceClientImpl implements SlackWorkspaceClient {
         this.authServiceBaseUrl = authServiceBaseUrl;
     }
 
-    @Retry(name = "slack-workspace")
     @CircuitBreaker(name = "slack-workspace", fallbackMethod = "getWorkspaceFallback")
     @Override
     public Optional<SlackWorkspaceInfo> getWorkspace(String tenantId) {

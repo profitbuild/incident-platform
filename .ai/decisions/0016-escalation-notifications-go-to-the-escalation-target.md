@@ -46,8 +46,9 @@ An oncall-service outage is not "nobody on call" (backlog #0-19). `getCurrentOnc
 `findCurrentByUserId` throw `OncallLookupUnavailableException`; the entry stays PENDING until the
 lookup has been failing for `notification.scheduler.lookup-retry-window`, then becomes UNDELIVERABLE.
 The window runs from the entry's first failed lookup (`first_lookup_failure_at`), not from its
-creation, or a restart would park a whole backlog on one blip. `@Retry(name = "oncall")` on these
-clients is probably inactive (backlog #0-23); the scheduler's PENDING retry is the real one.
+creation, or a restart would park a whole backlog on one blip. These lookups carry no retry of their
+own since backlog #0-23 (the `@Retry(name = "oncall")` never fired, behind a fallback that answers
+every failure); the scheduler's PENDING retry is their retry.
 `findBySlackUserId` still fails open. A scheduler run stops after `processing-budget` (PT2M30S),
 which must stay below the 4-minute ShedLock (validated at startup), and loads at most `batch-size`
 entries, oldest first. The budget is checked between entries, so the lock must also outlast the
@@ -61,7 +62,8 @@ calls fail at once as `SLACK_UNAVAILABLE` (`circuit_open`) and a trial call ever
 close it; the lock check still counts the closed breaker's worst case. It has no fallback of its own:
 Resilience4j puts the retry outside the breaker, an open breaker's `CallNotPermittedException` is not in
 the retry's list, and the retry's fallback classifies it (a fallback on the breaker would turn every
-failure into a result before the retry sees it, the #0-23 problem). It ignores 4xx, 429 and `ok:false`,
+failure into a result before the retry sees it, the reason #0-23 removed the oncall and
+slack-workspace retries). It ignores 4xx, 429 and `ok:false`,
 so no tenant's workspace can open it for the others; that also leaves out Slack's own `ok:false` outage
 codes and an unreadable 200, which answer at once. It registers no health indicator: a channel's outage
 must not mark the service DOWN (as with mail). Accepted until #0-32: while it is open, Slack messages

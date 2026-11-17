@@ -1,6 +1,8 @@
 package com.incidentplatform.notification.support;
 
 import org.springframework.boot.env.YamlPropertySourceLoader;
+import org.springframework.context.ApplicationContextInitializer;
+import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.core.env.ConfigurableEnvironment;
 import org.springframework.core.env.PropertySource;
 import org.springframework.core.io.ClassPathResource;
@@ -30,6 +32,15 @@ public final class ApplicationYml {
      * own {@code @TestPropertySource} overrides only what it names (third review
      * of #0-104: a test pinning a copy of the file's settings could drift from it).
      */
+    public static final class Initializer
+            implements ApplicationContextInitializer<ConfigurableApplicationContext> {
+
+        @Override
+        public void initialize(ConfigurableApplicationContext context) {
+            addLast(context.getEnvironment());
+        }
+    }
+
     public static void addLast(ConfigurableEnvironment environment) {
         try {
             new YamlPropertySourceLoader()
