@@ -2,7 +2,8 @@
 
 - **Status:** Accepted (2026-11-13, by the owner, with the amendment of #0-237: the factory as a product of its own,
   stages T and N); amended by ADR-0056 (2026-11-14: the portable part of the VM is one provision script, not raw
-  cloud-init user-data)
+  cloud-init user-data); amended 2026-11-17 by the owner (stage 3: the baseline from stage 2's transcripts, #0-205;
+  #0-204 moves to stage 4)
 - **Backlog:** stage 0 of this migration (the freeze below); each later stage gets its own item when its turn comes
   (stage 1: #0-237)
 - **Date:** 2026-11-13
@@ -87,8 +88,8 @@ its turn comes:
 | 0 | Freeze hook hardening (below) | this ADR merged and set to Accepted by the owner | revert the statuses |
 | 1 | Organisation `profitbuild`, incident-platform transferred (its frontend not); the owner read from `repository.json`, not the repository's owner (#0-237); `repository-settings.rb check` | one item merged the usual way | transfer back |
 | 2 | Build VM (provisioned as code) running today's devcontainer | 3 items with no environment problem | the devcontainer on the Mac |
-| 3 | Baseline metrics: agent calls, stage times, model, transcripts kept (#0-204, #0-205); a seed pattern for a removed positive control (PR #572; the next free id after #0-218's P-25 and P-26) | numbers for 3 items | revert |
-| 4 | Dispatcher v0, in the new `factory` repository: the container has no token; push, PR and commit trailers by the dispatcher (#0-212); builder-app (not on `factory`); the gate contract, incident-platform's adapter the first | 3 PRs opened by it | `shipBy: shipper` |
+| 3 | Baseline metrics: agent calls, times, tokens, model, tools, refusals per agent call, from the runs' transcripts, kept off the build VM (#0-205; amended 2026-11-17: from stage 2's three runs, no new runs of the old path; #0-204's per-call commit trace moves to stage 4, where the dispatcher records it); a seed pattern for a removed positive control (PR #572; the next free id after #0-218's P-25 and P-26) | numbers for 3 items | revert |
+| 4 | Dispatcher v0, in the new `factory` repository: the container has no token; push, PR and commit trailers by the dispatcher (#0-212), the trace of each agent call (#0-204) and its transcripts' summary (#0-205's script); builder-app (not on `factory`); the gate contract, incident-platform's adapter the first | 3 PRs opened by it | `shipBy: shipper` |
 | 5 | review-app and the review VM, in shadow, then required; the review rules split into the factory's core, the `spring-boot` profile and the product's own | a `/seed-bugs` series on the new path catches at least what the old one did | drop the required check |
 | 6a | `factory/lane`, `factory-trace`, `factory/human-gate`, CODEOWNERS (#0-153), `/human-review`; not required at first | lane agrees with the owner on 3 PRs | not required |
 | 6b | Deterministic gates one at a time (#0-108 ArchUnit, Squawk, commitlint, TODO); each removes its rule from the prompts | each catches its seeded case | revert that gate |
@@ -110,7 +111,8 @@ incident-platform first, and, once stage N has passed, on the new application to
 **Stage 0, the freeze.** Open items that harden what a later stage removes wait as `Blocked` (superseded by the stage
 named): #0-236 (4), #0-225 (2 and 4), #0-211 (6c), #0-210 (6c), #0-214 (6c), #0-217 (4), #0-183 (5), #0-167 (6a),
 #0-226 (4), #0-228 (4), #0-234 (4), #0-227 (6a), #0-213 (4), #0-201 (7).
-Items a stage carries out point at it: #0-116 (2, then C), #0-202 (2), #0-204 and #0-205 (3), #0-212 (4), #0-153 (6a).
+Items a stage carries out point at it: #0-116 (2, then C), #0-202 (2), #0-205 (3), #0-204 (3, moved to 4 on 2026-11-17),
+#0-212 (4), #0-153 (6a). Frozen on 2026-11-17, superseded by stage 4: #0-251, #0-253, #0-254.
 The rest stay as they are; the `/seed-bugs` items (#0-171, #0-190, #0-218, #0-219) are wanted before stage 5.
 
 ## Alternatives considered

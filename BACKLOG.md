@@ -125,8 +125,7 @@ Code, Javadoc, config comments and commits reference items as `backlog #N`.
 | [0-193](#0-193-four-forked-security-chains-do-not-add-apikeyauthfilter-as-sec-12-says-they-do) | Four forked security chains do not add `ApiKeyAuthFilter`, as SEC-12 says they do | security | Medium | Open |
 | [0-201](#0-201-a-ready-items-touches-line-is-validated-only-once-it-is-queued) | A `ready` item's Touches line is validated only once it is queued | ci | Low | Blocked (superseded, ADR-0055) |
 | [0-202](#0-202-the-owner-and-the-bot-share-one-working-tree) | The owner and the bot share one working tree | design | Low | Open |
-| [0-204](#0-204-a-runs-record-keeps-no-run-id-no-agent-calls-and-no-stage-of-each-commit) | A run's record keeps no run id, no agent calls and no stage of each commit | ci | Low | Open |
-| [0-205](#0-205-a-runs-transcripts-expire-after-90-days-and-nothing-reads-them-per-agent) | A run's transcripts expire after 90 days and nothing reads them per agent | ci | Low | Open |
+| [0-204](#0-204-a-runs-record-keeps-no-run-id-no-agent-calls-and-no-stage-of-each-commit) | A run's record keeps no run id, no agent calls and no stage of each commit | ci | Low | Open (migration stage 4) |
 | [0-208](#0-208-five-route-walks-hold-five-copies-of-isexempt) | Five route walks hold five copies of `isExempt` | tech-debt | Low | Open |
 | [0-210](#0-210-twenty-one-deny-rules-of-the-autopilot-settings-never-match) | Twenty-one deny rules of the autopilot settings never match | ci | Low | Blocked (superseded, ADR-0055) |
 | [0-211](#0-211-two-lists-of-secret-paths-and-nothing-keeps-them-equal) | Two lists of secret paths, and nothing keeps them equal | ci | Low | Blocked (superseded, ADR-0055) |
@@ -155,9 +154,9 @@ Code, Javadoc, config comments and commits reference items as `backlog #N`.
 | [0-245](#0-245-validation-errors-do-not-redact-apikey-and-privatekey-fields) | Validation errors do not redact `apiKey` and `privateKey` fields | bug | Medium | Open |
 | [0-246](#0-246-service-classes-below-60-coverage-found-with-0-57) | Service classes below 60% coverage, found with #0-57 | tech-debt | Low | Open |
 | [0-249](#0-249-claude-code-in-the-devcontainer-image-is-whatever-version-was-current-at-build-time) | Claude Code in the devcontainer image is whatever version was current at build time | ci | Medium | Open |
-| [0-251](#0-251-a-live-runs-lock-turns-stale-after-a-fixed-three-hours) | A live run's lock turns stale after a fixed three hours | ci | Low | Open |
-| [0-253](#0-253-a-run-stopped-by-the-factory-scripts-guard-keeps-its-lock) | A run stopped by the factory-scripts guard keeps its lock | ci | Medium | Open |
-| [0-254](#0-254-a-resumed-item-that-ships-keeps-its-draft-prs-blocked-title) | A resumed item that ships keeps its draft PR's "(BLOCKED)" title | ci | Low | Open |
+| [0-251](#0-251-a-live-runs-lock-turns-stale-after-a-fixed-three-hours) | A live run's lock turns stale after a fixed three hours | ci | Low | Blocked (superseded, ADR-0055) |
+| [0-253](#0-253-a-run-stopped-by-the-factory-scripts-guard-keeps-its-lock) | A run stopped by the factory-scripts guard keeps its lock | ci | Medium | Blocked (superseded, ADR-0055) |
+| [0-254](#0-254-a-resumed-item-that-ships-keeps-its-draft-prs-blocked-title) | A resumed item that ships keeps its draft PR's "(BLOCKED)" title | ci | Low | Blocked (superseded, ADR-0055) |
 | [0-255](#0-255-an-approval-re-runs-the-whole-factory-guards-job) | An approval re-runs the whole Factory guards job | ci | Low | Open |
 | [0-256](#0-256-a-pr-description-opens-with-the-list-of-changes-not-the-problem) | A PR description opens with the list of changes, not the problem | ci | Low | Open |
 | [0-257](#0-257-an-agent-takes-a-handoff-from-an-earlier-run-as-fact) | An agent takes a handoff from an earlier run as fact | ci | Medium | Open |
@@ -2593,7 +2592,7 @@ preflight, and the cost of a second Maven/Docker cache.
 
 ### 0-204. A run's record keeps no run id, no agent calls and no stage of each commit
 
-**Type:** ci · **Priority:** Low · **Status:** Open (carried out by migration stage 3, ADR-0055); Owner, 2026-11-03 (what the factory keeps of a run, for the audits).
+**Type:** ci · **Priority:** Low · **Status:** Open (carried out by migration stage 4, ADR-0055; moved from stage 3 on 2026-11-17, see "Stage 3" below); Owner, 2026-11-03 (what the factory keeps of a run, for the audits).
 **Autopilot:** human-only · **Risk:** low · **Complexity:** medium · **Depends on:** —
 **Touches:** ci (.claude/workflows/backlog-autopilot.js, scripts/factory/state.sh, .github/scripts/test-autopilot-workflow.mjs,
 .github/scripts/test-factory-state.sh, .claude/agents/shipper.md, .claude/skills/ship-record/), docs (docs/ai-factory.md)
@@ -2627,41 +2626,11 @@ AC2. `state.json`'s history entry carries the run id and the agent call count; `
 AC3. `docs/ai-factory.md`'s phase 3 says `--merge --auto`, with the reason (the branch's commits are the audit's
      evidence).
 
-### 0-205. A run's transcripts expire after 90 days and nothing reads them per agent
-
-**Type:** ci · **Priority:** Low · **Status:** Open (carried out by migration stage 3, ADR-0055); Owner, 2026-11-03 (what each agent touched, for the audits).
-**Autopilot:** human-only · **Risk:** medium · **Complexity:** medium · **Depends on:** #0-204 (the run id in the record)
-**Touches:** ci (scripts/factory/ a new archive-and-summary script and its test, .claude/workflows/backlog-autopilot.js,
-scripts/factory/audit-data.sh, .github/scripts/test-audit-data.sh, .gitignore if the archive is in the workspace),
-docs (docs/ai-factory.md, .ai/README.md)
-
-**Problem.** The only full record of what an agent read, edited and ran, and of what a hook refused it, is the
-session's transcripts (`~/.claude/projects/-workspace/<session>/subagents/workflows/wf_<id>/`, the agents' `.jsonl`
-files and the workflow's `journal.jsonl`) in the container's `~/.claude` volume. Claude Code deletes them after
-`cleanupPeriodDays` (90, `.claude/settings.json:75`), and a rebuilt volume loses them sooner. Nothing links a run to
-its directory: `audit-data.sh` passes the analysts the transcripts' root only ("may be unreadable"). A hook's refusal
-reaches only the refused agent (`_lib.sh` `block()`, exit 2), so how often an agent fights a guard is seen only by
-reading transcripts by hand: both #0-199 runs that died on `maxTurns` (2026-11-02, #0-206) were diagnosed that way.
-
-**Approach (to decide; proposed: derive from transcripts, no new recorder).** A factory script, run at
-the end of each run, copies the run's `wf_<id>` directory into an archive that the cleanup does not reach, and writes
-from it one summary per agent call: turns, tokens (the transcripts' `usage`), model, tools used, paths read and
-written, commands (shortened, no file contents) and every refusal with the hook that gave it. `audit-data.sh` includes
-the summaries. Rejected: a PostToolUse hook writing an action log during the run — it records again what the
-transcripts already hold, sits on every call of the run, and with `onFailure: "block"` a logger that fails would stop
-the run; its file would be as writable by the agents as the transcripts are. Reconsider only if the summaries show a
-gap. Claude Code's own OpenTelemetry export is out of scope: it needs a way out of the devcontainer's firewall (an ADR
-of its own).
-To weigh: the archive holds what the agents read (never committed; where it lives with #0-202's shared tree; whether a
-later run's agents may read it, a prompt-injection path the audit agents already treat as data); how the run finds
-its `wf_<id>` (#0-204); whether each `block()` message names its hook.
-
-**Acceptance criteria (draft).**
-AC1. After a run, its transcripts are in the archive under the run id, and a summary per agent call holds turns,
-     tokens, tools, paths and refusals; a test on a fixture transcript shows each field, including a refused call.
-AC2. No summary holds a file's content or a token-shaped string; the test shows a fixture with both left out.
-AC3. `audit-data.sh` puts the summaries of the period's runs into its output; `test-audit-data.sh` shows it, and an
-     audit with no archive still runs.
+**Stage 3 (owner, 2026-11-17).** Not done in today's workflow: everything above lives in `backlog-autopilot.js`,
+`state.sh` and the shipper, which stage 4's dispatcher replaces (they stay only as its rollback, `shipBy: shipper`). The
+dispatcher starts and ends each call itself, so it records the trace (agent, stage, round, time, the commits a call
+added) without asking an agent, with #0-212's trailers. Stage 3's baseline is #0-205's, keyed by the run's `wf_<id>`,
+so the run id in `state.json` is not needed for it.
 
 ### 0-208. Five route walks hold five copies of `isExempt`
 
@@ -3463,8 +3432,9 @@ says which it found.
 
 ### 0-251. A live run's lock turns stale after a fixed three hours
 
-**Type:** ci · **Priority:** Low · **Status:** Open. Found by the review of #0-250 (round 2, architecture; owner,
-2026-11-16).
+**Type:** ci · **Priority:** Low · **Status:** Blocked — superseded by migration stage 4 (ADR-0055, 2026-11-17: the
+dispatcher's lock per task, which a live run renews, #0-261); was Open. Found by the review of #0-250 (round 2,
+architecture; owner, 2026-11-16).
 **Autopilot:** human-only · **Risk:** medium · **Complexity:** medium · **Depends on:** #0-250
 **Touches:** factory (scripts/factory/preflight.sh, scripts/factory/state.sh, .claude/workflows/, .github/scripts/
 tests: owner-only), docs (docs/ai-factory.md, ADR-0052 "Consequences")
@@ -3490,8 +3460,10 @@ AC3. `docs/ai-factory.md` and ADR-0052 "Consequences" say what makes a lock stal
 
 ### 0-253. A run stopped by the factory-scripts guard keeps its lock
 
-**Type:** ci · **Priority:** Medium · **Status:** Open. Found by run wf_24c48844-aa4 in the build VM (owner,
-2026-11-16).
+**Type:** ci · **Priority:** Medium · **Status:** Blocked — superseded by migration stage 4 (ADR-0055, 2026-11-17: the
+dispatcher, a script outside the agents' hooks, releases the lock, #0-261); was Open. Found by run wf_24c48844-aa4 in
+the build VM (owner, 2026-11-16). Until then: `docs/ai-factory.md` "Troubleshooting" (merge `main` into the branch,
+`scripts/factory/state.sh unlock`).
 **Autopilot:** human-only · **Risk:** medium · **Complexity:** low · **Depends on:** —
 **Touches:** factory (.claude/workflows/backlog-autopilot.js, .claude/hooks/guard-factory-scripts.sh,
 scripts/factory/: owner-only), docs (docs/ai-factory.md "Troubleshooting")
@@ -3515,7 +3487,9 @@ AC3. A test shows each.
 
 ### 0-254. A resumed item that ships keeps its draft PR's "(BLOCKED)" title
 
-**Type:** ci · **Priority:** Low · **Status:** Open. Found by run wf_207ec85e-4ad (#0-58, PR #639; owner, 2026-11-16).
+**Type:** ci · **Priority:** Low · **Status:** Blocked — superseded by migration stage 4 (ADR-0055, 2026-11-17: the
+dispatcher opens and titles the PR); was Open. Found by run wf_207ec85e-4ad (#0-58, PR #639; owner, 2026-11-16).
+Until then the owner retitles a resumed draft by hand.
 **Autopilot:** human-only · **Risk:** low · **Complexity:** low · **Depends on:** —
 **Touches:** factory (.claude/agents/shipper.md: owner-only)
 

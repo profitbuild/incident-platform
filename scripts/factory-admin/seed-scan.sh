@@ -27,6 +27,8 @@
 # The journal is read differently from the transcripts: a shape it does not know is no refusal, only no exception
 # (`run.head` is null and the reviewed commit's reads are reported), so the scan reports more, never less.
 # Prints {"ok": true, "run": {...}, "reviewers": [{type, relay, told, original, catalogue}], "summary": {...}}.
+# run-summary.sh (backlog #0-205) reads the same layout: a change in Claude Code's format is to be fixed in both. It
+# refuses a journal that is not JSON, where this scan reads on (see its header for why they differ).
 # Tested by .github/scripts/test-seed-scan.sh.
 # ============================================================
 set -uo pipefail

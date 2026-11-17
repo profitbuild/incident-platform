@@ -110,6 +110,12 @@ jobs:
       - name: Seed scan tests
         run: .github/scripts/test-seed-scan.sh
 
+      # A workflow run summarised from its transcripts, per agent call: turns, tokens, model, time, tools, paths,
+      # programs and refusals, never a file's content, a command's arguments or a token (scripts/factory-admin/run-summary.sh,
+      # backlog #0-205, ADR-0055 stage 3); refusing a transcript shape it does not know, as the seed scan does.
+      - name: Run summary tests
+        run: .github/scripts/test-run-summary.sh
+
       - name: Preflight tests
         run: .github/scripts/test-preflight.sh
 

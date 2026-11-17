@@ -32,26 +32,28 @@ task container is stage 4). The Mac devcontainer stays the rollback.
   the allow-list, before stage 4 moves `scripts/factory-admin/`), #0-244, #0-249 (pin Claude Code in the image).
 
 ### 3. Baseline metrics — CURRENT
-ADR-0055: agent calls, stage times, model, transcripts kept; a seed pattern for a removed positive control.
-- carries: #0-204 (run id, agent calls, stage of each commit), #0-205 (transcripts archived, a summary per agent call).
+ADR-0055 (amended 2026-11-17): agent calls, times, tokens, model, tools, refusals per agent call, from the runs'
+transcripts, kept off the build VM; a seed pattern for a removed positive control.
+- carries: #0-205 (Done, PR #652: `scripts/factory-admin/run-summary.sh`, the archive on the Mac, the baseline of stage 2's three
+  runs `wf_207ec85e-4ad`, `wf_5135023f-b7d`, `wf_e5a616a0-073`, no new runs of the old path). The baseline, the
+  exit's "numbers for 3 items", is recorded in #0-205's "Baseline (AC4)".
 - gap: the seed pattern for PR #572's removed positive control (the next id after #0-218's P-25 and P-26), the owner's
   row in `.ai/audit/benchmark/patterns.md`.
 - waits: #0-259 (a second model's review, measured against this baseline), #0-260 (disputes with evidence: the panel
   does not change before the baseline).
-- **Proposed 2026-11-17, not yet in ADR-0055 or the items:** derive the baseline from the Claude Code transcripts of
-  stage 2's three runs (`wf_207ec85e-4ad`, `wf_5135023f-b7d`, `wf_e5a616a0-073`; checked: all present, `model` and
-  `usage` recorded) with one owner-run script, no new runs of the old path; #0-204's per-call commit trace and
-  `--merge --auto` move to stage 4 with #0-212, where the dispatcher records them itself.
 
 ### 4. Dispatcher v0, in the new `factory` repository
 ADR-0055: the container has no token; push, PR and commit trailers by the dispatcher; builder-app (never on `factory`);
 the gate contract, incident-platform's adapter first. Exit: 3 PRs opened by it.
-- carries: #0-212 (`Factory-Run` / `Factory-Agent` trailers), #0-261 (the dispatcher's written requirements: locks,
+- carries: #0-212 (`Factory-Run` / `Factory-Agent` trailers), #0-204 (the trace of each agent call and the commits it
+  added, `--merge --auto`; moved from stage 3 on 2026-11-17), #0-261 (the dispatcher's written requirements: locks,
   state, retries, rate limits, the gate's pass summary).
 - superseded: #0-213, #0-217, #0-225 (the task container), #0-226, #0-228, #0-234, #0-236.
-- proposed to freeze as superseded (2026-11-17): #0-251 (lock stale after 3 h: a `flock` per task, #0-261), #0-253 (a
-  guard keeps the lock of a run it stopped), #0-254 (shipper keeps a draft's "(BLOCKED)" title: the dispatcher opens
-  the PR). #0-258 (a factory change first run on a real item) names itself superseded by the dispatcher's own canary.
+- also: the dispatcher runs #0-205's `run-summary.sh` at the end of each task, and `audit-data.sh` reads the summaries
+  (#0-205's draft AC3, moved here).
+- superseded on 2026-11-17: #0-251 (lock stale after 3 h: a `flock` per task, #0-261), #0-253 (a guard keeps the lock
+  of a run it stopped), #0-254 (shipper keeps a draft's "(BLOCKED)" title: the dispatcher opens the PR). #0-258 (a
+  factory change first run on a real item) names itself superseded by the dispatcher's own canary.
 - related: #0-256 (PR description opens with the problem; with #0-254, the template moves to `factory`), #0-239,
   #0-243 (the scripts move).
 - gap: the `factory` repository and its baseline; dispatcher v0 (claim, lease, containers, push, PR, statuses);
