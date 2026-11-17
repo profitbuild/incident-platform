@@ -1,33 +1,29 @@
-# Handoff: <item id>
+# Handoff: 0-23
 
 Facts only. No reasoning about why the change is good: reviewers judge it themselves. Updated by the
 implementer after every round.
 
 ## Changed
-- <file / endpoint / topic / migration / config key>: <what changed>
+- notification-service `OncallClientImpl`: the three `@Retry(name = "oncall")` and the import removed; `@CircuitBreaker`s, fallbacks and metric calls untouched; class Javadoc section "Changed (backlog #0-23)".
+- notification-service `SlackWorkspaceClientImpl`: `@Retry(name = "slack-workspace")` and the import removed; class Javadoc says circuit breaker with no retry.
+- notification-service `application.yml`: `resilience4j.retry.instances.oncall` and `.slack-workspace` deleted with their comments; a note says the scheduler's PENDING window is the retry; the `slack` breaker comment reworded.
+- test support `ApplicationYml.Initializer` (new nested `ApplicationContextInitializer`, calls `addLast`).
+- new `OncallClientResilienceTest` (5 tests); `SlackWorkspaceClientResilienceTest` loads the shipped `application.yml`.
+- README "Resilience" row and ADR-0016 (retry paragraph and the "#0-23 problem" parenthesis) reworded as settled facts.
 
 ## How to verify
-- `./mvnw test -pl <module> -Dtest=<Class>` — <what it shows>
+- `./mvnw -q test -pl notification-service -am -Dtest=OncallClientResilienceTest` and `-Dtest=SlackWorkspaceClientResilienceTest`: one request per 503, fallback counter +1, no retry instance.
+- `./mvnw -q verify -pl notification-service -am`: ran, passed.
 
 ## Tests changed and why
-- (only if an existing test changed) <test>: <the acceptance criterion or requirement that changed it>
+- `SlackWorkspaceClientResilienceTest`: the `@TestPropertySource` (max-attempts=1 and two breaker pins) was removed because AC4 requires the service's own configuration. No assertion dropped; `verify(1, ...)` added to `serverErrorGoesThroughFallback`; the breaker is reset in `@BeforeEach`.
 
 ## Deliberately out of scope
-- <thing>: <backlog item or reason>
+- `SlackApiClientResilienceTest`'s own initializer and ingestion-service's #0-23 comment: left as they are.
 
 ## Noticed, not touched
-- <defect elsewhere>: <file:line> — proposed backlog item: <one line>
+- none
 
 ## Follow-up needed
-<!-- Work this item showed is needed but is not part of it (.ai/rules/planning.md, "Follow-ups"); at most 3.
-     The shipper turns each entry into a backlog item with **Autopilot:** proposed. Delete this comment
-     and leave the section empty when there is none. -->
-### <title, as a backlog item title>
-- Why: <what is missing and what fails or stays incomplete without it, 1–2 lines>
-- Touches: <module (packages), …>
-- Risk: <low|high> · Complexity: <low|medium|high>
-- Draft criteria:
-  - AC1. <observable, checkable by a test>
 
 ## Disputed
-- <finding id>: <reason, citing code or a rule>

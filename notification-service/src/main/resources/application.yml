@@ -290,6 +290,8 @@ management:
 resilience4j:
   circuit-breaker:
     instances:
+      # The oncall and slack-workspace breakers have no retry of their own: the scheduler's
+      # PENDING window is their retry (backlog #0-23, see resilience4j.retry below).
       oncall:
         register-health-indicator: true
         sliding-window-size: 10
@@ -338,8 +340,8 @@ resilience4j:
       # the breakers above, but without a fallback of its own: Resilience4j wraps the
       # retry around the breaker, so each attempt passes it, and an open breaker's
       # CallNotPermittedException goes, unretried, to the retry's fallback (SLACK_UNAVAILABLE,
-      # circuit_open). A fallback here would hide the failure from the retry (the question of
-      # backlog #0-23). Only network errors and 5xx count. Ignored, so they never open it: a
+      # circuit_open). A fallback here would hide the failure from the retry (the reason
+      # backlog #0-23 removed the oncall and slack-workspace retries). Only network errors and 5xx count. Ignored, so they never open it: a
       # tenant's revoked token, a channel the bot is not in, a rate limit (4xx, 429, ok:false)
       # - Slack answering, and no one tenant may open it for the others - and also Slack's
       # own ok:false outage codes (internal_error, service_unavailable) and a 200 that cannot
@@ -383,42 +385,10 @@ resilience4j:
           - org.springframework.web.client.ResourceAccessException
           - org.springframework.web.client.HttpServerErrorException
 
-      # Retry for oncall-service calls (getCurrentOncall, findBySlackUserId,
-      # findCurrentByUserId).
-      # 2 attempts with 200ms fixed wait — oncall-service is within the cluster,
-      # transient failures are typically short-lived.
-      # NOTE (backlog #0-23): this retry is probably inactive for these methods. Each has a
-      # circuit-breaker fallback that turns every failure into OncallLookupUnavailableException
-      # (or, for findBySlackUserId, an empty result), and neither is listed in retry-exceptions
-      # below, so the retry never sees the original ResourceAccessException /
-      # HttpServerErrorException. The real retry of the recipient lookup is the scheduler's:
-      # the entry stays PENDING (notification.scheduler.lookup-retry-window). Whether to keep
-      # this retry, and how Resilience4j orders it around the breaker in this configuration,
-      # has not been verified.
-      oncall:
-        max-attempts: ${ONCALL_RETRY_MAX_ATTEMPTS:2}
-        wait-duration: ${ONCALL_RETRY_WAIT_MS:200ms}
-        retry-exceptions:
-          - org.springframework.web.client.ResourceAccessException
-          - org.springframework.web.client.HttpServerErrorException
-        ignore-exceptions:
-          - org.springframework.web.client.HttpClientErrorException
-
-      # Retry for SlackWorkspaceClient (backlog #0-21/#0-30). Same shape as
-      # oncall above, including its open question (backlog #0-23): this
-      # client's @CircuitBreaker fallback also returns normally rather than
-      # rethrowing, so whether @Retry actually gets a chance to see the
-      # original exception before the fallback answers is the same
-      # unverified Resilience4j-ordering question already tracked there —
-      # not re-litigated here.
-      slack-workspace:
-        max-attempts: ${SLACK_WORKSPACE_RETRY_MAX_ATTEMPTS:2}
-        wait-duration: ${SLACK_WORKSPACE_RETRY_WAIT_MS:200ms}
-        retry-exceptions:
-          - org.springframework.web.client.ResourceAccessException
-          - org.springframework.web.client.HttpServerErrorException
-        ignore-exceptions:
-          - org.springframework.web.client.HttpClientErrorException
+      # No retry instance for the oncall-service and auth-service (slack-workspace) lookups
+      # (backlog #0-23): their @Retry sat outside a circuit breaker whose fallback answers every
+      # failure, so it never fired, and it was removed. Their retry is the scheduler's: the
+      # entry stays PENDING and is tried every cycle until notification.scheduler.lookup-retry-window.
 
 logging:
   level:

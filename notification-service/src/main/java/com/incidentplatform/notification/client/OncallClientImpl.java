@@ -6,7 +6,6 @@ import com.incidentplatform.shared.observability.ClientFallbackMetrics;
 import com.incidentplatform.shared.security.ServiceNames;
 import com.incidentplatform.shared.security.ServiceTokenProvider;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
-import io.github.resilience4j.retry.annotation.Retry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -45,6 +44,21 @@ import java.util.UUID;
  * as an unchecked {@link OncallResponseParsingException} so it also
  * propagates to the proxy cleanly, without forcing a checked-exception
  * catch back into the calling methods.
+ *
+ * <h2>Changed (backlog #0-23): no retry of its own</h2>
+ * The three lookups used to carry {@code @Retry(name = "oncall")} outside the
+ * {@code @CircuitBreaker}. Its fallback answers every failure
+ * ({@link OncallLookupUnavailableException} is not in {@code retry-exceptions},
+ * and {@code Optional.empty()} is a success), so the retry never saw an
+ * exception and never fired. It is removed rather than repaired: the lookups'
+ * retry is the scheduler's. An entry whose lookup failed stays PENDING and is
+ * tried every cycle until {@code notification.scheduler.lookup-retry-window}
+ * (a deadline, not an attempt count).
+ *
+ * <p>Not chosen: a {@code fallbackMethod} on the {@code @Retry} would double the
+ * worst case on the scheduler thread, which runs under the 4-minute ShedLock;
+ * listing the fallback exception in {@code retry-exceptions} would retry 4xx
+ * answers and an open breaker.
  */
 @Component
 public class OncallClientImpl implements OncallClient {
@@ -72,7 +86,6 @@ public class OncallClientImpl implements OncallClient {
         this.oncallServiceBaseUrl = oncallServiceBaseUrl;
     }
 
-    @Retry(name = "oncall")
     @CircuitBreaker(name = "oncall", fallbackMethod = "getCurrentOncallFallback")
     @Override
     public Optional<OncallInfo> getCurrentOncall(String tenantId, UUID teamId, String role) {
@@ -124,7 +137,6 @@ public class OncallClientImpl implements OncallClient {
                 "oncall-service could not answer getCurrentOncall", e);
     }
 
-    @Retry(name = "oncall")
     @CircuitBreaker(name = "oncall", fallbackMethod = "findBySlackUserIdFallback")
     @Override
     public Optional<OncallInfo> findBySlackUserId(String tenantId, String slackUserId) {
@@ -175,7 +187,6 @@ public class OncallClientImpl implements OncallClient {
         return Optional.empty();
     }
 
-    @Retry(name = "oncall")
     @CircuitBreaker(name = "oncall", fallbackMethod = "findCurrentByUserIdFallback")
     @Override
     public Optional<OncallInfo> findCurrentByUserId(String tenantId, String userId) {

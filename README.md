@@ -196,7 +196,7 @@ A multi-tenant platform onboards customers while it runs. A Flyway seed gave eve
 | Email | Spring Mail + Mailtrap SMTP | Real SMTP integration, safe sandbox |
 | Slack | Bot Token + chat.postMessage | DM + channel posts, per tenant; ACK-via-Slack returns with the OAuth install (backlog #0-35) |
 | AI | Gemini API via RestClient | Vendor-neutral, no SDK lock-in |
-| Resilience | Resilience4j | Circuit breakers on Redis (ingestion-service fail-open, auth-service's platform API and admin MFA reset limits fail-closed), Gemini, inter-service HTTP clients (oncall-service, incident ACK) and the Slack Web API (backlog #0-104, alert `SlackCircuitOpen`), retry with backoff (the oncall client's own retry is unverified, backlog #0-23; the Slack Web API calls' since backlog #0-103) |
+| Resilience | Resilience4j | Circuit breakers on Redis (ingestion-service fail-open, auth-service's platform API and admin MFA reset limits fail-closed), Gemini, inter-service HTTP clients (oncall-service, incident ACK) and the Slack Web API (backlog #0-104, alert `SlackCircuitOpen`), retry with backoff only on the Slack Web API calls (backlog #0-103); the oncall-service and Slack-workspace lookups have none of their own, as the notification scheduler's PENDING window is their retry (backlog #0-23) |
 | Rate Limiting | bucket4j + Redis | ingestion-service per tenant + per IP; auth-service's platform API per operator and in total (backlog #0-83), and the admin MFA reset per admin and per tenant (backlog #0-88); state shared across replicas via `bucket4j-redis` |
 | API Docs | SpringDoc OpenAPI 3 | Auto-generated, available at `/swagger-ui.html` |
 | Build | Maven multi-module | Shared dependency management, incremental builds |

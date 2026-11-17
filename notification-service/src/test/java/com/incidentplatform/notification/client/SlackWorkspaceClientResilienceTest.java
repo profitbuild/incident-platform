@@ -6,6 +6,8 @@ import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
 import com.incidentplatform.shared.observability.ClientFallbackMetrics;
 import com.incidentplatform.shared.security.ServiceNames;
 import com.incidentplatform.shared.security.ServiceTokenProvider;
+import com.incidentplatform.notification.support.ApplicationYml;
+import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
 import io.github.resilience4j.springboot3.circuitbreaker.autoconfigure.CircuitBreakerAutoConfiguration;
 import io.github.resilience4j.springboot3.retry.autoconfigure.RetryAutoConfiguration;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -21,7 +23,6 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.client.JdkClientHttpRequestFactory;
-import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.junit.jupiter.SpringJUnitConfig;
 import org.springframework.web.client.RestClient;
 
@@ -51,14 +52,18 @@ import static org.mockito.Mockito.mock;
  * difference. This one builds a minimal Spring context with only the AOP and
  * Resilience4j auto-configurations, so a regression to self-invocation (or a
  * {@code @Qualifier} that no longer points at the proxied bean) fails here.
+ *
+ * <h2>Reads the shipped application.yml (backlog #0-23)</h2>
+ * It used to pin {@code max-attempts=1} and the breaker window itself, which
+ * hid that the client's {@code @Retry} never fired. It now loads the service's
+ * own {@code application.yml} ({@link ApplicationYml.Initializer}), so there is
+ * no copy of the configuration to drift (third review of #0-104), and a 503
+ * is asserted to make exactly one request. The breaker is reset before each
+ * test because the shipped window (3 calls) would otherwise let the 503s of
+ * earlier tests open it.
  */
-@SpringJUnitConfig(SlackWorkspaceClientResilienceTest.TestConfig.class)
-@TestPropertySource(properties = {
-        // Kept independent of application.yml so the test pins what it relies on.
-        "resilience4j.circuitbreaker.instances.slack-workspace.sliding-window-size=10",
-        "resilience4j.circuitbreaker.instances.slack-workspace.minimum-number-of-calls=10",
-        "resilience4j.retry.instances.slack-workspace.max-attempts=1"
-})
+@SpringJUnitConfig(classes = SlackWorkspaceClientResilienceTest.TestConfig.class,
+        initializers = ApplicationYml.Initializer.class)
 @DisplayName("SlackWorkspaceClient — Resilience4j proxy is really in the call path")
 class SlackWorkspaceClientResilienceTest {
 
@@ -79,9 +84,13 @@ class SlackWorkspaceClientResilienceTest {
     @Autowired
     private MeterRegistry meterRegistry;
 
+    @Autowired
+    private CircuitBreakerRegistry circuitBreakerRegistry;
+
     @BeforeEach
     void resetWireMock() {
         WIRE_MOCK.resetAll();
+        circuitBreakerRegistry.circuitBreaker("slack-workspace").reset();
     }
 
     @AfterAll
@@ -107,6 +116,7 @@ class SlackWorkspaceClientResilienceTest {
                 .isInstanceOf(SlackWorkspaceLookupUnavailableException.class);
 
         assertThat(serverErrorFallbacks() - before).isEqualTo(1.0);
+        WIRE_MOCK.verify(1, getRequestedFor(urlPathEqualTo(PATH)));
     }
 
     @Test
