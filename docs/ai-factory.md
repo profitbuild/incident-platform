@@ -128,7 +128,8 @@ has no item yet: `.ai/context/migration.md`.
 Stage 2 of ADR-0055 (#0-238, ADR-0056): the same devcontainer, inside a Lima VM on the Mac, so the Docker a test
 reaches is the VM's and the repository is a clone of its own, not your checkout. The files are in
 `scripts/factory-admin/build-vm/`; the Mac needs Lima (`brew install lima`) and, for `verify-pins.sh`, Docker.
-Until AC5 of #0-238 is met the devcontainer on the Mac (Setup above) stays the way back.
+AC5 of #0-238 is met (stage 2 done, 2026-11-17); the devcontainer on the Mac (Setup above) stays the way back (the
+owner's decision, `.ai/context/migration/stage-2.md`).
 The VM's Docker is rootless (ADR-0057, #0-116, #0-240): its daemon runs as `factory`, so root in any container,
 the devcontainer's included, is `factory` in the VM, and root's chain `FACTORY-EGRESS` filters everything any uid
 from 1000 up sends, `factory` and its subordinate range among them (a copy of the devcontainer's allow-list plus the
