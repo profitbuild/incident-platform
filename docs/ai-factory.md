@@ -422,6 +422,20 @@ The agents' instructions are not a boundary; these are, each with its limit:
   marker counts only when it reached `main` in a PR the owner opened (#0-129; the others are listed as
   `unverifiedEscapes`), so add it on your own branch, not through an autopilot PR; Factory guards fails a marker
   without its `**Fixes:** #0-<digits>` part (#0-128).
+- **A run's cost and behaviour** (#0-205, ADR-0055 stage 3): `scripts/factory-admin/run-summary.sh <the run's wf
+  dir>` summarises one run from its transcripts, per agent call (turns, tokens by kind, model, time, tools, paths
+  read and written, programs, refusals with the hook that gave them) and for the run (totals by agent type and
+  model, unanswered calls). It keeps no file content and of a command only its program (and, for `git`, `gh`,
+  `docker`, Maven and the factory's scripts, one lower-case word: the subcommand, or an option's value before it), and
+  refuses a transcript shape it does not know. Claude Code deletes the transcripts after `cleanupPeriodDays` (90) and a rebuilt volume loses them, so
+  copy a run's directory off the build VM first, to `~/factory-archive/` on the Mac (never into the repository: it
+  holds what the agents read). In the devcontainer: `tar -C ~/.claude/projects/-workspace -czf /tmp/<wf_id>.tgz
+  <session>/subagents/workflows/<wf_id>`; in the VM: `docker cp <container>:/tmp/<wf_id>.tgz /tmp/`; on the Mac:
+  `limactl copy factory-build:/tmp/<wf_id>.tgz ~/factory-archive/`. Then delete both temporary copies (`rm
+  /tmp/<wf_id>.tgz` in the devcontainer and in the VM): they are the raw transcripts outside `~/.claude`, where a
+  later agent in that container could read them. The archive comes from the agents' zone, so unpack it as untrusted
+  data: into a new directory of its own (`mkdir ~/factory-archive/<wf_id> && tar -xzf … -C` it; plain `tar`, never
+  `-P`), and read it only with `run-summary.sh`. The baseline of stage 2's three runs is in #0-205.
 
 ## Pinned versions
 
