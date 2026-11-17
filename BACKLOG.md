@@ -168,6 +168,7 @@ Code, Javadoc, config comments and commits reference items as `backlog #N`.
 | [0-263](#0-263-nothing-runs-a-bug-fixs-test-on-the-code-before-the-fix) | Nothing runs a bug fix's test on the code before the fix | ci | Medium | Open |
 | [0-264](#0-264-a-green-pr-is-merged-on-a-base-that-moved-under-it) | A green PR is merged on a base that moved under it | ci | Medium | Open |
 | [0-265](#0-265-a-task-back-after-a-pause-is-resumed-without-asking-whether-it-still-makes-sense) | A task back after a pause is resumed without asking whether it still makes sense | ci | Low | Open |
+| [0-267](#0-267-migration-stage-4-starts-without-the-factory-repository-and-its-decisions) | Migration stage 4 starts without the `factory` repository and its decisions | ci | High | Open |
 | [0-133](#0-133-incidentresolvedevent-carries-no-openedat) | `IncidentResolvedEvent` carries no `openedAt` | tech-debt | Low | Open |
 | [0-134](#0-134-diff-cover-is-installed-by-version-without-hashes) | `diff-cover` is installed by version, without hashes | ci | Low | Open |
 | [0-135](#0-135-kubectl-in-ci-is-downloaded-unverified) | kubectl in CI is downloaded unverified | ci | Low | Open |
@@ -3762,3 +3763,33 @@ Thresholds to decide.
 
 AC1. The dispatcher runs the agent in the three cases and acts on MODERNIZE and REWORK; CLOSE reaches the owner.
 AC2. On three resumed tasks the disposition agrees with the owner's.
+
+
+### 0-267. Migration stage 4 starts without the `factory` repository and its decisions
+
+**Type:** ci · **Priority:** High · **Status:** Open (migration stage 4.1, ADR-0055, ADR-0060). Owner, 2026-11-17.
+**Autopilot:** human-only · **Risk:** high · **Complexity:** medium · **Depends on:** ADR-0055 stage 3 (done, #652,
+#653)
+**Touches:** root (.ai/decisions/0060-a-dispatcher-runs-each-agent-in-a-task-container.md, .ai/context/migration.md,
+BACKLOG.md), the new repository `profitbuild/factory` (its README, CODEOWNERS, ruleset, CI)
+
+**Problem.** Stage 4's dispatcher (ADR-0060) lives in a repository of its own, `factory`, which does not exist, and its
+decisions (D1–D8) are Proposed. Every later item of the stage (4.2 builder-app, 4.3 the dispatcher's core, 4.4 the
+ported control flow, 4.5 push, PR, trailers and trace, 4.6 the credential proxy and `stream-json`, 4.7 the adapter and
+the three runs of the exit, `.ai/context/migration.md`) needs both. `factory` is the organisation's most protected
+repository (ADR-0055): builder-app is never installed on it, so only the owner's pull requests change it.
+
+**Work** (the plan's step 4.1, `.ai/context/migration/stage-4.md`). The owner sets ADR-0060 to Accepted. The owner creates `profitbuild/factory`, public, and gives it the
+baseline incident-platform has, scaled to an empty repository: `main` changed only by pull request, with the owner's
+review (CODEOWNERS `* @lukaszplawiak`), required checks, no force push or deletion, secret scanning and push protection,
+Actions pinned by SHA with a read-only default token. Its CI runs, on the Node of `.node-version`, `node --test` and the
+workflow linters at incident-platform's pins (actionlint, shellcheck, zizmor), on a skeleton (README, `.node-version`,
+one test). Stage T turns this into the template; it is set by hand here.
+
+**Acceptance criteria.**
+AC1. ADR-0060 is Accepted.
+AC2. `profitbuild/factory` exists, public; `gh api repos/profitbuild/factory/rulesets` shows a ruleset on `main`
+     requiring a pull request, the code owner's review and the CI check, and blocking force pushes and deletion;
+     `gh api repos/profitbuild/factory/installation` (as builder-app, once 4.2 creates it) answers 404.
+AC3. The CI of `factory` passes on its skeleton and fails on a planted shellcheck finding and on a failing test.
+AC4. `.ai/context/migration.md` stage 4 names the repository and this item as done.
