@@ -152,6 +152,8 @@ resolvable.
 | 0-252 | The isolation check reads the agent type Claude Code gives review-general's probe command: the session-level hook `isolation-probe.sh` records it under `.ai/runs/isolation/` for the locked run, `isolation.sh` reads it, the preflight clears the records as it takes the lock; the model's answers are read no more (ADR-0058); details in [the section](#0-252-the-isolation-check-depends-on-the-model-agreeing-to-quote-its-prompt) | PR #643 |
 | 0-23 | The `oncall` and `slack-workspace` `@Retry` (which never fired: a circuit-breaker fallback answered every failure first) removed from notification-service, with both `resilience4j.retry.instances`; breakers and fallbacks unchanged; `OncallClientResilienceTest` runs the client through its real proxies (one request per 503, fallback metric +1), `SlackWorkspaceClientResilienceTest` uses the shipped `application.yml`; Javadoc, comments, README and ADR-0016 say the scheduler's PENDING window is the retry; details in [the section](#0-23-the-oncall-and-slack-workspace-retry-never-fires) | PR #649 |
 | 0-25 | Every `notification_queue` transition after the INSERT is a conditional UPDATE from PENDING (`markSent`, `markFailed`, `markUndeliverable`, `recordLookupFailure`, scoped by id and tenant, row count returned); the entity's mutators are gone; a stale write is logged at info and counted in `notification.queue.stale_write` with no audit event and no operator alert; `.ai/context/architecture.md` states the criterion for a state-guarded UPDATE versus `@Version` (ADR-0059); details in [the section](#0-25-a-stale-notification_queue-write-can-overwrite-a-terminal-status) | PR #645 |
+| 0-238 | Migration stage 2 (ADR-0055, ADR-0056): the build VM is a Lima instance created and deleted by scripts under `scripts/factory-admin/build-vm/`, with a clone of its own and today's devcontainer inside; three autopilot items ran there with no environment problem (runs wf_207ec85e-4ad, wf_5135023f-b7d, wf_e5a616a0-073); details in [the section](#0-238-migration-stage-2-a-build-vm-provisioned-as-code-runs-todays-devcontainer) | PRs #628, #629, #650 |
+| 0-266 | factory-ops runs on `claude-sonnet-5-5` instead of Haiku 4.5, which garbled the scripts' answers it relayed; in run 3, 10 of 11 answers equal the script's output, the gate's `summary` shortened; details in [the section](#0-266-factory-ops-a-small-model-garbles-the-scripts-answers-it-relays) | PR #648 |
 
 Items completed before `BACKLOG.md` existed are not listed.
 
@@ -3579,3 +3581,138 @@ AC5. The comments of both clients and of `application.yml`, README's "Resilience
 `@Retry(name = "oncall")` being "probably inactive" and on "the #0-23 problem") say the lookups have no retry of their
 own and the scheduler's PENDING window is their retry; nothing calls them "probably inactive" or "unverified".
 AC6. `./mvnw verify -pl notification-service -am` passes, with the 60% JaCoCo and `diff-cover` thresholds.
+
+
+### 0-238. Migration stage 2: a build VM, provisioned as code, runs today's devcontainer
+
+**Type:** ci · **Priority:** High · **Status:** Done, PR #650 (2026-11-17); AC1-AC4 and AC6 in PRs #628, #629, AC5 by runs wf_207ec85e-4ad (PR #639), wf_5135023f-b7d (PR #645) and wf_e5a616a0-073 (PR #649); was In progress. Stage 2 of ADR-0055 (owner, 2026-11-13); its first step is a
+spike of UTM, the owner's VM tool. Spike done 2026-11-13 (UTM failed S1, Lima passed S1–S3, ADR-0056); AC1–AC4 and
+AC6 in the PR of `feat/0-238-build-vm`; AC5 after it is merged and the owner has logged in inside the VM.
+**Autopilot:** human-only · **Risk:** high · **Complexity:** high · **Depends on:** #0-237
+**Touches:** factory (the VM's provisioning and scripts, proposed under `scripts/factory-admin/build-vm/`, an owner-only
+path that moves to the `factory` repository in stage 4; `.devcontainer/` only if the VM needs it), root
+(.ai/decisions/ (a new ADR: the VM tool and the VM's layout), BACKLOG.md), docs (docs/ai-factory.md, README.md
+"Infrastructure Hardening": where the autopilot runs and what isolates it)
+
+**Problem.** The factory runs as a devcontainer on the owner's Mac. Three known gaps come from that place, not from the
+factory's logic:
+- **#0-116:** code an agent runs reaches the host's Docker, so a test can leave the devcontainer's firewall and read
+  or start anything Docker on the Mac can;
+- **#0-202:** the container bind-mounts the owner's checkout, so the owner and the bot share one `.git`, HEAD, index and
+  every gitignored file (`docker/.env`, the `application-local.yml` files);
+- **#0-225, the part frozen for this stage:** a secret file in that tree is one file tool away from an agent.
+ADR-0055 moves the factory off the Mac in stages. Stage 2 is the first: the same devcontainer, unchanged, inside a VM
+that holds only what the factory needs, created from code that a cloud VM can later read unchanged (stage C).
+
+**Approach.**
+1. **Spike: UTM** (UTM 4.7.4 on the owner's M1 Pro, 32 GB). `utmctl` has `start`, `stop`, `clone`, `delete`, `exec`
+   and `ip-address`, but no `create`. Try, in this order, to create the VM from a script with no click in UTM's window:
+   (a) AppleScript, if UTM's scripting creates a VM with a disk and a cloud-init seed; (b) `utmctl clone` of a base VM
+   holding only Ubuntu's cloud image, with the seed attached by the script. The criteria, fixed now:
+   - S1. The VM is created, and recreated from nothing, by one script in the repository, with no step in the GUI.
+   - S2. Its contents come from one cloud-init `user-data` file (NoCloud seed, Ubuntu cloud image) that a cloud VM
+     could read unchanged: no UTM-specific step inside the guest. (Reworded by ADR-0056: one provision script, which
+     Lima runs as a provision and a cloud VM takes as its user-data; Lima reads no raw user-data.)
+   - S3. In it, today's devcontainer starts (`devcontainer up`), its firewall comes up, and a test gate with
+     Testcontainers passes (`./mvnw verify` of one module with a repository test).
+   If S1 fails, the tool is Lima (a YAML file, `limactl create/start/delete`, the same cloud image and
+   Virtualization.framework), checked against S1–S3 the same way. The ADR records the tool, the criteria and what the
+   spike showed.
+2. **The VM**: Ubuntu cloud image; `user-data` (a provision script, ADR-0056) installs Docker Engine (in the VM, not Docker Desktop), git, the
+   devcontainer CLI and its runtime; the repository is cloned from `origin` inside the VM, a tree of its own with no
+   gitignored file of the owner's (#0-202: the owner's checkout is no longer mounted); the bot's `gh` login and
+   Claude Code's login are entered once into the VM's volumes, as today's devcontainer documents. Resources sized
+   for the test gate (around 12–16 GB, `devcontainer.json`'s `hostRequirements` asks 16).
+3. **The autopilot starts there**, the owner's sessions stay on the Mac. How Claude Code authenticates unattended stays
+   open (ADR-0055 "Consequences"): in this stage the owner logs in interactively, as today, and starts each run.
+4. **Exit (ADR-0055):** 3 autopilot items run on the VM with no environment problem. **Rollback:** the devcontainer on
+   the Mac, unchanged, as it is today.
+
+**Not this item.** The dispatcher and builder-app (stage 4), metrics (stage 3), the review VM (stage 5), the cloud
+(stage C), a Docker API proxy or a firewall outside the container (#0-116's own options, decided with stage 4 and C).
+What stage 2 changes for #0-116 is where Docker's root reaches: the VM, which holds no owner file, instead of the Mac;
+#0-116 stays open until a boundary holds the code an agent runs. Sysbox in the build VM, which ADR-0055 leaves to its
+stage, is decided with that boundary, not here: it is one of the ways to run the test gate's Docker without root over
+the container (beside #0-116's Docker API proxy), and in stage 2 Docker runs on the VM itself.
+
+AC1. The spike's result is in a new ADR: the VM tool, S1–S3 each passed or failed with what was run, and the reason
+for the choice.
+AC2. One script in the repository creates the build VM from nothing and another deletes it; the VM's contents come only
+from its `user-data` file (a provision script, ADR-0056) and that script (S1, S2), and the steps the owner does by hand (logins, the bot's token) are
+listed in `docs/ai-factory.md`.
+AC3. The repository inside the VM is a clone of its own: no mount of the owner's checkout, no gitignored file of the
+owner's (#0-202's concern, checked in the VM).
+AC4. In the VM the devcontainer starts with its firewall and a test gate with Testcontainers passes (S3).
+AC5. Three autopilot items run on the VM with no environment problem (ADR-0055's exit), each named here with its run id.
+Runs so far: run 20261114-155647 (#0-58, PR #639, draft): BLOCKED by the environment, so not one of the three: its
+gate's Testcontainers pulls were refused on CloudFront addresses the VM's allow-list had not resolved (#0-247).
+Then #0-58 resumed on 2026-11-15, after #0-248: past the isolation check, BLOCKED at the gate ("test gate returned no
+result", #0-250): a factory problem, not the VM's, and not one of the three either (run 20261115-170407).
+On 2026-11-16, after #0-250: wf_24c48844-aa4 was refused by `guard-factory-scripts.sh` (the branch's base predated
+#0-250's `preflight.sh`; the owner merged `main` into it) and left its lock (#0-253); wf_71cca984-ef4 stopped
+`NOT_STARTED` at the isolation check, the model declining to quote its prompt (#0-252). Neither is one of the three.
+**1 of 3: run wf_207ec85e-4ad (#0-58, PR #639, merged 2026-11-16)**, after #0-250 and #0-252: through every stage with
+no environment problem; the gate built and tested all nine modules in 03:03 min (Testcontainers' pulls allowed,
+#0-247) and answered, the isolation probe was recorded as review-general, the panel approved in round 1 and the
+acceptance met AC1-AC13. Its PR kept the draft's title "(BLOCKED)" (#0-254).
+**2 of 3: run wf_5135023f-b7d (#0-25, PR #645, merged 2026-11-16)**, the queue's next item, started with no argument:
+through every stage with no environment problem; six reviewers approved in round 1, the acceptance accepted, ADR-0059.
+Its factory-ops relayed one `changed-paths.sh` answer with a file name garbled (`a35aa6ee/context/architecture.md`
+for `.ai/context/architecture.md`; the script's own output, in the transcript, was right): a model's copy, not the
+script, and nothing it decided was wrong (the relay of ADR-0058's Consequences).
+**3 of 3: run wf_e5a616a0-073 (#0-23, PR #649, merged 2026-11-17)**, the queue's next item, started with no argument,
+after #0-266 had moved factory-ops to Sonnet 5.5: through every stage with no environment problem; the gate built and
+tested shared and notification-service (943 tests), five reviewers approved in round 1, the acceptance met AC1-AC6,
+and the owner approved the bot's PR and merged it without the bypass. ADR-0055's exit for stage 2 is met (owner,
+2026-11-17); the devcontainer on the Mac stays the rollback, so #0-116, #0-202 and #0-225 keep their stage 2 notes.
+AC6. README "Infrastructure Hardening" and `docs/ai-factory.md` say where the autopilot runs and what isolates it;
+#0-202 and #0-225 point at what this stage settled for them, and #0-116 at what it did not.
+
+**Found by the spike.** The devcontainer image had no `unzip`, so in any fresh environment `./mvnw` downloaded
+Maven's `.tar.gz` and checked it against the `.zip`'s `distributionSha256Sum`, and failed; fixed in
+`.devcontainer/Dockerfile` with this item. S2 is reworded in ADR-0056: Lima takes no raw user-data, so the VM's
+contents come from one script (`provision.sh`) that a cloud VM takes unchanged as its user-data.
+
+
+### 0-266. factory-ops, a small model, garbles the scripts' answers it relays
+
+**Type:** ci · **Priority:** High · **Status:** Done, PR #648 (2026-11-17); AC2 by run wf_e5a616a0-073 (10 of 11 answers equal, the gate's `summary` shortened; closed in PR #650). Found by run
+wf_5135023f-b7d (#0-25, PR #645; owner, 2026-11-16).
+**Autopilot:** human-only · **Risk:** medium · **Complexity:** low · **Depends on:** —
+**Touches:** factory (.claude/agents/factory-ops.md: owner-only)
+
+**Problem.** The workflow cannot run a shell, so factory-ops (`claude-haiku-4-5-20251001`, two generations older than
+every other agent of the factory) runs each factory script and returns its JSON "unchanged". In run wf_5135023f-b7d
+it returned one `changed-paths.sh` answer with `"a35aa6ee/context/architecture.md"` for
+`".ai/context/architecture.md"`: the start of the head's sha, which the agent had in its context, in place of `.ai`.
+The script's own output, in the transcript as the tool's result, was right; the same call was right before and after.
+Nothing it decided was wrong that time, but the relay carries the fields that decide gates (`needsHuman`,
+`migrationTouched`, a gate's `status`, the isolation record of ADR-0058), and a model that rewrites a path can
+rewrite a boolean.
+
+**Approach (decided by the owner).** The model of the panel's Sonnet reviewers, `claude-sonnet-5-5`, for factory-ops,
+until the dispatcher (ADR-0055 stage 4, #0-261) removes the relay. Enough because, until then, every PR needs the
+owner's approval (`CODEOWNERS: *`) and CI's required checks, which do not read the relay: a garbled answer can weaken
+a run's review, not merge unread. Not chosen: a digest of each answer that the workflow checks (it detects every
+garbling, but it is code in every script and the workflow that stage 4 removes), two calls compared (twice the cost,
+and one model can err twice alike). If auto-merge (stage 10) or a narrower `CODEOWNERS` came before the dispatcher,
+the digest is the fix.
+
+AC1. `factory-ops.md` runs on `claude-sonnet-5-5`, with the reason beside the field.
+AC2. In the next autopilot run every answer of factory-ops equals the script's output in its transcript (the same
+comparison as wf_5135023f-b7d's: the `files` lists, escaped and not).
+
+**Result (run wf_e5a616a0-073, #0-23, PR #649; owner, 2026-11-17).** Each factory-ops transcript of the run was read
+by a script outside the repository: the agent type from its `agent-*.meta.json`, the script's output from the tool's
+result of its one Bash call, the answer from the input of its `StructuredOutput` call, compared as JSON. On
+wf_5135023f-b7d, the control, it found the known garbling and more: 9 of 11 Haiku answers differed from the script's
+output (`a35aa6ee/context/…`, fields the script never printed, `exitCode: 0` and `ok: true`, and empty arrays
+dropped). On wf_e5a616a0-073, 10 of 11 Sonnet answers equal the script's output, every field of every
+`changed-paths.sh`, `state.sh`, `next-item.sh`, `start-item.sh`, `preflight.sh`, `isolation.sh` and `notify.sh`
+answer included. The eleventh, `run-tests.sh`'s, has the same `status`, `exitCode`, `head` and `artifact` but a
+shortened `summary`: the last 2 of the script's 60 lines, against the definition's "Do not summarise it". So AC2 is
+not met to the letter: every field that decides a gate arrived unchanged, the one that only informs did not. A
+`summary` matters when the gate fails (the implementer is given it, `backlog-autopilot.js`'s test gate), and the cost
+of a shortened one there is a fix attempt with less to go on, which ends BLOCKED at worst, not a merge. The owner
+closed the item on that result (2026-11-17), since stage 4 removes the relay, and left the cause, a `pass` summary of
+green lines, to #0-261.
