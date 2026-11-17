@@ -37,8 +37,8 @@ transcripts, kept off the build VM; a seed pattern for a removed positive contro
 - carries: #0-205 (Done, PR #652: `scripts/factory-admin/run-summary.sh`, the archive on the Mac, the baseline of stage 2's three
   runs `wf_207ec85e-4ad`, `wf_5135023f-b7d`, `wf_e5a616a0-073`, no new runs of the old path). The baseline, the
   exit's "numbers for 3 items", is recorded in #0-205's "Baseline (AC4)".
-- gap: the seed pattern for PR #572's removed positive control (the next id after #0-218's P-25 and P-26), the owner's
-  row in `.ai/audit/benchmark/patterns.md`.
+- carries: P-27 in `.ai/audit/benchmark/patterns.md` (PR #572's removed positive control, after #0-218's P-25 and
+  P-26); its first `/seed-bugs` run is wanted before stage 5, with P-25 and P-26.
 - waits: #0-259 (a second model's review, measured against this baseline), #0-260 (disputes with evidence: the panel
   does not change before the baseline).
 
