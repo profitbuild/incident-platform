@@ -57,7 +57,8 @@ the factory moves stage by stage to three zones (the owner's Mac, a build VM whe
 credential, a review VM), a GitHub Issues queue and a merge by the ruleset alone, with the owner's approval left on the
 high-risk lane and a sample after merge. Each stage gets its backlog item when its turn comes; until then this runbook
 describes the factory as it runs. Hook hardening that a stage removes is frozen (stage 0: the items marked
-`Blocked — superseded by migration stage N`).
+`Blocked — superseded by migration stage N`). Which open items belong to which stage, and the work of a stage that
+has no item yet: `.ai/context/migration.md`.
 
 ## Setup (once)
 

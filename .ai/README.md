@@ -86,7 +86,8 @@ Directories are created when they provide real value. Current structure:
 │   ├── project.md             ← purpose, domain, users, service map, index of decisions
 │   ├── architecture.md        ← shared, persistence, decided patterns (moved from CLAUDE.md)
 │   ├── security.md            ← tenant isolation and authentication (moved from CLAUDE.md)
-│   └── infrastructure.md      ← CI rules and supply chain (moved from CLAUDE.md)
+│   ├── infrastructure.md      ← CI rules and supply chain (moved from CLAUDE.md)
+│   └── migration.md           ← the factory's migration: ADR-0055's stages mapped to backlog items, and their gaps
 ├── decisions/                 ← ADRs: README.md is the index, _template.md the format
 ├── rules/                     ← HUMAN-OWNED criteria the agents are judged by
 │   ├── review/                ← one file per review dimension + _common.md
@@ -133,6 +134,7 @@ Before making any implementation decision, read in this order, and only what you
 | a tenant id, authentication, a filter chain, an HTTP client between services, Kafka, a notification recipient, tenant status | `.ai/context/security.md` |
 | `shared`, an entity, a repository, a migration, a scheduler, an outbox, retries | `.ai/context/architecture.md` |
 | `.github/`, a Dockerfile, `k8s/`, `docker/`, a POM's plugins | `.ai/context/infrastructure.md` |
+| the factory's migration (ADR-0055): a stage, or an item that belongs to one | `.ai/context/migration.md` |
 
 ## Step 3 — Check previous decisions
 
