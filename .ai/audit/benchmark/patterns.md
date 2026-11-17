@@ -35,6 +35,10 @@ answer, and a finding there counts as at the plant (backlog #0-181, ADR-0044 dec
 | P-22 | k8s | K8S-06 | remove a `readinessProbe`, a `livenessProbe` or the `resources` block from a Deployment the change touches |
 | P-23 | architecture | FAC-A02 | in a workflow, let a missing or malformed agent answer go on: drop the `!answer \|\|` of a guard that stops the item, or read a field with `?.` where its absence must stop |
 | P-24 | architecture | FAC-A06 | leave a field the workflow reads out of its `agent()` call's schema, or type it only as required |
+| P-27 | general | GEN-03 | in a deny-by-default route walk the change adds or changes (`*DenyByDefaultTest`, ADR-0048), delete its positive control (the valid user token that gets past authentication, and where the chain holds `ApiKeyAuthFilter` the `verify` that the key lookup was asked), so every 401 the walk asserts could come from a context in which no token validates; never in a walk the change does not touch. Escaped to `main` in PR #572 (#0-191), found by the owner's review (ADR-0048 rule 7, ADR-0055 stage 3); candidate hosts: PR #586 (`73270071`, incident), #587 (`c07db052`, ingestion, with the key lookup), #576 (`f3d79a0b`, notification, oncall, postmortem) |
+
+P-25 and P-26 are reserved by backlog #0-218 (security, SEC-12 and SEC-13) and land with it; P-27 comes after them
+(ADR-0055 stage 3).
 
 P-23 and P-24 are planted by hand, not by `seed-bugs`: their hosts change Owner-only paths, which `seed-branch.sh`
 refuses. The host's code is reverted on `review/<8 hex>` (`Revert "<subject>"`), replayed with the plant committed
