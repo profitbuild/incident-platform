@@ -126,7 +126,6 @@ Code, Javadoc, config comments and commits reference items as `backlog #N`.
 | [0-201](#0-201-a-ready-items-touches-line-is-validated-only-once-it-is-queued) | A `ready` item's Touches line is validated only once it is queued | ci | Low | Blocked (superseded, ADR-0055) |
 | [0-202](#0-202-the-owner-and-the-bot-share-one-working-tree) | The owner and the bot share one working tree | design | Low | Open |
 | [0-204](#0-204-a-runs-record-keeps-no-run-id-no-agent-calls-and-no-stage-of-each-commit) | A run's record keeps no run id, no agent calls and no stage of each commit | ci | Low | Open (migration stage 4) |
-| [0-205](#0-205-a-runs-transcripts-expire-after-90-days-and-nothing-reads-them-per-agent) | A run's transcripts expire after 90 days and nothing reads them per agent | ci | Low | In progress |
 | [0-208](#0-208-five-route-walks-hold-five-copies-of-isexempt) | Five route walks hold five copies of `isExempt` | tech-debt | Low | Open |
 | [0-210](#0-210-twenty-one-deny-rules-of-the-autopilot-settings-never-match) | Twenty-one deny rules of the autopilot settings never match | ci | Low | Blocked (superseded, ADR-0055) |
 | [0-211](#0-211-two-lists-of-secret-paths-and-nothing-keeps-them-equal) | Two lists of secret paths, and nothing keeps them equal | ci | Low | Blocked (superseded, ADR-0055) |
@@ -2632,73 +2631,6 @@ AC3. `docs/ai-factory.md`'s phase 3 says `--merge --auto`, with the reason (the 
 dispatcher starts and ends each call itself, so it records the trace (agent, stage, round, time, the commits a call
 added) without asking an agent, with #0-212's trailers. Stage 3's baseline is #0-205's, keyed by the run's `wf_<id>`,
 so the run id in `state.json` is not needed for it.
-
-### 0-205. A run's transcripts expire after 90 days and nothing reads them per agent
-
-**Type:** ci · **Priority:** Low · **Status:** In progress (migration stage 3, ADR-0055); Owner, 2026-11-03 (what each agent touched, for the audits).
-**Autopilot:** human-only · **Risk:** medium · **Complexity:** medium · **Depends on:** —
-**Touches:** factory (scripts/factory-admin/run-summary.sh, .github/scripts/test-run-summary.sh,
-.github/workflows/factory-guards.yml: owner-only), root (.ai/decisions/0055-the-factory-moves-to-three-zones.md,
-.ai/context/migration.md, BACKLOG.md), docs (docs/ai-factory.md)
-
-**Problem.** The only full record of what an agent read, edited and ran, and of what a hook refused it, is the
-session's transcripts (`~/.claude/projects/-workspace/<session>/subagents/workflows/wf_<id>/`, the agents' `.jsonl`
-files and the workflow's `journal.jsonl`) in the container's `~/.claude` volume. Claude Code deletes them after
-`cleanupPeriodDays` (90, `.claude/settings.json:77`), and a rebuilt volume loses them sooner. Nothing links a run to
-its directory: `audit-data.sh` passes the analysts the transcripts' root only ("may be unreadable"). A hook's refusal
-reaches only the refused agent (`_lib.sh` `block()`, exit 2), so how often an agent fights a guard is seen only by
-reading transcripts by hand: both #0-199 runs that died on `maxTurns` (2026-11-02, #0-206) were diagnosed that way.
-
-**Approach (to decide; proposed: derive from transcripts, no new recorder).** A factory script, run at
-the end of each run, copies the run's `wf_<id>` directory into an archive that the cleanup does not reach, and writes
-from it one summary per agent call: turns, tokens (the transcripts' `usage`), model, tools used, paths read and
-written, commands (shortened, no file contents) and every refusal with the hook that gave it. `audit-data.sh` includes
-the summaries. Rejected: a PostToolUse hook writing an action log during the run — it records again what the
-transcripts already hold, sits on every call of the run, and with `onFailure: "block"` a logger that fails would stop
-the run; its file would be as writable by the agents as the transcripts are. Reconsider only if the summaries show a
-gap. Claude Code's own OpenTelemetry export is out of scope: it needs a way out of the devcontainer's firewall (an ADR
-of its own).
-To weigh: the archive holds what the agents read (never committed; where it lives with #0-202's shared tree; whether a
-later run's agents may read it, a prompt-injection path the audit agents already treat as data); how the run finds
-its `wf_<id>` (#0-204); whether each `block()` message names its hook.
-
-**Decided (owner, 2026-11-17: ADR-0055 stage 3, as amended).** Derived from the transcripts, as proposed, by an
-owner-run script, `scripts/factory-admin/run-summary.sh <wf dir>`, not by the workflow: today's workflow is replaced in
-stage 4, whose dispatcher will run the script at the end of each task. It refuses a transcript shape it does not know,
-as `seed-scan.sh` does (ADR-0044 decision 6). A command is kept as its program and first subcommand only, so its
-arguments, where a token would be, never reach the summary. The archive is on the owner's Mac, outside the repository
-(`~/factory-archive/<wf_id>/`), copied off the build VM: transcripts leave the machine (ADR-0055), and what the agents
-read is never committed. The baseline is computed from stage 2's three runs, whose transcripts were checked on the VM
-on 2026-11-17 (`wf_207ec85e-4ad` 18 calls, `wf_5135023f-b7d` 24, `wf_e5a616a0-073` 22, each with `model` and
-`usage`), so the old path needs no more runs. Not in this item: `audit-data.sh` reading the summaries (the draft's
-AC3), with the dispatcher in stage 4, where a summary exists for every run; until then an analyst is given the
-archive's path. The archive holds raw transcripts, everything the agents read, text an attacker may have shaped among
-it: an agent given its path is judged by the rule of two (`factory.md` FAC-S01) before it is (review round 1, FAC-S05). Each `block()` message already names its hook (`BLOCKED by <hook>.sh`), which the summary reads.
-
-**Acceptance criteria.**
-AC1. `run-summary.sh` gives, per agent call, turns, tokens by kind, model, time, tools, paths read and written,
-     programs and every refusal with its hook, and the run's totals by type and model; `test-run-summary.sh` shows
-     each field on a fixture, a refused call included, and a refusal for each unknown shape.
-AC2. No summary holds a file's content, a token-shaped string, or a command's arguments beyond one lower-case word
-     after a program that takes a subcommand; the test shows a fixture with each left out, and the one word kept.
-AC3. `docs/ai-factory.md` says how a run's transcripts reach the archive and how it is summarised.
-AC4. The baseline of stage 2's three runs is recorded in this item (ADR-0055 stage 3's exit: numbers for 3 items).
-
-**Baseline (AC4, 2026-11-17; `run-summary.sh` on the copies in the owner's archive).** Tokens are output / cache
-read; wall is the run's first to last transcript line.
-
-| Run | Item | Calls | Turns | Wall | Output tok | Cache read tok | Calls by model (Haiku 4.5 / Sonnet 5.5 / Opus 5.5) | Refusals |
-|---|---|---|---|---|---|---|---|---|
-| `wf_5135023f-b7d` | #0-25 (full run) | 24 | 181 | 19 min | 117,862 | 12.3 M | 11 / 7 / 6 | `readonly-bash.sh` 5, a `dontAsk` denial 1 |
-| `wf_207ec85e-4ad` | #0-58 (resumed at the gate: no plan, no implementer) | 18 | 71 | 7 min | 31,309 | 1.4 M | 9 / 6 / 3 | `readonly-bash.sh` 3 |
-| `wf_e5a616a0-073` | #0-23 (full run, Complexity low) | 22 | 120 | 11 min | 60,453 | 4.3 M | 0 / 18 / 4 (factory-ops on Sonnet since #0-266) | `readonly-bash.sh` 4 |
-
-Each run also has the isolation probe's one refusal by `isolation-probe.sh`, by design (ADR-0058); no call ended
-unanswered. By phase, the implementer and the architect hold most of the cost: in #0-25 the implementation (3 calls,
-60 turns, 54,744 output tokens, 7.7 M cache read, its longest call 8.9 min) and the plan (25 turns, 21,051, 2.1 M)
-against a review of 9 calls (47 turns, 19,052, 1.3 M); in #0-23 the plan 25 turns and 14,552, the implementer 16
-turns and 15,796. Pick, preflight and acceptance are small in every run (under 10 turns and 4,000 output tokens a
-phase). The per-call summaries are in the archive (`~/factory-archive/<wf_id>.summary.json`), not in the repository.
 
 ### 0-208. Five route walks hold five copies of `isExempt`
 

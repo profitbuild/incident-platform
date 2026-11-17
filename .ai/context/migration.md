@@ -34,7 +34,7 @@ task container is stage 4). The Mac devcontainer stays the rollback.
 ### 3. Baseline metrics — CURRENT
 ADR-0055 (amended 2026-11-17): agent calls, times, tokens, model, tools, refusals per agent call, from the runs'
 transcripts, kept off the build VM; a seed pattern for a removed positive control.
-- carries: #0-205 (`scripts/factory-admin/run-summary.sh`, the archive on the Mac, the baseline of stage 2's three
+- carries: #0-205 (Done, PR #652: `scripts/factory-admin/run-summary.sh`, the archive on the Mac, the baseline of stage 2's three
   runs `wf_207ec85e-4ad`, `wf_5135023f-b7d`, `wf_e5a616a0-073`, no new runs of the old path). The baseline, the
   exit's "numbers for 3 items", is recorded in #0-205's "Baseline (AC4)".
 - gap: the seed pattern for PR #572's removed positive control (the next id after #0-218's P-25 and P-26), the owner's
