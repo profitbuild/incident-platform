@@ -87,7 +87,8 @@ Directories are created when they provide real value. Current structure:
 │   ├── architecture.md        ← shared, persistence, decided patterns (moved from CLAUDE.md)
 │   ├── security.md            ← tenant isolation and authentication (moved from CLAUDE.md)
 │   ├── infrastructure.md      ← CI rules and supply chain (moved from CLAUDE.md)
-│   └── migration.md           ← the factory's migration: ADR-0055's stages mapped to backlog items, and their gaps
+│   ├── migration.md           ← the factory's migration: ADR-0055's stages mapped to backlog items, and their gaps
+│   └── migration/             ← one file per stage: how a finished stage was done, the current stage's plan
 ├── decisions/                 ← ADRs: README.md is the index, _template.md the format
 ├── rules/                     ← HUMAN-OWNED criteria the agents are judged by
 │   ├── review/                ← one file per review dimension + _common.md

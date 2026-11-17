@@ -3,7 +3,8 @@
 - **Status:** Accepted (2026-11-13, by the owner, with the amendment of #0-237: the factory as a product of its own,
   stages T and N); amended by ADR-0056 (2026-11-14: the portable part of the VM is one provision script, not raw
   cloud-init user-data); amended 2026-11-17 by the owner (stage 3: the baseline from stage 2's transcripts, #0-205;
-  #0-204 moves to stage 4)
+  #0-204 moves to stage 4); amended by ADR-0060 (2026-11-17, stage 4's design: until stage 7 the dispatcher keeps its
+  tasks' state on the VM, until stage C the task image is built there, the per-call summary from `stream-json`)
 - **Backlog:** stage 0 of this migration (the freeze below); each later stage gets its own item when its turn comes
   (stage 1: #0-237)
 - **Date:** 2026-11-13

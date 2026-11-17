@@ -5,8 +5,13 @@ backlog item that belongs to a stage onto it, and names the work of each stage t
 still created one at a time, when their stage comes (ADR-0055, "an item is created for a stage when its turn comes"):
 a gap below is a reminder of what that item will have to cover, not an item.
 
-**Keep it true.** A PR that creates, freezes or closes an item of a stage, or ends a stage, updates this file in the
-same PR. A session working on the migration reads it first, then ADR-0055 and the items of the current stage.
+**One file per stage** under `.ai/context/migration/`: for a finished stage the record of how it was done
+([stage 1](migration/stage-1.md), [stage 2](migration/stage-2.md), [stage 3](migration/stage-3.md)), for the current
+one its plan, step by step ([stage 4](migration/stage-4.md)). An item is written from its stage's plan, and a stage's
+file is written before its first item.
+
+**Keep it true.** A PR that creates, freezes or closes an item of a stage, or ends a stage, updates this file and its
+stage's file in the same PR. A session working on the migration reads it first, then ADR-0055 and the items of the current stage.
 
 Legend: **carries** = the item does the stage's work; **superseded** = frozen as `Blocked`, the stage removes what it
 hardens; **before** = wanted done before the stage starts; **waits** = depends on the stage; **gap** = stage work with
@@ -43,24 +48,31 @@ transcripts, kept off the build VM; a seed pattern for a removed positive contro
   does not change before the baseline).
 
 ### 4. Dispatcher v0, in the new `factory` repository
+Decided in ADR-0060 (2026-11-17, Proposed until the owner accepts it): D1 the dispatcher runs each agent as its own
+`claude -p` in a task container and the gate itself; D2 Node built-ins; D3 builder-app, key for user `dispatcher`; D4
+Claude's API key behind a proxy; D5 public `factory`, loaded read-only as a plugin; D6 `.factory/adapter.json`; D7
+checks before a push outside the container; D8 started by hand. The plan, step by step: `migration/stage-4.md`.
+Items in order: 4.1 #0-267 (ADR accepted, `factory` repository and its baseline), then, each created when its turn comes, 4.2 builder-app, 4.3 the dispatcher's core
+(#0-261), 4.4 the control flow ported with its tests, 4.5 push, PR, trailers and trace (#0-212, #0-204), 4.6 the
+credential proxy and `stream-json` transcripts, 4.7 the adapter, the switch and the three runs of the exit.
 ADR-0055: the container has no token; push, PR and commit trailers by the dispatcher; builder-app (never on `factory`);
 the gate contract, incident-platform's adapter first. Exit: 3 PRs opened by it.
 - carries: #0-212 (`Factory-Run` / `Factory-Agent` trailers), #0-204 (the trace of each agent call and the commits it
   added, `--merge --auto`; moved from stage 3 on 2026-11-17), #0-261 (the dispatcher's written requirements: locks,
   state, retries, rate limits, the gate's pass summary).
 - superseded: #0-213, #0-217, #0-225 (the task container), #0-226, #0-228, #0-234, #0-236.
-- also: the dispatcher runs #0-205's `run-summary.sh` at the end of each task, and `audit-data.sh` reads the summaries
-  (#0-205's draft AC3, moved here).
+- also: a summary per agent call from the `stream-json` records (the successor of #0-205's `run-summary.sh`, ADR-0060
+  amending ADR-0055), and `audit-data.sh` reads the summaries (#0-205's draft AC3, moved here).
 - superseded on 2026-11-17: #0-251 (lock stale after 3 h: a `flock` per task, #0-261), #0-253 (a guard keeps the lock
   of a run it stopped), #0-254 (shipper keeps a draft's "(BLOCKED)" title: the dispatcher opens the PR). #0-258 (a
   factory change first run on a real item) names itself superseded by the dispatcher's own canary.
 - related: #0-256 (PR description opens with the problem; with #0-254, the template moves to `factory`), #0-239,
   #0-243 (the scripts move).
-- gap: the `factory` repository and its baseline; dispatcher v0 (claim, lease, containers, push, PR, statuses);
-  builder-app and where its private key lives and how it rotates; the gate contract and incident-platform's adapter;
-  how a product session loads the factory's agents and skills (a plugin is the first candidate); how Claude Code
-  authenticates unattended on the VM (API key or subscription token, within the terms); the ADRs it amends
-  (ADR-0052 and ADR-0034 for the bot, ADR-0053 for factory-ops).
+- decided by ADR-0060, built by 4.1 to 4.7 (no item yet past #0-267): the `factory` repository; dispatcher v0 (claim,
+  lease, containers, push, PR; no status the ruleset requires is set with builder-app's
+  credential, ADR-0055; v0 sets none); builder-app and its key; the gate contract and the adapter;
+  loading the factory as a read-only plugin; Claude's credential behind a proxy; the ADRs it amends (ADR-0055, ADR-0052,
+  ADR-0034, ADR-0050, ADR-0058; ADR-0053 superseded at the exit).
 
 ### 5. review-app and the review VM, shadow then required
 Exit: a `/seed-bugs` series on the new path catches at least what the old one did.
