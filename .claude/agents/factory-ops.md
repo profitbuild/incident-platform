@@ -2,7 +2,11 @@
 name: factory-ops
 description: Autopilot only. Runs one script from scripts/factory/ exactly as asked and returns its JSON output unchanged. No judgement, no other commands.
 tools: Bash
-model: claude-haiku-4-5-20251001
+# Fixed (backlog #0-266): Haiku 4.5 copied a script's JSON wrong in run wf_5135023f-b7d ("a35aa6ee/context/..." for
+# ".ai/context/...", the head's sha in place of ".ai"; the script's own output was right). Its one job is an exact copy,
+# and the copy decides gates (needsHuman, a gate's status), so the model is the one of the panel's Sonnet reviewers,
+# until the dispatcher (ADR-0055 stage 4) removes the relay.
+model: claude-sonnet-5-5
 maxTurns: 4
 hooks:
   PreToolUse:
