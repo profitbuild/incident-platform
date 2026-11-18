@@ -59,7 +59,8 @@ credential proxy and `stream-json` transcripts, 4.7 the adapter, the switch and 
 ADR-0055: the container has no token; push, PR and commit trailers by the dispatcher; builder-app (never on `factory`);
 the gate contract, incident-platform's adapter first. Exit: 3 PRs opened by it.
 - before 4.2, from 4.1's review: #0-268 (`factory`'s CI is a copy of incident-platform's, with no drift check and
-  without part of its controls; its secret scan decided before 4.2), #0-269 (the owner's denies in a session in `factory`).
+  without part of its controls; its secret scan decided before 4.2), #0-269 (`factory`'s code
+  written with an app of its own, `profitbuild-factory-dev`, not with the owner's admin token; ADR-0060 D5 amended).
 - carries: #0-212 (`Factory-Run` / `Factory-Agent` trailers), #0-204 (the trace of each agent call and the commits it
   added, `--merge --auto`; moved from stage 3 on 2026-11-17), #0-261 (the dispatcher's written requirements: locks,
   state, retries, rate limits, the gate's pass summary).

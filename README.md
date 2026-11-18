@@ -430,7 +430,13 @@ with `gh api repos/{owner}/{repo}/...` after changing anything in Settings).
   interactive Claude Code sessions, which use the owner's login, may not use the bypass
   nor change the ruleset (`.claude/settings.json` denies `gh pr merge --admin`, merges through the API, `gh api`
   on the rulesets, `gh repo edit`, `gh pr review` and `repository-settings.rb plan`/`apply`: the owner runs them, the merge with
-  `--match-head-commit` so a commit pushed after their reading cannot ride along, #0-131).
+  `--match-head-commit` so a commit pushed after their reading cannot ride along, #0-131), nor push a tag or write a
+  release (`--tags`, `--follow-tags`, `--mirror`, `refs/tags/`, the writing `gh release` commands and the alias `gh release new`, `gh api` on releases
+  and git refs, backlog #0-269). These denies match a command's text, not the program it runs: `bash -c`, `git -C <dir>
+  push`, a tag pushed by its bare name (`git push origin v1.2`, which reads as a branch) and tags a plain branch push
+  sends once git's configuration says so (`push.followTags`, `remote.<r>.mirror`, `remote.<r>.push`) pass them. A session
+  holding the owner's token is an admin no ruleset binds, so the code of `factory` is to be written with an app of its
+  own instead (`profitbuild-factory-dev`, ADR-0060 D5 as amended, #0-269).
   `delete_branch_on_merge` on, `allow_auto_merge` off (phase 3, after #0-116). Lint Workflows compares GitHub
   with the files on every PR and push (`repository-settings.rb check`, main's files for a PR that does not
   change them), so a setting changed in the UI turns CI red, and refuses a required check that no job of a
@@ -721,7 +727,9 @@ harmless while Claude Code gives them to no agent with Bash, unchecked if a vers
 ADR-0055 stages 2 and 4: no secret file in the task container; in the build VM the clone holds none of the owner's,
 ADR-0056, and the gitignored files a task itself creates there wait for stage 4); `factory`'s CI is a copy of this
 repository's with no drift check and without its secret scan, download and runtime checks (#0-268), a session in a
-`factory` clone has none of the owner's denies (#0-269), and its settings are checked by no `repository-settings`
+`factory` clone has none of the owner's denies until #0-269, every interactive session of the owner holds the owner's
+token, an admin's, which no ruleset binds, so there only the text-matching denies stand (#0-269 moves `factory`'s
+code to an app of its own, not those sessions), and its settings are checked by no `repository-settings`
 file until stage T; the organisation does not require two-factor authentication yet, while the owner's account is
 the one way to `main` and to the rulesets of both repositories (the owner turns it on on 2026-11-19, #0-267).
 Layers and their limits: docs/ai-factory.md, "What isolates what".
