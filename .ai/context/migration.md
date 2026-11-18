@@ -52,11 +52,14 @@ Decided in ADR-0060 (2026-11-17, Accepted by the owner on 2026-11-18): D1 the di
 `claude -p` in a task container and the gate itself; D2 Node built-ins; D3 builder-app, key for user `dispatcher`; D4
 Claude's API key behind a proxy; D5 public `factory`, loaded read-only as a plugin; D6 `.factory/adapter.json`; D7
 checks before a push outside the container; D8 started by hand. The plan, step by step: `migration/stage-4.md`.
-Items in order: 4.1 #0-267 (ADR accepted, `factory` repository and its baseline), then, each created when its turn comes, 4.2 builder-app, 4.3 the dispatcher's core
+Items in order: 4.1 #0-267 (done 2026-11-18: ADR-0060 accepted, `profitbuild/factory` and its baseline, PR #655 and
+`factory` PR #1), then, each created when its turn comes, 4.2 builder-app, 4.3 the dispatcher's core
 (#0-261), 4.4 the control flow ported with its tests, 4.5 push, PR, trailers and trace (#0-212, #0-204), 4.6 the
 credential proxy and `stream-json` transcripts, 4.7 the adapter, the switch and the three runs of the exit.
 ADR-0055: the container has no token; push, PR and commit trailers by the dispatcher; builder-app (never on `factory`);
 the gate contract, incident-platform's adapter first. Exit: 3 PRs opened by it.
+- before 4.2, from 4.1's review: #0-268 (`factory`'s CI is a copy of incident-platform's, with no drift check and
+  without part of its controls; its secret scan decided before 4.2), #0-269 (the owner's denies in a session in `factory`).
 - carries: #0-212 (`Factory-Run` / `Factory-Agent` trailers), #0-204 (the trace of each agent call and the commits it
   added, `--merge --auto`; moved from stage 3 on 2026-11-17), #0-261 (the dispatcher's written requirements: locks,
   state, retries, rate limits, the gate's pass summary).
@@ -68,7 +71,8 @@ the gate contract, incident-platform's adapter first. Exit: 3 PRs opened by it.
   factory change first run on a real item) names itself superseded by the dispatcher's own canary.
 - related: #0-256 (PR description opens with the problem; with #0-254, the template moves to `factory`), #0-239,
   #0-243 (the scripts move).
-- decided by ADR-0060, built by 4.1 to 4.7 (no item yet past #0-267): the `factory` repository; dispatcher v0 (claim,
+- decided by ADR-0060, built by 4.1 to 4.7 (4.1 done by #0-267; no item yet past it, apart from its #0-268 and
+  #0-269): the `factory` repository (`profitbuild/factory`, 4.1); dispatcher v0 (claim,
   lease, containers, push, PR; no status the ruleset requires is set with builder-app's
   credential, ADR-0055; v0 sets none); builder-app and its key; the gate contract and the adapter;
   loading the factory as a read-only plugin; Claude's credential behind a proxy; the ADRs it amends (ADR-0055, ADR-0052,

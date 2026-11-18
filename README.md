@@ -685,6 +685,16 @@ security boundary, so every rule that matters is also enforced outside the model
   it is in place before `factory`'s session starts, which requires it, and fails closed. Root writes nothing under
   `factory`'s home (a link planted there would turn a root write into root for `factory`). `create.sh` checks all of it
   on every VM it makes, and it and Factory guards refuse a VM copy of the devcontainer's allow-list that differs from it either way.
+- **The factory's own repository, `profitbuild/factory`** (backlog #0-267, ADR-0060 D5): public, changed only by the
+  owner's pull requests. Its ruleset `main` requires a pull request, the code owner's review and its two CI checks
+  (`Test`, `Lint Workflows`, bound to GitHub Actions) and refuses force pushes and deletion; its ruleset `tags` has
+  no bypass and refuses moving or deleting any tag, since a product loads the factory at a pinned tag. Secret
+  scanning and push protection, private vulnerability reporting, immutable releases; Actions limited to GitHub's own,
+  pinned by SHA, with a read-only token; no bot and no GitHub App on it (builder-app is never installed there).
+  With one code owner, who cannot approve their own pull request, every merge is the owner's bypass (the admin role,
+  through a pull request), which skips the review and the required checks: the owner merges only once
+  `gh pr checks` is green. Set by the owner with `gh api` and read back on 2026-11-18; no `repository-settings`
+  files yet (stage T).
 
 **Known gaps**: a bypass actor or an admin added in the UI is seen only when the owner runs
 `repository-settings.rb check` (#0-113, ADR-0034), and so is a secret added in the UI (ADR-0035); a scan that
@@ -709,7 +719,11 @@ hook of the owner's session refuses `--output`, `--ext-diff`, `--textconv` (#0-1
 the autopilot's settings allow the Grep and Glob tools, which no secret deny rule (`Read(…)` only) or hook names:
 harmless while Claude Code gives them to no agent with Bash, unchecked if a version does (#0-225, frozen until
 ADR-0055 stages 2 and 4: no secret file in the task container; in the build VM the clone holds none of the owner's,
-ADR-0056, and the gitignored files a task itself creates there wait for stage 4).
+ADR-0056, and the gitignored files a task itself creates there wait for stage 4); `factory`'s CI is a copy of this
+repository's with no drift check and without its secret scan, download and runtime checks (#0-268), a session in a
+`factory` clone has none of the owner's denies (#0-269), and its settings are checked by no `repository-settings`
+file until stage T; the organisation does not require two-factor authentication yet, while the owner's account is
+the one way to `main` and to the rulesets of both repositories (the owner turns it on on 2026-11-19, #0-267).
 Layers and their limits: docs/ai-factory.md, "What isolates what".
 
 ### Container images
