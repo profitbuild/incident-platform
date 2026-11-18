@@ -3,7 +3,7 @@
 The decisions are ADR-0060 (D1–D8); this file is how each step carries them out, so an item is written from its
 section, not from memory. **A living plan:** an item that settles an open question or changes a step updates its
 section in the same PR, as it updates `.ai/context/migration.md`. Items are created one at a time, as their turn comes;
-only 4.1 exists (#0-267).
+4.1 (#0-267) is done, and its review left #0-268 and #0-269, both before 4.2.
 
 Exit (ADR-0055): 3 PRs opened by the dispatcher. Rollback: today's `/backlog-autopilot` in the devcontainer, kept
 working until stage 5's exit. Rule of the migration: one factory change at a time, then application items.
@@ -36,8 +36,19 @@ state recorded → container removed.
   (`ACTIONLINT_VERSION`, `SHELLCHECK_VERSION`, `ZIZMOR_VERSION` in its `ci.yml`), installed the way
   `install-pinned-tool.sh` does (a copy until stage T makes the template).
 - **Shows it:** #0-267 AC1–AC4.
-- **Open:** the licence; whether `factory` gets its own `repository-settings` files now or at stage T (proposal: stage
-  T; until then the owner's `gh api` read of the ruleset is AC2's evidence).
+- **Done (2026-11-18, #0-267):** ADR-0060 Accepted (PR #655); `profitbuild/factory` created by the owner with `gh api`
+  alone, each setting read back. Beyond the list above: a ruleset on every tag (no update, no deletion, no bypass),
+  since a product loads the factory at a pinned tag; the required checks `Test` and `Lint Workflows` bound to GitHub
+  Actions (`integration_id` 15368), added after their first run; merge commits only; no issues, wiki or projects;
+  Dependabot alerts, private vulnerability reporting, immutable releases; Actions limited to GitHub's own; fork runs
+  wait for approval; a direct push to `main` refused (the ruleset's positive control). The skeleton also holds
+  `.github/actions/setup-node` and `.github/zizmor.yml` (copies, as `install-pinned-tool.sh`) and `LICENSE`
+  (Apache-2.0). Factory PR #1; AC3's failing half by the draft PR #2, closed unmerged.
+- **Settled:** the licence, Apache-2.0 (the owner, 2026-11-18); `repository-settings` files for `factory` at stage T,
+  the owner's `gh api` read of 2026-11-18 being AC2's evidence until then.
+- **Left by its review, before 4.2:** #0-268 (`factory`'s CI is a copy with no drift check and without part of
+  incident-platform's controls; the secret scan decided before 4.2), #0-269 (a session in the `factory` clone has
+  none of the owner's denies). Moved to 4.2: the check that builder-app is not installed on `factory`.
 
 ## 4.2 builder-app
 
@@ -63,6 +74,8 @@ state recorded → container removed.
 - **Tests:** a JWT verified against a key pair generated in the test; the token request against a fake server
   (`node:http`); a test that the token is absent from argv, from the environment of every child but git's, and from
   the state directory.
+- **Shows it also:** `gh api repos/profitbuild/factory/installation` with the app's JWT answers 404: the app is not on
+  `factory` (moved from #0-267's AC2, which could not check an app that did not exist yet).
 - **Open:** rotation cadence (proposal: a new key each quarter, the old deleted after the switch); where the stage-C
   secret store is.
 
@@ -172,7 +185,7 @@ state recorded → container removed.
 
 ## Owner's steps, in order
 
-1. ADR-0060 Accepted; `profitbuild/factory` created with its baseline (4.1).
+1. ADR-0060 Accepted; `profitbuild/factory` created with its baseline (4.1). Done 2026-11-18.
 2. builder-app created and installed on incident-platform; its key on the VM (4.2).
 3. A Console workspace with a spend limit and its key on the VM (4.6).
 4. Merging each item's PRs; the three exit runs started by hand (4.7).
@@ -181,8 +194,8 @@ state recorded → container removed.
 
 | Step | Question | Proposal |
 |---|---|---|
-| 4.1 | Licence of `factory` | the owner's choice |
-| 4.1 | `repository-settings` files for `factory` now or at stage T | stage T |
+| 4.1 | Licence of `factory` | settled 2026-11-18: Apache-2.0 |
+| 4.1 | `repository-settings` files for `factory` now or at stage T | settled 2026-11-18: stage T |
 | 4.2 | Key rotation cadence | quarterly |
 | 4.3 | `next-item.sh`'s `gh pr list` without a token | the dispatcher passes the open PRs as a file |
 | 4.3 | Shared `~/.m2` cache | accept in v0 |
