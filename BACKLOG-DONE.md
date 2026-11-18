@@ -155,6 +155,7 @@ resolvable.
 | 0-238 | Migration stage 2 (ADR-0055, ADR-0056): the build VM is a Lima instance created and deleted by scripts under `scripts/factory-admin/build-vm/`, with a clone of its own and today's devcontainer inside; three autopilot items ran there with no environment problem (runs wf_207ec85e-4ad, wf_5135023f-b7d, wf_e5a616a0-073); details in [the section](#0-238-migration-stage-2-a-build-vm-provisioned-as-code-runs-todays-devcontainer) | PRs #628, #629, #650 |
 | 0-266 | factory-ops runs on `claude-sonnet-5-5` instead of Haiku 4.5, which garbled the scripts' answers it relayed; in run 3, 10 of 11 answers equal the script's output, the gate's `summary` shortened; details in [the section](#0-266-factory-ops-a-small-model-garbles-the-scripts-answers-it-relays) | PR #648 |
 | 0-205 | Migration stage 3 (ADR-0055, amended): `scripts/factory-admin/run-summary.sh` summarises a run from its transcripts per agent call (turns, tokens, model, time, tools, paths, programs, refusals with their hook), with no file content, command arguments beyond one word, or token; transcripts archived off the build VM on the owner's Mac; the baseline of stage 2's three runs recorded; details in [the section](#0-205-a-runs-transcripts-expire-after-90-days-and-nothing-reads-them-per-agent) | PR #652 |
+| 0-267 | Migration stage 4.1 (ADR-0055, ADR-0060 Accepted): `profitbuild/factory`, public, with its baseline (rulesets on `main` and on every tag, required checks bound to GitHub Actions, secret scanning, Actions limited to GitHub's own) and the dispatcher's skeleton with its CI, Apache-2.0; details in [the section](#0-267-migration-stage-4-starts-without-the-factory-repository-and-its-decisions) | PR #656 |
 
 Items completed before `BACKLOG.md` existed are not listed.
 
@@ -3784,3 +3785,50 @@ unanswered. By phase, the implementer and the architect hold most of the cost: i
 against a review of 9 calls (47 turns, 19,052, 1.3 M); in #0-23 the plan 25 turns and 14,552, the implementer 16
 turns and 15,796. Pick, preflight and acceptance are small in every run (under 10 turns and 4,000 output tokens a
 phase). The per-call summaries are in the archive (`~/factory-archive/<wf_id>.summary.json`), not in the repository.
+
+### 0-267. Migration stage 4 starts without the `factory` repository and its decisions
+
+**Type:** ci · **Priority:** High · **Status:** Done, PR #656 (2026-11-18; migration stage 4.1, ADR-0055, ADR-0060; `factory` PR #1). Owner, 2026-11-17.
+**Autopilot:** human-only · **Risk:** high · **Complexity:** medium · **Depends on:** ADR-0055 stage 3 (done, #652,
+#653)
+**Touches:** root (.ai/decisions/0060-a-dispatcher-runs-each-agent-in-a-task-container.md, .ai/context/migration.md,
+.ai/context/migration/stage-4.md, BACKLOG.md, README.md), the new repository `profitbuild/factory` (its README,
+CODEOWNERS, LICENSE, rulesets, settings, CI, the dispatcher's skeleton)
+
+**Problem.** Stage 4's dispatcher (ADR-0060) lives in a repository of its own, `factory`, which does not exist, and its
+decisions (D1–D8) are Proposed. Every later item of the stage (4.2 builder-app, 4.3 the dispatcher's core, 4.4 the
+ported control flow, 4.5 push, PR, trailers and trace, 4.6 the credential proxy and `stream-json`, 4.7 the adapter and
+the three runs of the exit, `.ai/context/migration.md`) needs both. `factory` is the organisation's most protected
+repository (ADR-0055): builder-app is never installed on it, so only the owner's pull requests change it.
+
+**Work** (the plan's step 4.1, `.ai/context/migration/stage-4.md`). The owner sets ADR-0060 to Accepted. The owner creates `profitbuild/factory`, public, and gives it the
+baseline incident-platform has, scaled to an empty repository: `main` changed only by pull request, with the owner's
+review (CODEOWNERS `* @lukaszplawiak`), required checks, no force push or deletion, secret scanning and push protection,
+Actions pinned by SHA with a read-only default token. Its CI runs, on the Node of `.node-version`, `node --test` and the
+workflow linters at incident-platform's pins (actionlint, shellcheck, zizmor), on a skeleton (README, `.node-version`,
+one test). Stage T turns this into the template; it is set by hand here.
+
+**Acceptance criteria.**
+AC1. ADR-0060 is Accepted.
+AC2. `profitbuild/factory` exists, public; `gh api repos/profitbuild/factory/rulesets` shows a ruleset on `main`
+     requiring a pull request, the code owner's review and the CI check, and blocking force pushes and deletion.
+     (Its last clause, `gh api repos/profitbuild/factory/installation` as builder-app answering 404, moved to 4.2 on
+     2026-11-18: no app existed to ask; `stage-4.md` 4.2 "Shows it also".)
+AC3. The CI of `factory` passes on its skeleton and fails on a planted shellcheck finding and on a failing test.
+AC4. `.ai/context/migration.md` stage 4 names the repository and this item as done.
+
+**Result (owner, 2026-11-18).** AC1: ADR-0060 Accepted (PR #655). AC2: the owner created `profitbuild/factory`
+with `gh api` alone and read each setting back. The ruleset `main` (id 27568099) requires a pull request, the code
+owner's review with `require_last_push_approval`, and the checks `Test` and `Lint Workflows` bound to GitHub Actions
+(`integration_id` 15368, added once their first run had registered them); it refuses force pushes and deletion, and
+its one bypass is the admin role, through a pull request; a direct push to `main` was refused (GH013), the
+ruleset's positive control. Beyond the AC: the ruleset `tags` (id 27568100, `~ALL`, no update, no deletion, no
+bypass), since a product loads the factory at a pinned tag; secret scanning and push protection, Dependabot alerts,
+private vulnerability reporting, immutable releases; Actions limited to GitHub's own and pinned by SHA, a read-only
+token, no PR approvals by workflows, fork runs waiting for approval; no issues, wiki or projects; merge commits
+only; the owner the one collaborator, no deploy key, no webhook. The organisation: base permission none, members
+cannot create repositories. AC3: `factory` PR #1 (merged, 598cacea) green on Node 24.22.1 (2 tests); the draft PR #2,
+closed unmerged, failed in run 44363735176 on both planted defects: `Lint Workflows` on SC2086 in a planted script,
+`Test` on a changed assertion. AC4: the migration map and `stage-4.md` 4.1 record it. Licence: Apache-2.0. Left by
+the review of `factory` PR #1: #0-268, #0-269. Left for the owner: the organisation does not require two-factor
+authentication yet; the owner turns it on, own account and the bot's first, on 2026-11-19.
