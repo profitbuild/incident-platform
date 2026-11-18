@@ -1,6 +1,7 @@
 # ADR-0060: A dispatcher on the build VM runs each agent of a task in a container that holds no credential
 
-- **Status:** Proposed (the owner chose D1–D8 below on 2026-11-17, in an interactive session; Accepted is the owner's)
+- **Status:** Accepted (2026-11-18, by the owner; D1–D8 below chosen by the owner on 2026-11-17, in an
+  interactive session)
 - **Backlog:** #0-267 (stage 4.1); stage 4's later items are created as their turn comes, each from its step of the
   plan `.ai/context/migration/stage-4.md`
 - **Date:** 2026-11-17
