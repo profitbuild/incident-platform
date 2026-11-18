@@ -48,7 +48,7 @@ transcripts, kept off the build VM; a seed pattern for a removed positive contro
   does not change before the baseline).
 
 ### 4. Dispatcher v0, in the new `factory` repository
-Decided in ADR-0060 (2026-11-17, Proposed until the owner accepts it): D1 the dispatcher runs each agent as its own
+Decided in ADR-0060 (2026-11-17, Accepted by the owner on 2026-11-18): D1 the dispatcher runs each agent as its own
 `claude -p` in a task container and the gate itself; D2 Node built-ins; D3 builder-app, key for user `dispatcher`; D4
 Claude's API key behind a proxy; D5 public `factory`, loaded read-only as a plugin; D6 `.factory/adapter.json`; D7
 checks before a push outside the container; D8 started by hand. The plan, step by step: `migration/stage-4.md`.

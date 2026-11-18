@@ -3767,7 +3767,8 @@ AC2. On three resumed tasks the disposition agrees with the owner's.
 
 ### 0-267. Migration stage 4 starts without the `factory` repository and its decisions
 
-**Type:** ci · **Priority:** High · **Status:** Open (migration stage 4.1, ADR-0055, ADR-0060). Owner, 2026-11-17.
+**Type:** ci · **Priority:** High · **Status:** Open (migration stage 4.1, ADR-0055, ADR-0060; AC1 met
+2026-11-18). Owner, 2026-11-17.
 **Autopilot:** human-only · **Risk:** high · **Complexity:** medium · **Depends on:** ADR-0055 stage 3 (done, #652,
 #653)
 **Touches:** root (.ai/decisions/0060-a-dispatcher-runs-each-agent-in-a-task-container.md, .ai/context/migration.md,
