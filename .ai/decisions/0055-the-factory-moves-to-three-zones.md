@@ -4,7 +4,9 @@
   stages T and N); amended by ADR-0056 (2026-11-14: the portable part of the VM is one provision script, not raw
   cloud-init user-data); amended 2026-11-17 by the owner (stage 3: the baseline from stage 2's transcripts, #0-205;
   #0-204 moves to stage 4); amended by ADR-0060 (2026-11-17, stage 4's design: until stage 7 the dispatcher keeps its
-  tasks' state on the VM, until stage C the task image is built there, the per-call summary from `stream-json`)
+  tasks' state on the VM, until stage C the task image is built there, the per-call summary from `stream-json`);
+  its identities are to gain `profitbuild-factory-dev`, an app on `factory` alone that writes the factory's code and
+  is no builder (ADR-0060 D5 as amended by #0-269, 2026-11-18)
 - **Backlog:** stage 0 of this migration (the freeze below); each later stage gets its own item when its turn comes
   (stage 1: #0-237)
 - **Date:** 2026-11-13

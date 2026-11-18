@@ -47,8 +47,9 @@ state recorded → container removed.
 - **Settled:** the licence, Apache-2.0 (the owner, 2026-11-18); `repository-settings` files for `factory` at stage T,
   the owner's `gh api` read of 2026-11-18 being AC2's evidence until then.
 - **Left by its review, before 4.2:** #0-268 (`factory`'s CI is a copy with no drift check and without part of
-  incident-platform's controls; the secret scan decided before 4.2), #0-269 (a session in the `factory` clone has
-  none of the owner's denies). Moved to 4.2: the check that builder-app is not installed on `factory`.
+  incident-platform's controls; the secret scan decided before 4.2), #0-269 (a session holding the owner's token
+  is an admin no ruleset binds: `factory`'s code is to be written with an app of its own, `profitbuild-factory-dev`, ADR-0060
+  D5 as amended). Moved to 4.2: the check that builder-app is not installed on `factory`.
 
 ## 4.2 builder-app
 

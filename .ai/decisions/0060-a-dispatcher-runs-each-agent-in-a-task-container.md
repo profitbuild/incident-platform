@@ -1,7 +1,7 @@
 # ADR-0060: A dispatcher on the build VM runs each agent of a task in a container that holds no credential
 
 - **Status:** Accepted (2026-11-18, by the owner; D1–D8 below chosen by the owner on 2026-11-17, in an
-  interactive session)
+  interactive session); D5 amended on 2026-11-18 by backlog #0-269 (`factory`'s code is to be written with an app of its own)
 - **Backlog:** #0-267 (stage 4.1); stage 4's later items are created as their turn comes, each from its step of the
   plan `.ai/context/migration/stage-4.md`
 - **Date:** 2026-11-17
@@ -53,6 +53,28 @@ and `--plugin-dir` (code.claude.com/docs/en/headless.md, cli-reference.md).
   stage 5. A task loads the factory through a read-only mount of a `factory` checkout at the pinned tag, passed as
   `--plugin-dir`; a run whose `stream-json` init event lists a `plugin_errors` entry stops. The task image built in CI
   (GHCR) is stage C's.
+  **Amended (2026-11-18, #0-269, the owner): who writes `factory`'s code.** The rulesets bind everyone but an admin,
+  and a session that holds the owner's token is an admin: there only the session's deny rules, which match command
+  text, keep it from a merge, a ruleset or a tag. So the code of `factory` (4.2 onwards) is to be written by a session that
+  holds neither the owner's token nor a builder's, but the token of a GitHub App of its own, `profitbuild-factory-dev`:
+  installed on `factory` alone, with Contents and Pull requests read and write and Metadata read, nothing else (no
+  Workflows, no Administration, no Checks, no Statuses), its key where neither the autopilot's devcontainer nor the
+  build VM's task code reaches it. The app is no bypass actor, so the rulesets bind it: GitHub refuses it a push to
+  `main`, a review that counts, a merge of a pull request the owner has not approved since its last push (`main`'s
+  ruleset: the code owner's review, `require_last_push_approval`, `dismiss_stale_reviews_on_push`; a PR the owner
+  approved it may merge, its code read), a change to `.github/workflows/` (no Workflows permission) and, through a
+  ruleset of its own that restricts tag creation to the admin role, a tag; the ruleset `tags` keeps no bypass.
+  Contents write still lets it publish a release, and its assets, on a tag that exists: harmless while a product
+  loads the git checkout at its tag, not a release's assets. A branch the app pushes is a pull request of the same
+  repository, whose CI runs with the repository's Actions secrets and needs no approval; the missing Workflows
+  permission guards `.github/workflows/`, not the scripts they run. So `factory` holds no Actions secret a
+  `pull_request` run can read: a secret its CI needs lives in an environment limited to `main`, as `scans` does in
+  incident-platform. Merging, tagging and every setting stay the
+  owner's. ADR-0055 holds as decided: no builder credential (neither the bot's token nor builder-app) is on `factory`,
+  so no agent that builds a product can propose a change to the factory's own rules. Text and plans are still
+  prepared in the owner's sessions on the Mac, under the denies of their project's settings, and `factory` carries a
+  copy of those denies for a session started in its clone. Where that key lives and how its session starts are
+  #0-269's.
 - **D6. The product's adapter is `.factory/adapter.json`**: repository, gate command, changed-paths command, queue
   source (`BACKLOG.md` until stage 7), protected-paths file, `trustedPaths` (the product's scripts the dispatcher runs
   from `main` and a task branch may not change; for incident-platform `scripts/factory/`), task image, profile,
@@ -95,6 +117,9 @@ and `--plugin-dir` (code.claude.com/docs/en/headless.md, cli-reference.md).
 - ADR-0052 (`FACTORY_BOT_LOGIN`) and ADR-0034 (the ruleset's actors and bypass) are amended when builder-app lands
   (stage 4.2); ADR-0050 (the agents' command lists: no git writing commands once the dispatcher commits, 4.4) and
   ADR-0058 (the isolation probe's successor, 4.4) are amended by 4.4; ADR-0053 is superseded at stage 4's exit.
+- `factory` is to have one non-admin writer, `profitbuild-factory-dev` (D5 as amended by #0-269): a new credential, a
+  private key whose tokens last an hour and reach `factory` alone; its PRs wait for the owner's review like the bot's on
+  incident-platform. The bot's token still reaches incident-platform only.
 - Where it lives: ADR-0060 stays in incident-platform with ADR-0050 to ADR-0059 (written before `factory` existed);
   the ADRs stage 4's items write about the factory go to `factory`.
 - The PR body's audit fields and the gate's JSON are contracts: a change to either changes `audit-data.sh` or every
