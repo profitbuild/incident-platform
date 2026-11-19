@@ -168,7 +168,6 @@ Code, Javadoc, config comments and commits reference items as `backlog #N`.
 | [0-263](#0-263-nothing-runs-a-bug-fixs-test-on-the-code-before-the-fix) | Nothing runs a bug fix's test on the code before the fix | ci | Medium | Open |
 | [0-264](#0-264-a-green-pr-is-merged-on-a-base-that-moved-under-it) | A green PR is merged on a base that moved under it | ci | Medium | Open |
 | [0-265](#0-265-a-task-back-after-a-pause-is-resumed-without-asking-whether-it-still-makes-sense) | A task back after a pause is resumed without asking whether it still makes sense | ci | Low | Open |
-| [0-271](#0-271-builder-apps-token-is-minted-by-code-that-checks-its-scope-step-42a) | builder-app's token is minted by code that checks its scope (step 4.2a) | ci | High | Open |
 | [0-272](#0-272-builder-app-exists-its-key-is-the-vms-and-it-can-write-only-its-own-branches-step-42b) | builder-app exists, its key is the VM's, and it can write only its own branches (step 4.2b) | ci | High | Open |
 | [0-273](#0-273-dev-tokenmjs-keeps-its-own-copy-of-the-token-checks) | `dev-token.mjs` keeps its own copy of the token checks | ci | Low | Open |
 | [0-133](#0-133-incidentresolvedevent-carries-no-openedat) | `IncidentResolvedEvent` carries no `openedAt` | tech-debt | Low | Open |
@@ -3766,83 +3765,6 @@ Thresholds to decide.
 
 AC1. The dispatcher runs the agent in the three cases and acts on MODERNIZE and REWORK; CLOSE reaches the owner.
 AC2. On three resumed tasks the disposition agrees with the owner's.
-
-### 0-271. builder-app's token is minted by code that checks its scope (step 4.2a)
-
-**Type:** ci · **Priority:** High · **Status:** Open (migration stage 4, step 4.2a; ADR-0055, ADR-0060 D3). Split from
-4.2 by the owner on 2026-11-19 (the analysis of 4.2: the code first, tested with a key made in the test, before the
-real key exists, #0-272).
-**Autopilot:** human-only · **Risk:** high · **Complexity:** medium · **Depends on:** #0-270
-**Touches:** the repository `profitbuild/factory` (`dispatcher/src/github/`, `dispatcher/src/git/`, the dispatcher's
-command line, `dispatcher/test/`, its README; a draft pull request from its container, `/review factory#<n>`), root
-(.ai/context/migration/stage-4.md "4.2", .ai/context/migration.md, on closing)
-
-**Problem.** builder-app's private key will be the first secret that writes to incident-platform with no one at the
-keyboard: whoever holds it mints a new hour's token at will. Nothing in `factory` mints one yet. `app-token.mjs` (#0-269)
-has the JWT, the token request, the repository list and the revoke, and `dev-token.mjs` the checks a token must pass
-before it is used (the key's mode, the installation's exact permissions, exactly one repository), but as a tool of the
-Mac's host for the dev app, writing a file; the dispatcher (4.3) needs them as a library, in memory, for builder-app.
-
-**Work.** In `factory`, written in its container with the dev app's token:
-- a module that reads the key and refuses one readable by others, then mints builder-app's token, and before it is
-  used checks:
-  - the installation holds exactly Contents write, Pull requests write and Metadata read (Issues waits for 4.5, which
-    sets the first label);
-  - the token reaches exactly `profitbuild/incident-platform` and is narrowed to it;
-  - the token holds the same three permissions.
-
-  It keeps the token in memory until 5 minutes before it expires, never on disk. The app's id and its installation's
-  id come from the dispatcher's env file, not from `src/`;
-- `git push` gets the token through `GIT_ASKPASS`: a script that prints a variable of the git process's own
-  environment, so the token is in no URL, argv, file or other child's environment. Why the devcontainer keeps a
-  credential helper that reads a file is written down: there the token crosses from the host into a container, and a
-  mounted file is what crosses; here git is the dispatcher's own child;
-- a command `check-app`. It mints a token, runs every check above, asks GitHub with the app's JWT for its installation
-  on `profitbuild/factory` and expects 404 (the app is never on `factory`, ADR-0060 D5), then revokes the token. It
-  prints no token.
-
-**Acceptance criteria.**
-AC1. The module refuses, with no token returned or written:
-     - a key readable by others;
-     - an installation holding any permission other than the three;
-     - a token reaching any repository but incident-platform;
-     - a token whose permissions differ.
-
-     Each refusal is a test, and a mutation of each check is caught.
-AC2. A token is reused from memory until 5 minutes before it expires, then minted again; no token is ever on disk, in
-     argv, or in the environment of a child other than git (tests).
-AC3. `check-app` against a fake GitHub passes, and fails when the installation on `factory` answers anything but 404.
-AC4. The code holds no app id, installation id or bot id; `dev-token.mjs` and its app are unchanged.
-AC5. `stage-4.md` "4.2" describes what was built.
-
-**Result (owner, 2026-11-19).** `factory` PR #9, merged (cdae18c5), after three review rounds of
-`/review factory#9`.
-- **The rounds:**
-  - round 1, 127: architecture's blocking arc-5e0f, a second configuration mechanism against ADR-0055's "environment
-    only". The owner chose `process.env`, loaded by `node --env-file`;
-  - round 2, 127: all three approved;
-  - round 3, 2: security approved.
-- **What it holds:** `stage-4.md` "4.2a" (AC5) lists what was built: the settings, the key's checks, the token's
-  checks and cache, the hardened push, `check-app`, and 86 tests with 48 of 50 mutations caught. AC1 to AC4 hold as
-  written there; `dev-token.mjs` is unchanged (AC4).
-- **Facts tried in the owner's session, not only stated:**
-  - on git 2.54, a repository's `url.<ssh>.insteadOf` with `core.sshCommand` received the token from the
-    environment, and `GIT_ALLOW_PROTOCOL=https` stopped it (`transport 'ssh' not allowed`), even with
-    `protocol.ssh.allow=always`;
-  - `GIT_ASKPASS` wins over `core.askPass`;
-  - `-c credential.helper=` also clears a URL-scoped helper of the repository;
-  - `GIT_CONFIG_GLOBAL=/dev/null` skips the XDG config;
-  - Node's `--env-file` applies `NODE_OPTIONS` from the file (an injected `--require` ran before the main module),
-    and a variable already set in the environment wins over the file.
-- **Not done here:**
-  - left to #0-272 (AC7, AC8): the env file's modes on the VM, and one source for the permission list;
-  - left to 4.3 (`stage-4.md` "4.3", carried from this review): a trusted clone, refspecs, the product from the
-    adapter, and allowlisted children;
-  - left to #0-273: moving `dev-token.mjs` onto `checked-token.mjs`;
-  - left to a real app (#0-272's AC1): GitHub's 404 for `factory`, the narrowed token's one repository, and
-    `metadata: read`.
-- **Kept:** commit `b5569e9` of `factory` is red on its own: a staged rename went in without its imports, and the next
-  commit fixes it. The owner kept it rather than force-push, and it is recorded in the PR.
 
 ### 0-272. builder-app exists, its key is the VM's, and it can write only its own branches (step 4.2b)
 
