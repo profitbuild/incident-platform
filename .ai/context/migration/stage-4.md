@@ -73,29 +73,48 @@ Split by the owner on 2026-11-19, after an analysis of the step. The cut follows
 What the old single step also held moves to 4.5, where it describes real behaviour: ADR-0052 and ADR-0034 amended,
 `audit-data.sh` reading `app/profitbuild-builder`, and the Issues permission (labels).
 
-### 4.2a The code (#0-271, in `factory`)
+### 4.2a The code (#0-271, in `factory`) — done 2026-11-19, `factory` PR #9 (merge cdae18c5)
 
-- **Code** (`dispatcher/src/github/`, grown from `app-token.mjs`, #0-269). It reads the key and refuses one readable by
-  others. A JWT (`iat` = now − 60 s, `exp` = now + 9 min, `iss` = app id), signed RS256 with `node:crypto`, buys the
-  token from `POST /app/installations/{id}/access_tokens`, narrowed to incident-platform and the three permissions.
-  Before the token is used it checks what `dev-token.mjs` checks for the dev app:
-  - the installation's exact permissions;
-  - exactly one repository;
-  - the token's own permissions.
-
-  It is cached in memory until 5 minutes before expiry and never written to disk. The app's id and its installation's
-  id come from `/home/dispatcher/.config/factory/env`; no identity sits in `src/`.
-- **git: `GIT_ASKPASS`**, a script printing a variable of the git process's own environment: the token is in no URL,
-  argv, file or other child's environment. Two mechanisms exist on purpose. The devcontainer's credential helper reads
-  a file because there the token crosses from the Mac's host into a container, and only a mounted file crosses; here
-  git is the dispatcher's own child, so nothing needs to cross.
-- **`check-app`:** mints, runs the checks, expects 404 from `GET /repos/profitbuild/factory/installation` with the
-  app's JWT (the app is never on `factory`, moved here from #0-267's AC2), revokes. It prints no token.
-- **Tests:** a JWT verified against a key pair made in the test; the requests against `testing/fake-github.mjs`; the
-  token absent from argv, from the environment of every child but git's, and from the state directory; each refusal
-  mutated.
-- `dev-token.mjs` stays a tool of the Mac's host, unchanged; whether it ships in the VM's package is `provision.sh`'s
-  call (4.2b).
+What was built, in `dispatcher/` (Node built-ins only):
+- **Settings from the environment** (`src/config/builder-env.mjs`, ADR-0055 "environment only", the owner's choice in
+  review round 1): `BUILDER_APP_ID`, `BUILDER_APP_INSTALLATION_ID`, `BUILDER_APP_KEY` (default
+  `/home/dispatcher/.config/factory/builder-app.pem`), read from `process.env`.
+  - The file `/home/dispatcher/.config/factory/env` is loaded by Node itself: `node --env-file=… dispatcher/bin/…`. A
+    variable already set in the process's environment wins over the file.
+  - That file is trusted as code is: it can set `NODE_OPTIONS` (`--require`), which runs code in the process that reads
+    the key before any check of ours (tried in the owner's session). So only its owner writes it (4.2b checks the
+    modes), and it never holds a secret, since every child of the dispatcher inherits `process.env`.
+  - A refusal names the variable, never its value; an unknown `BUILDER_APP_*` is refused.
+- **The key** (`src/config/own-file.mjs`): `lstat` (a regular file, the process's own uid, no bit for group or
+  others), then `open` with `O_NOFOLLOW|O_NONBLOCK` and `fstat` of the handle (the same inode, the same checks), so a
+  swap to a symlink, a FIFO or a directory between the two is refused. It is read again at every mint.
+- **The token** (`src/github/checked-token.mjs`, parametrised checks; `builder-token.mjs`, builder-app's values and
+  the cache):
+  - The API URL must be https, or http to loopback (`url-policy.mjs`, one rule for the API and the push URL), before
+    the key is read.
+  - The installation on incident-platform must carry the env's installation id and app id and exactly Contents write,
+    Pull requests write and Metadata read.
+  - The token is asked narrowed to `incident-platform` and those three. It must reach exactly
+    `profitbuild/incident-platform` and hold exactly the three, and must not expire within 5 minutes. Any failure
+    after the mint revokes it.
+  - One token is held in memory and reused until 5 minutes before expiry; concurrent calls share one mint; a failure
+    leaves nothing held; the old token is not revoked at a refresh (a push may be using it), and `revoke()` closes the
+    source.
+- **The push** (`gitPushCommand`, `libexec/git-askpass.sh`):
+  - The token is in the git process's environment only, read by the askpass script for the push's own origin.
+  - The environment is an allowlist (`PATH`, `HOME`, the proxy variables) plus `LC_ALL=C` and its own `GIT_*`.
+  - `GIT_ALLOW_PROTOCOL=https` stops a URL rewritten to `ssh://` (with a `core.sshCommand` from `.git/config`) from
+    reaching a program with the token; tried on git 2.54.
+  - Global and system config off, hooks and fsmonitor off, credential helpers cleared, an explicit push URL.
+  - Why the devcontainer keeps its file-reading credential helper is written in both scripts.
+- **Errors:** `githubRequest` errors carry `status` (GitHub answered) or `kind` (`timeout`, `network`) with `cause`,
+  never a credential: what #0-261's retries branch on.
+- **`check-app`** (`bin/check-app.mjs`): mints, checks, expects 404 for an installation on `profitbuild/factory`,
+  revokes; prints its eight lines and no token; exit 1 at the first failure, a failed final revoke included.
+- **Tests:** 86, and 48 of 50 mutations caught (the two that live are each one half of the layered symlink guard;
+  removing both is caught). `dev-token.mjs` is unchanged; moving it onto `checked-token.mjs` is #0-273.
+- **Left for a real app** (#0-272's AC1): GitHub's 404 for `factory`, the narrowed token's one repository, and
+  `metadata: read` in its answer.
 
 ### 4.2b The app, the key and the confinement (#0-272, in incident-platform and on GitHub)
 
@@ -167,8 +186,21 @@ bypass covers the roles above it.
 
 - **CLI:** `node dispatcher/src/cli.mjs run [--item 0-N] [--resume <branch>] --adapter <product>/.factory/adapter.json`.
   Configuration from the environment only (ADR-0055): `FACTORY_STATE_DIR`, `FACTORY_REPO_DIR` (the product clone the
-  dispatcher reads `main` from), the app's ids, `FACTORY_PROXY_ADDR`, and today's limits `FACTORY_MAX_BLOCKED`,
-  `FACTORY_AUDIT_EVERY`, `FACTORY_MAX_MERGES_PER_DAY` (no defaults, ADR-0052 point 5).
+  dispatcher reads `main` from), the app's ids (`BUILDER_APP_*`, 4.2a), `FACTORY_PROXY_ADDR`, and today's limits
+  `FACTORY_MAX_BLOCKED`, `FACTORY_AUDIT_EVERY`, `FACTORY_MAX_MERGES_PER_DAY` (no defaults, ADR-0052 point 5).
+- **Carried from #0-271's review** (`factory` PR #9; the code holds them as preconditions, 4.3 makes them checks):
+  - **A trusted clone for the push.** The token goes only to a git run in a clone the dispatcher owns, whose
+    `.git/config` no agent's uid can write. The task's commits are fetched into it. The rest of an agent-written
+    config can still send the token elsewhere: `http.proxy`, `http.<url>.sslVerify`, `http.sslCAInfo`,
+    `http.curloptResolve`, `include.path`, and a section named after the push URL itself (`remote."<url>".pushurl`,
+    `.proxy`).
+  - **Refspecs pinned** to the task's own branch under `factory/**`: today only a leading `-` is refused, so `+` (force)
+    and `:ref` (delete) pass, bounded only by #0-272's rulesets.
+  - **The product from the adapter:** `BUILDER_REPOSITORY` and `PUSH_URL` are incident-platform's in 4.2a; they come
+    from `.factory/adapter.json`'s `repository` (ADR-0060 D6). The checks already take it as a parameter.
+  - **Children from an allowlisted environment:** every process the dispatcher starts (task containers, `claude -p`)
+    gets an environment built like `gitPushCommand`'s, never `process.env`, which holds the settings.
+  - **The env file holds no secret,** ever: anything there reaches `process.env`.
 - **State (`$FACTORY_STATE_DIR`, outside any repository):** `lock` (one `flock` for the whole dispatcher in v0: one
   task at a time), `state.json` (the breaker's counts and history, the semantics of today's `state.sh`),
   `tasks/<runId>/task.json` (`runId`, `item`, `branch`, `baseSha`, `phase`, `round`, `calls[]`, `status`, `pr`),

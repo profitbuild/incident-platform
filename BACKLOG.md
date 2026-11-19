@@ -168,8 +168,8 @@ Code, Javadoc, config comments and commits reference items as `backlog #N`.
 | [0-263](#0-263-nothing-runs-a-bug-fixs-test-on-the-code-before-the-fix) | Nothing runs a bug fix's test on the code before the fix | ci | Medium | Open |
 | [0-264](#0-264-a-green-pr-is-merged-on-a-base-that-moved-under-it) | A green PR is merged on a base that moved under it | ci | Medium | Open |
 | [0-265](#0-265-a-task-back-after-a-pause-is-resumed-without-asking-whether-it-still-makes-sense) | A task back after a pause is resumed without asking whether it still makes sense | ci | Low | Open |
-| [0-271](#0-271-builder-apps-token-is-minted-by-code-that-checks-its-scope-step-42a) | builder-app's token is minted by code that checks its scope (step 4.2a) | ci | High | Open |
 | [0-272](#0-272-builder-app-exists-its-key-is-the-vms-and-it-can-write-only-its-own-branches-step-42b) | builder-app exists, its key is the VM's, and it can write only its own branches (step 4.2b) | ci | High | Open |
+| [0-273](#0-273-dev-tokenmjs-keeps-its-own-copy-of-the-token-checks) | `dev-token.mjs` keeps its own copy of the token checks | ci | Low | Open |
 | [0-133](#0-133-incidentresolvedevent-carries-no-openedat) | `IncidentResolvedEvent` carries no `openedAt` | tech-debt | Low | Open |
 | [0-134](#0-134-diff-cover-is-installed-by-version-without-hashes) | `diff-cover` is installed by version, without hashes | ci | Low | Open |
 | [0-135](#0-135-kubectl-in-ci-is-downloaded-unverified) | kubectl in CI is downloaded unverified | ci | Low | Open |
@@ -3766,54 +3766,6 @@ Thresholds to decide.
 AC1. The dispatcher runs the agent in the three cases and acts on MODERNIZE and REWORK; CLOSE reaches the owner.
 AC2. On three resumed tasks the disposition agrees with the owner's.
 
-### 0-271. builder-app's token is minted by code that checks its scope (step 4.2a)
-
-**Type:** ci · **Priority:** High · **Status:** Open (migration stage 4, step 4.2a; ADR-0055, ADR-0060 D3). Split from
-4.2 by the owner on 2026-11-19 (the analysis of 4.2: the code first, tested with a key made in the test, before the
-real key exists, #0-272).
-**Autopilot:** human-only · **Risk:** high · **Complexity:** medium · **Depends on:** #0-270
-**Touches:** the repository `profitbuild/factory` (`dispatcher/src/github/`, `dispatcher/src/git/`, the dispatcher's
-command line, `dispatcher/test/`, its README; a draft pull request from its container, `/review factory#<n>`), root
-(.ai/context/migration/stage-4.md "4.2", .ai/context/migration.md, on closing)
-
-**Problem.** builder-app's private key will be the first secret that writes to incident-platform with no one at the
-keyboard: whoever holds it mints a new hour's token at will. Nothing in `factory` mints one yet. `app-token.mjs` (#0-269)
-has the JWT, the token request, the repository list and the revoke, and `dev-token.mjs` the checks a token must pass
-before it is used (the key's mode, the installation's exact permissions, exactly one repository), but as a tool of the
-Mac's host for the dev app, writing a file; the dispatcher (4.3) needs them as a library, in memory, for builder-app.
-
-**Work.** In `factory`, written in its container with the dev app's token:
-- a module that reads the key and refuses one readable by others, then mints builder-app's token, and before it is
-  used checks:
-  - the installation holds exactly Contents write, Pull requests write and Metadata read (Issues waits for 4.5, which
-    sets the first label);
-  - the token reaches exactly `profitbuild/incident-platform` and is narrowed to it;
-  - the token holds the same three permissions.
-
-  It keeps the token in memory until 5 minutes before it expires, never on disk. The app's id and its installation's
-  id come from the dispatcher's env file, not from `src/`;
-- `git push` gets the token through `GIT_ASKPASS`: a script that prints a variable of the git process's own
-  environment, so the token is in no URL, argv, file or other child's environment. Why the devcontainer keeps a
-  credential helper that reads a file is written down: there the token crosses from the host into a container, and a
-  mounted file is what crosses; here git is the dispatcher's own child;
-- a command `check-app`. It mints a token, runs every check above, asks GitHub with the app's JWT for its installation
-  on `profitbuild/factory` and expects 404 (the app is never on `factory`, ADR-0060 D5), then revokes the token. It
-  prints no token.
-
-**Acceptance criteria.**
-AC1. The module refuses, with no token returned or written:
-     - a key readable by others;
-     - an installation holding any permission other than the three;
-     - a token reaching any repository but incident-platform;
-     - a token whose permissions differ.
-
-     Each refusal is a test, and a mutation of each check is caught.
-AC2. A token is reused from memory until 5 minutes before it expires, then minted again; no token is ever on disk, in
-     argv, or in the environment of a child other than git (tests).
-AC3. `check-app` against a fake GitHub passes, and fails when the installation on `factory` answers anything but 404.
-AC4. The code holds no app id, installation id or bot id; `dev-token.mjs` and its app are unchanged.
-AC5. `stage-4.md` "4.2" describes what was built.
-
 ### 0-272. builder-app exists, its key is the VM's, and it can write only its own branches (step 4.2b)
 
 **Type:** ci · **Priority:** High · **Status:** Open (migration stage 4, step 4.2b; ADR-0055, ADR-0060 D3). Split from
@@ -3892,7 +3844,41 @@ AC5. As `factory`, the user of the task containers, on the VM: reading `/home/di
 AC6. ADR-0034 is amended for the two rulesets, their bypass actors and the wider `check` (ADR-0060's Consequences, as
      amended on 2026-11-19, put that part of ADR-0034 here), and its title changed to match: it names one ruleset
      guarding `main` (review of the plan, round 2).
-AC7. README "Infrastructure Hardening" names the controls added and the gaps left:
+AC7. On the VM, set by `provision.sh` and checked after it, the result in the Result:
+     - the env file is mode 600;
+     - `/home/dispatcher/.config/factory` is mode 700;
+     - both are owned by `dispatcher`.
+
+     The file is trusted as code (it can set `NODE_OPTIONS`, #0-271), and 4.2a's code cannot check it in time, since
+     Node loads it first (review of `factory` PR #9, round 3).
+AC8. One source for builder-app's permissions: `repository-settings.rb` checks the installation against the same list
+     `check-app` enforces (`BUILDER_PERMISSIONS` in `factory`'s `builder-token.mjs`), by reading it or by a test that
+     compares the two, not a second hand-kept copy (review of `factory` PR #9, arc-a01b).
+AC9. README "Infrastructure Hardening" names the controls added and the gaps left:
      - the key at rest is protected by the Mac's FileVault, since the VM's disk is a file under `~/.lima`;
      - root on the VM reads the key;
      - a secret store waits for stage C.
+
+### 0-273. `dev-token.mjs` keeps its own copy of the token checks
+
+**Type:** ci · **Priority:** Low · **Status:** Open (migration stage 4; left by #0-271, `factory` PR #9, review
+arc-2d71; `factory`'s `checked-token.mjs` cites this item).
+**Autopilot:** human-only · **Risk:** medium · **Complexity:** low · **Depends on:** #0-271
+**Touches:** the repository `profitbuild/factory` (`dispatcher/bin/dev-token.mjs` and its tests, a draft pull request
+from its container, `/review factory#<n>`)
+
+**Problem.** #0-271 wrote the checks a GitHub App token must pass before it is used as parametrised functions,
+`checked-token.mjs` and `url-policy.mjs`. AC4 of #0-271 kept `dev-token.mjs`, the tool that mints the dev app's token
+on the Mac, unchanged, so it still has its own copy: the key's mode, the installation's exact permissions, exactly one
+repository, the token's permissions, and the https-or-loopback rule. Two copies of a check drift. The dev app's
+values differ on purpose (its token is not narrowed to a repository; it will never hold Issues), and the parameters
+carry that.
+
+**Work.** `dev-token.mjs` calls `checked-token.mjs` and `url-policy.mjs` with the dev app's values. It also gains what
+4.2a added for builder-app's key: `lstat`, `O_NOFOLLOW|O_NONBLOCK`, `fstat`. Its behaviour, its file and its
+`--watch` stay as they are.
+
+**Acceptance criteria.**
+AC1. `dev-token.mjs` holds no check of its own that `checked-token.mjs` or `url-policy.mjs` has; its tests pass
+     unchanged, plus the key-file refusals 4.2a has (a symlink, a FIFO, another owner where testable).
+AC2. `checked-token.mjs` no longer cites this item.

@@ -159,6 +159,7 @@ resolvable.
 | 0-269 | `factory`'s code is written by a session holding only the hour's token of the GitHub App `profitbuild-factory-dev` (installed on `factory` alone, Contents and Pull requests write, Metadata read), in `factory`'s devcontainer (a clone in a volume of its own, the token minted on the Mac's host by `dev-token.mjs`, HTTPS to GitHub and Anthropic only); tag creation restricted to the admin role; the owner's sessions deny tag pushes and releases, and `factory` carries the denies that apply there; AC3 probed by GitHub's refusals; details in [the section](#0-269-a-session-that-writes-factory-holds-the-owners-token-which-the-rulesets-do-not-bind) | PRs #657, #658; `factory` PR #3 |
 | 0-268 | `profitbuild/factory` scans every commit for secrets before a merge (a required check) and keeps its devcontainer's Node equal to `.node-version`; `check-factory-copies.rb` in Lint Workflows here compares every copy of this repository's controls there (pins, actions' SHAs, scripts, setup-node, zizmor.yml, .node-version, the denies both ways), this repository leading: a PR fails only on a difference it brings (ADR-0061); details in [the section](#0-268-factorys-ci-is-a-copy-of-incident-platforms-with-no-drift-check-and-without-part-of-its-controls) | PR #659; `factory` PR #5 |
 | 0-270 | `/review factory#<n> <digits>` reviews a pull request of `profitbuild/factory` from files GitHub's API serves (`scripts/factory-admin/fetch-factory-pr.sh`: pinned to one head, every path checked, files as `<path>.pr`, the pull request's CI as its gate), and `factory.md` applies to every such review (ADR-0038 amended); details in [the section](#0-270-the-review-panel-cannot-review-a-change-to-factory) | PR #660 |
+| 0-271 | builder-app's token is minted by `factory` code that checks its scope before use (settings from the environment via `node --env-file`, the key's file checks, `checked-token.mjs`, the token cache, a push limited to https with an allowlisted environment, `check-app`; step 4.2a); details in [the section](#0-271-builder-apps-token-is-minted-by-code-that-checks-its-scope-step-42a) | factory PR #9; PR #662 |
 
 Items completed before `BACKLOG.md` existed are not listed.
 
@@ -4081,3 +4082,80 @@ AC3. Done before 4.2's first pull request to `factory`, or that PR's review is d
 - How a `factory` change is made, from the draft pull request to the owner's plain merge, is recorded in `factory`'s
   CONTRIBUTING.md (factory PR #7, merged 2026-11-19). A `factory` pull request replaces its hand-made "Review"
   point with `/review factory#<n>`.
+
+### 0-271. builder-app's token is minted by code that checks its scope (step 4.2a)
+
+**Type:** ci · **Priority:** High · **Status:** Done, factory PR #9 and PR #662 (2026-11-19) (migration stage 4, step 4.2a; ADR-0055, ADR-0060 D3). Split from
+4.2 by the owner on 2026-11-19 (the analysis of 4.2: the code first, tested with a key made in the test, before the
+real key exists, #0-272).
+**Autopilot:** human-only · **Risk:** high · **Complexity:** medium · **Depends on:** #0-270
+**Touches:** the repository `profitbuild/factory` (`dispatcher/src/github/`, `dispatcher/src/git/`, the dispatcher's
+command line, `dispatcher/test/`, its README; a draft pull request from its container, `/review factory#<n>`), root
+(.ai/context/migration/stage-4.md "4.2", .ai/context/migration.md, on closing)
+
+**Problem.** builder-app's private key will be the first secret that writes to incident-platform with no one at the
+keyboard: whoever holds it mints a new hour's token at will. Nothing in `factory` mints one yet. `app-token.mjs` (#0-269)
+has the JWT, the token request, the repository list and the revoke, and `dev-token.mjs` the checks a token must pass
+before it is used (the key's mode, the installation's exact permissions, exactly one repository), but as a tool of the
+Mac's host for the dev app, writing a file; the dispatcher (4.3) needs them as a library, in memory, for builder-app.
+
+**Work.** In `factory`, written in its container with the dev app's token:
+- a module that reads the key and refuses one readable by others, then mints builder-app's token, and before it is
+  used checks:
+  - the installation holds exactly Contents write, Pull requests write and Metadata read (Issues waits for 4.5, which
+    sets the first label);
+  - the token reaches exactly `profitbuild/incident-platform` and is narrowed to it;
+  - the token holds the same three permissions.
+
+  It keeps the token in memory until 5 minutes before it expires, never on disk. The app's id and its installation's
+  id come from the dispatcher's env file, not from `src/`;
+- `git push` gets the token through `GIT_ASKPASS`: a script that prints a variable of the git process's own
+  environment, so the token is in no URL, argv, file or other child's environment. Why the devcontainer keeps a
+  credential helper that reads a file is written down: there the token crosses from the host into a container, and a
+  mounted file is what crosses; here git is the dispatcher's own child;
+- a command `check-app`. It mints a token, runs every check above, asks GitHub with the app's JWT for its installation
+  on `profitbuild/factory` and expects 404 (the app is never on `factory`, ADR-0060 D5), then revokes the token. It
+  prints no token.
+
+**Acceptance criteria.**
+AC1. The module refuses, with no token returned or written:
+     - a key readable by others;
+     - an installation holding any permission other than the three;
+     - a token reaching any repository but incident-platform;
+     - a token whose permissions differ.
+
+     Each refusal is a test, and a mutation of each check is caught.
+AC2. A token is reused from memory until 5 minutes before it expires, then minted again; no token is ever on disk, in
+     argv, or in the environment of a child other than git (tests).
+AC3. `check-app` against a fake GitHub passes, and fails when the installation on `factory` answers anything but 404.
+AC4. The code holds no app id, installation id or bot id; `dev-token.mjs` and its app are unchanged.
+AC5. `stage-4.md` "4.2" describes what was built.
+
+**Result (owner, 2026-11-19).** `factory` PR #9, merged (cdae18c5), after three review rounds of
+`/review factory#9`.
+- **The rounds:**
+  - round 1, 127: architecture's blocking arc-5e0f, a second configuration mechanism against ADR-0055's "environment
+    only". The owner chose `process.env`, loaded by `node --env-file`;
+  - round 2, 127: all three approved;
+  - round 3, 2: security approved.
+- **What it holds:** `stage-4.md` "4.2a" (AC5) lists what was built: the settings, the key's checks, the token's
+  checks and cache, the hardened push, `check-app`, and 86 tests with 48 of 50 mutations caught. AC1 to AC4 hold as
+  written there; `dev-token.mjs` is unchanged (AC4).
+- **Facts tried in the owner's session, not only stated:**
+  - on git 2.54, a repository's `url.<ssh>.insteadOf` with `core.sshCommand` received the token from the
+    environment, and `GIT_ALLOW_PROTOCOL=https` stopped it (`transport 'ssh' not allowed`), even with
+    `protocol.ssh.allow=always`;
+  - `GIT_ASKPASS` wins over `core.askPass`;
+  - `-c credential.helper=` also clears a URL-scoped helper of the repository;
+  - `GIT_CONFIG_GLOBAL=/dev/null` skips the XDG config;
+  - Node's `--env-file` applies `NODE_OPTIONS` from the file (an injected `--require` ran before the main module),
+    and a variable already set in the environment wins over the file.
+- **Not done here:**
+  - left to #0-272 (AC7, AC8): the env file's modes on the VM, and one source for the permission list;
+  - left to 4.3 (`stage-4.md` "4.3", carried from this review): a trusted clone, refspecs, the product from the
+    adapter, and allowlisted children;
+  - left to #0-273: moving `dev-token.mjs` onto `checked-token.mjs`;
+  - left to a real app (#0-272's AC1): GitHub's 404 for `factory`, the narrowed token's one repository, and
+    `metadata: read`.
+- **Kept:** commit `b5569e9` of `factory` is red on its own: a staged rename went in without its imports, and the next
+  commit fixes it. The owner kept it rather than force-push, and it is recorded in the PR.
