@@ -3772,8 +3772,10 @@ AC2. On three resumed tasks the disposition agrees with the owner's.
 **Type:** ci · **Priority:** Medium · **Status:** Open (migration stage 4, before 4.2; ADR-0055, ADR-0060). Found by
 the review of `factory` PR #1 (FAC-A01, FAC-A05; owner, 2026-11-18).
 **Autopilot:** human-only · **Risk:** medium · **Complexity:** medium · **Depends on:** #0-267
-**Touches:** the repository `profitbuild/factory` (.github/, .claude/settings.json, .devcontainer/), root (.ai/context/migration/stage-4.md), factory
-(.github/workflows/factory-guards.yml, should the drift check live here: owner-only)
+**Touches:** the repository `profitbuild/factory` (.github/, .claude/settings.json, .devcontainer/), root (.ai/context/migration/stage-4.md,
+.ai/context/migration.md, .ai/context/infrastructure.md, README.md "Infrastructure Hardening" and "CI/CD"), factory
+(.github/workflows/ci.yml, .github/scripts/check-factory-copies.rb, test-check-factory-copies.sh, run-blocks.rb:
+owner-only)
 
 **Problem.** `factory`'s CI copies incident-platform's pins (actionlint, shellcheck, zizmor, `actions/checkout`,
 `actions/setup-node`), `install-pinned-tool.sh`, the `setup-node` action, `.node-version` and `zizmor.yml`; only
@@ -3788,7 +3790,7 @@ the same way. #0-269 added three more copies to the list: `factory`'s `.devconta
 this repository's), its Dockerfile's `FROM node:<version>` (a second copy of `.node-version`, unchecked) and the dev
 app's identity in two files (`APP_ID` in `dispatcher/bin/dev-token.mjs`, the bot's user id in
 `.devcontainer/devcontainer.json`). And both repositories' denies miss the deletion of a branch by a push (`git push
-<r> --delete <b>`, `git push <r> :<b>`): a deny for it goes into both lists at once, or the copy drifts.
+<r> --delete <b>`, `git push <r> :<b>`): a deny for it would go into both lists at once, or the copy drifts.
 
 **Work.** Decide per control: copy it now, check it from incident-platform (ADR-0055, ADR-0060 D5: `factory` names no product,
 so a drift check, if any, lives in incident-platform, for example Factory guards comparing the pins with `factory`'s
@@ -3806,6 +3808,57 @@ AC4. The denies of `factory/.claude/settings.json` and those of incident-platfor
      there differ in neither direction without a check failing, compared with `factory/.claude/settings.json` itself, not
      with the list in its test (`dispatcher/test/session-denies.test.mjs`, a third copy), or stage T's template has
      replaced the copy.
+
+**Result (owner, 2026-11-19).** The owner chose option B of the analysis: `factory` runs what must run before a
+merge there, and one check here compares every copy with its original (ADR-0060 D5: `factory` names no product).
+- `factory` PR #5 (merged 2026-11-19, 0d63f58d) adds the `Secret Scan` job: this repository's, betterleaks v1.9.0
+  at its pin, with `secret-scan.sh` and `test-secret-scan.sh` copied unchanged but for a notice paragraph. The job
+  needs no token and reads no secret, so the worry of the Work about where a scan token would live is moot.
+  Its first run: 22 cases passed, "No secret in the 1 commit(s)". The whole history of `factory`'s `main` (5
+  commits) was scanned once, clean, the review ADR-0036 rests on. The owner added `Secret Scan` to the required
+  checks of `main`'s ruleset (id 27568099), read back as `Test`, `Lint Workflows`, `Secret Scan`, each bound to
+  GitHub Actions (`integration_id` 15368). This is AC2.
+- The same PR adds `dispatcher/test/devcontainer-node.test.mjs`: the devcontainer's `FROM node:<version>` equals
+  `.node-version` and is pinned by digest. `install-pinned-tool.sh`'s notice now names the check below.
+- This PR adds `.github/scripts/check-factory-copies.rb` (44 cases in `test-check-factory-copies.sh`) and ADR-0061,
+  run by Lint Workflows on a fresh clone of `factory@main`. It compares the tool pins (and requires those of actionlint,
+  shellcheck, zizmor and betterleaks), every action's SHA, the three scripts minus their notice, `setup-node`'s
+  `action.yml` and `zizmor.yml` minus their comments, `.node-version`, every file of `factory` that says it is a copy, and the denies in both directions, but for
+  `OPTIONAL_DENIES`, named one by one (the two `repository-settings.rb` denies and the two `Read(./docker/...)`
+  ones: what `factory` has no use for), neither required nor refused there. The generic `Read(./.env)` and
+  `Read(./.env.*)` are required: `factory` lacks them today, a warning (main has the difference already) until
+  `factory` adds them. That is AC3 and AC4. The clone is outside input
+  and the log public: a symlink anywhere in it fails the check before the sub-checks read it, a settings file that
+  does not parse is named by its error class only (the parser quotes the text, SEC-31), and a copy's difference
+  names a digest of the original, so a further change here does not hide behind drift `main` has. It also runs `check-downloads.rb`, `check-runtime-setup.rb` and `check-shell.rb` on that clone.
+- **Which side leads** (the review of `factory` PR #5, ADR-0061): this repository. A pull request here that changes a
+  compared file fails on a difference it brings, one `main` (the merge commit's first parent) does not have; a
+  difference `main` has already, and every other run, is a warning. So Renovate's next pull request is not failed by
+  drift the owner's mirror of another tool started. Drift that
+  `factory` starts would otherwise turn every pull request here red, unrelated ones included, and a red `main`
+  stops the autopilot. A copy is changed here first, then in `factory`. `factory`'s own findings (downloads,
+  runtimes, shellcheck) are always warnings, since no change here causes them. The comparison moves from
+  `factory@main` to the `factory` tag the product pins at step 4.7.
+
+AC1, the decision per control:
+
+| Control | Decided |
+|---|---|
+| tool pins (actionlint, shellcheck, zizmor, betterleaks), actions' SHAs | from here: compared by `check-factory-copies.rb`; Renovate stays here alone, so a bump here is mirrored in `factory` by the owner (a second app with Workflows write on `factory` would break #0-269's "no other bot or app") |
+| `check-pinned-tools.sh` | from here, by transitivity: `factory`'s pins must equal these, which it proves against their publishers |
+| `install-pinned-tool.sh`, `secret-scan.sh`, `test-secret-scan.sh` | copies in `factory`, compared from here minus their notice |
+| `setup-node` action, `zizmor.yml` | copies in `factory`, compared from here minus their comments (each names its repository's items) |
+| `.node-version` | compared from here; the Dockerfile's `FROM node` against it, in `factory` (`devcontainer-node.test.mjs`) |
+| secret scan | now, in `factory` (PR #5), before a merge there, and required |
+| `check-downloads.rb`, `check-runtime-setup.rb`, shellcheck of the composite actions' steps (`check-shell.rb`) | from here, on the clone, as warnings: `factory` has no Ruby (ADR-0060 D2); a finding shows after its merge there, not before |
+| the denies of `factory/.claude/settings.json` | from here, both ways, with named exclusions (AC4) |
+| a deny for deleting a branch by a push | not added, in either repository (D1, the owner): CLAUDE.md's "Working style" has sessions delete a merged branch with `git push origin --delete`; `main` and the tags are the rulesets'; an unmerged branch's commits stay in its PR |
+| `repository-settings.rb check` | stage T (settled 2026-11-18) |
+| `.devcontainer/init-firewall.sh` | stage T: the copy differs from the original on purpose (its allow-list), so a comparison would be a second list of exceptions |
+| the dev app's identity in two files (`APP_ID`, the bot's user id) | stage T: the bot's id comes from GitHub and cannot be derived offline |
+
+Left: `factory`'s own findings arrive after its merge, not on its pull request; a `factory` pull request that changes
+a copy first is only a warning here, caught by the owner's review of it (and #0-270's panel).
 
 ### 0-270. The review panel cannot review a change to `factory`
 

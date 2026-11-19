@@ -707,7 +707,14 @@ security boundary, so every rule that matters is also enforced outside the model
   (the host never runs a file it wrote), sends HTTPS to GitHub and Anthropic only (no port 22, and the addresses of
   `ssh.github.com`, which serves SSH on 443, rejected), and refuses loudly a start into which a client forwarded the
   host's git credential helper or SSH agent; its git helper stops git from asking any helper after it.
-  `factory/.claude/settings.json` holds the owner session's denies that apply there, kept by a test in its CI. No
+  `factory/.claude/settings.json` holds the owner session's denies that apply there, kept by a test in its CI.
+  Its CI scans every commit a pull request or a push adds for secrets (`Secret Scan`, this repository's job and
+  scripts, a required check; #0-268). Lint Workflows here keeps `factory`'s copies equal to their originals
+  (`check-factory-copies.rb`, #0-268): its tool pins and actions' SHAs, the copied scripts, `setup-node`,
+  `zizmor.yml`, `.node-version` and the denies, both ways, against a fresh clone of `factory@main`; this repository
+  leads (ADR-0061), so a pull request here that changes a compared file fails on a difference it brings until
+  `factory` matches, and a difference `main` has already is a warning; the clone is outside input (a symlink in it
+  fails the check, a parse error is named, never quoted). No
   other bot or app is on it (builder-app is never installed there).
   With one code owner, who cannot approve their own pull request, every merge is the owner's bypass (the admin role,
   through a pull request), which skips the review and the required checks: the owner merges only once
@@ -737,9 +744,10 @@ hook of the owner's session refuses `--output`, `--ext-diff`, `--textconv` (#0-1
 the autopilot's settings allow the Grep and Glob tools, which no secret deny rule (`Read(…)` only) or hook names:
 harmless while Claude Code gives them to no agent with Bash, unchecked if a version does (#0-225, frozen until
 ADR-0055 stages 2 and 4: no secret file in the task container; in the build VM the clone holds none of the owner's,
-ADR-0056, and the gitignored files a task itself creates there wait for stage 4); `factory`'s CI is a copy of this
-repository's with no drift check and without its secret scan, download and runtime checks (#0-268), and its copy of
-the owner's denies is checked one way only, against a list in its own test (#0-268);
+ADR-0056, and the gitignored files a task itself creates there wait for stage 4); `factory`'s copies are compared from
+here (#0-268), but drift `factory` starts (a copy changed there first) is only a warning here, its own download,
+runtime and shellcheck findings show here as warnings after its merge, not on its pull request, and its firewall
+copy and the dev app's identity in two files are compared by nothing until stage T;
 `profitbuild-factory-dev` may still publish a release on a tag that exists (not probed: `factory` has no tag yet) and
 delete a branch other than `main`, by a push or through the API, which no deny stops; VS Code's "Reopen in
 Container" forwards the host's git credential helper (the owner's admin token) and SSH agent into `factory`'s
@@ -1326,7 +1334,11 @@ ADR-0033). Then actionlint, with shellcheck for every workflow `run:` block, on 
 how they call the local actions in `.github/actions/`, one `::error` annotation per finding (backlog #0-146,
 ADR-0032); shellcheck, the same binary, on every tracked `.sh` file and the composite actions' steps, every severity
 (backlog #0-149, `check-shell.rb`); no download in a `run:` block outside `install-pinned-tool.sh` (backlog #0-149,
-`check-downloads.rb`); each checker's own cases run first; and zizmor's security audit of the same files and the
+`check-downloads.rb`); `factory`'s copies of the pins, the actions' SHAs, the scripts, `setup-node`, `zizmor.yml`,
+`.node-version` and the denies equal to their originals here, against a fresh clone of `factory@main`, failing a pull
+request that changes a compared file on a difference it brings and `main` lacks, warning otherwise (backlog #0-268,
+ADR-0061, `check-factory-copies.rb`); each
+checker's own cases run first; and zizmor's security audit of the same files and the
 actions, one annotation per finding not suppressed with its reason (backlog #0-147). Last, GitHub's ruleset of
 `main`, the environments, repository settings and admins, and every secret a job reads, against `.github/repository-settings/` (`main`'s copy, on a PR that does
 not change it), and every required check against the jobs that report one (backlog #0-113, ADR-0034,

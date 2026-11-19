@@ -20,7 +20,7 @@ no item yet.
 ## Where we are
 
 Stages 0 to 3 are done. **Current: stage 4** (4.1 done on 2026-11-18, with #0-269 on 2026-11-19; 4.2 next:
-#0-268 before it, #0-270 before its first PR to `factory`).
+#0-270 before its first PR to `factory`; #0-268 done on 2026-11-19).
 
 ## Stages
 
@@ -59,8 +59,9 @@ Items in order: 4.1 #0-267 (done 2026-11-18: ADR-0060 accepted, `profitbuild/fac
 credential proxy and `stream-json` transcripts, 4.7 the adapter, the switch and the three runs of the exit.
 ADR-0055: the container has no token; push, PR and commit trailers by the dispatcher; builder-app (never on `factory`);
 the gate contract, incident-platform's adapter first. Exit: 3 PRs opened by it.
-- before 4.2, from 4.1's review: #0-268 (`factory`'s CI is a copy of incident-platform's, with no drift check and
-  without part of its controls; its secret scan decided before 4.2), #0-269 (done 2026-11-19,
+- before 4.2, from 4.1's review: #0-268 (done 2026-11-19: a required secret scan in `factory`, `factory` PR #5, and
+  `check-factory-copies.rb` here comparing every copy with its original, failing a PR here only on a difference it
+  brings, ADR-0061), #0-269 (done 2026-11-19,
   `factory` PR #3: `factory`'s code written in `factory`'s devcontainer with the hour's token of `profitbuild-factory-dev`,
   minted on the Mac's host, not with the owner's admin token; ADR-0060 D5 amended); from #0-269's review, #0-270 (the
   review panel cannot review a change to `factory`).
@@ -75,8 +76,7 @@ the gate contract, incident-platform's adapter first. Exit: 3 PRs opened by it.
   factory change first run on a real item) names itself superseded by the dispatcher's own canary.
 - related: #0-256 (PR description opens with the problem; with #0-254, the template moves to `factory`), #0-239,
   #0-243 (the scripts move).
-- decided by ADR-0060, built by 4.1 to 4.7 (4.1 done by #0-267; no item yet past it, apart from #0-268 and
-  #0-270): the `factory` repository (`profitbuild/factory`, 4.1); dispatcher v0 (claim,
+- decided by ADR-0060, built by 4.1 to 4.7 (4.1 done by #0-267; no item yet past it, apart from #0-270): the `factory` repository (`profitbuild/factory`, 4.1); dispatcher v0 (claim,
   lease, containers, push, PR; no status the ruleset requires is set with builder-app's
   credential, ADR-0055; v0 sets none); builder-app and its key; the gate contract and the adapter;
   loading the factory as a read-only plugin; Claude's credential behind a proxy; the ADRs it amends (ADR-0055, ADR-0052,

@@ -3,7 +3,7 @@
 The decisions are ADR-0060 (D1–D8); this file is how each step carries them out, so an item is written from its
 section, not from memory. **A living plan:** an item that settles an open question or changes a step updates its
 section in the same PR, as it updates `.ai/context/migration.md`. Items are created one at a time, as their turn comes;
-4.1 (#0-267) is done; its review left #0-268, before 4.2, and #0-269, done on 2026-11-19, whose review left #0-270,
+4.1 (#0-267) is done; its review left #0-268 and #0-269, both done on 2026-11-19, and #0-269's review left #0-270,
 before 4.2's first PR to `factory`.
 
 Exit (ADR-0055): 3 PRs opened by the dispatcher. Rollback: today's `/backlog-autopilot` in the devcontainer, kept
@@ -47,8 +47,10 @@ state recorded → container removed.
   (Apache-2.0). Factory PR #1; AC3's failing half by the draft PR #2, closed unmerged.
 - **Settled:** the licence, Apache-2.0 (the owner, 2026-11-18); `repository-settings` files for `factory` at stage T,
   the owner's `gh api` read of 2026-11-18 being AC2's evidence until then.
-- **Left by its review, before 4.2:** #0-268 (`factory`'s CI is a copy with no drift check and without part of
-  incident-platform's controls; the secret scan decided before 4.2), #0-269 (a session holding the owner's token
+- **Left by its review, before 4.2:** #0-268 (done 2026-11-19: `factory` scans every commit for secrets before a
+  merge, a required check, `factory` PR #5; `check-factory-copies.rb` in Lint Workflows here compares every copy
+  with its original (ADR-0061), failing a pull request here only on a difference it brings, warning otherwise; the decision
+  per control is #0-268's AC1 table), #0-269 (a session holding the owner's token
   is an admin no ruleset binds: `factory`'s code is written with an app of its own, `profitbuild-factory-dev`, ADR-0060
   D5 as amended). Moved to 4.2: the check that builder-app is not installed on `factory`.
 - **Done (2026-11-19, #0-269):** the app `profitbuild-factory-dev` and the ruleset `tag-creation` (PR #657 and the
@@ -195,6 +197,8 @@ state recorded → container removed.
   by Factory guards against `factory`'s schema.
 - **The switch:** the owner starts either path; both read the same queue, and an open PR is a lock for both. Only one
   runs at a time (the owner's rule until the timer of stage 7).
+- **The copy check's reference:** with the pinned `factory` tag in `.factory/adapter.json`,
+  `check-factory-copies.rb` (#0-268) compares with that tag instead of `factory@main`.
 - **Exit:** three items from the queue, each a PR opened by builder-app, reviewed and accepted, merged by the owner.
   Then: ADR-0053 marked superseded by ADR-0060; #0-236, #0-251, #0-253, #0-213, #0-217, #0-226, #0-228, #0-234 closed
   as done by stage 4; the bot account and `factory-ops` kept for the rollback until stage 5's exit;

@@ -790,6 +790,33 @@ jobs:
           .github/scripts/test-runtime-setup.sh
           ruby .github/scripts/check-runtime-setup.rb
 
+      # Backlog #0-268, ADR-0061: profitbuild/factory copies this repository's tool pins, its actions' SHAs, three
+      # scripts, its setup-node action and zizmor.yml, .node-version and the session's denies, and `factory` names no
+      # product (ADR-0060 D5), so the check that keeps the copies equal lives here. Its cases first.
+      - name: Factory copies script tests
+        run: .github/scripts/test-check-factory-copies.sh
+
+      # factory@main, cloned without a token (the repository is public). This repository leads (ADR-0061): on a pull
+      # request, a difference fails only when the pull request changes a compared file and main (HEAD^1, the merge
+      # commit's first parent, checked out beside) does not have it already: the owner mirrors the change in `factory`
+      # first, then re-runs. Every other difference, and every push, is a warning: drift `factory` started would
+      # otherwise turn every pull request here red and stop the autopilot with a red main. Also runs
+      # check-downloads.rb, check-runtime-setup.rb and check-shell.rb on the clone, as warnings: `factory` has no
+      # Ruby (ADR-0060 D2). Compared with factory@main until step 4.7 pins a `factory` tag in .factory/adapter.json.
+      - name: The factory's copies match their originals
+        run: |
+          set -euo pipefail
+          git clone --quiet --depth 1 https://github.com/profitbuild/factory.git "${RUNNER_TEMP}/factory"
+          pr=()
+          # Unset outside GitHub (.github/scripts/ci-local.sh): a push there, so every difference is a warning.
+          if [ "${GITHUB_EVENT_NAME:-}" = pull_request ]; then
+            git diff --name-only HEAD^1 HEAD > "${RUNNER_TEMP}/changed-files.txt"
+            git worktree add --quiet --detach "${RUNNER_TEMP}/main-tree" HEAD^1
+            pr=(--changed "${RUNNER_TEMP}/changed-files.txt" --baseline "${RUNNER_TEMP}/main-tree")
+          fi
+          ruby .github/scripts/check-factory-copies.rb "${RUNNER_TEMP}/factory" \
+            --shellcheck "${RUNNER_TEMP}/lint-tools/shellcheck" "${pr[@]}"
+
       # Backlog #0-147: one ::error/::warning annotation per finding
       # (--format github); exits non-zero on any finding not suppressed. Reads
       # .github/zizmor.yml by itself.

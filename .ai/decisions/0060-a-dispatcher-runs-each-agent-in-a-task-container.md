@@ -129,6 +129,7 @@ and `--plugin-dir` (code.claude.com/docs/en/headless.md, cli-reference.md).
 - `factory` has one non-admin writer, `profitbuild-factory-dev` (D5 as amended by #0-269): a new credential, a
   private key whose tokens last an hour and reach `factory` alone; its PRs wait for the owner's review like the bot's on
   incident-platform. The bot's token still reaches incident-platform only.
+- `factory`'s copies of this repository's controls are compared from here, this repository leading (ADR-0061, #0-268).
 - Where it lives: ADR-0060 stays in incident-platform with ADR-0050 to ADR-0059 (written before `factory` existed);
   the ADRs stage 4's items write about the factory go to `factory`.
 - The PR body's audit fields and the gate's JSON are contracts: a change to either changes `audit-data.sh` or every

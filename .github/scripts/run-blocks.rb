@@ -125,4 +125,9 @@ module Annotation
     props << "col=#{col}" if col
     "::error#{props.empty? ? '' : ' ' + props.join(',')}::#{data(msg)}"
   end
+
+  # The same, as a `::warning` (check-factory-copies.rb, backlog #0-268: a finding that does not fail the run).
+  def self.warning(msg, file: nil, line: nil, col: nil)
+    error(msg, file: file, line: line, col: col).sub(/\A::error/, '::warning')
+  end
 end
