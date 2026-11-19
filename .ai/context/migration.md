@@ -19,7 +19,8 @@ no item yet.
 
 ## Where we are
 
-Stages 0, 1 and 2 are done. **Current: stage 3** (analysis 2026-11-17, see its section). The owner wants stage 4 soon.
+Stages 0 to 3 are done. **Current: stage 4** (4.1 done on 2026-11-18, with #0-269 on 2026-11-19; 4.2 next:
+#0-268 before it, #0-270 before its first PR to `factory`).
 
 ## Stages
 
@@ -36,7 +37,7 @@ task container is stage 4). The Mac devcontainer stays the rollback.
 - Follow-ups, open: #0-239 (the VM scripts' repeatable test; stage 4 moves the scripts), #0-242, #0-243 (one parser of
   the allow-list, before stage 4 moves `scripts/factory-admin/`), #0-244, #0-249 (pin Claude Code in the image).
 
-### 3. Baseline metrics — CURRENT
+### 3. Baseline metrics
 ADR-0055 (amended 2026-11-17): agent calls, times, tokens, model, tools, refusals per agent call, from the runs'
 transcripts, kept off the build VM; a seed pattern for a removed positive control.
 - carries: #0-205 (Done, PR #652: `scripts/factory-admin/run-summary.sh`, the archive on the Mac, the baseline of stage 2's three
@@ -47,7 +48,7 @@ transcripts, kept off the build VM; a seed pattern for a removed positive contro
 - waits: #0-259 (a second model's review, measured against this baseline), #0-260 (disputes with evidence: the panel
   does not change before the baseline).
 
-### 4. Dispatcher v0, in the new `factory` repository
+### 4. Dispatcher v0, in the new `factory` repository — CURRENT
 Decided in ADR-0060 (2026-11-17, Accepted by the owner on 2026-11-18): D1 the dispatcher runs each agent as its own
 `claude -p` in a task container and the gate itself; D2 Node built-ins; D3 builder-app, key for user `dispatcher`; D4
 Claude's API key behind a proxy; D5 public `factory`, loaded read-only as a plugin; D6 `.factory/adapter.json`; D7
@@ -59,8 +60,10 @@ credential proxy and `stream-json` transcripts, 4.7 the adapter, the switch and 
 ADR-0055: the container has no token; push, PR and commit trailers by the dispatcher; builder-app (never on `factory`);
 the gate contract, incident-platform's adapter first. Exit: 3 PRs opened by it.
 - before 4.2, from 4.1's review: #0-268 (`factory`'s CI is a copy of incident-platform's, with no drift check and
-  without part of its controls; its secret scan decided before 4.2), #0-269 (`factory`'s code
-  written with an app of its own, `profitbuild-factory-dev`, not with the owner's admin token; ADR-0060 D5 amended).
+  without part of its controls; its secret scan decided before 4.2), #0-269 (done 2026-11-19,
+  `factory` PR #3: `factory`'s code written in `factory`'s devcontainer with the hour's token of `profitbuild-factory-dev`,
+  minted on the Mac's host, not with the owner's admin token; ADR-0060 D5 amended); from #0-269's review, #0-270 (the
+  review panel cannot review a change to `factory`).
 - carries: #0-212 (`Factory-Run` / `Factory-Agent` trailers), #0-204 (the trace of each agent call and the commits it
   added, `--merge --auto`; moved from stage 3 on 2026-11-17), #0-261 (the dispatcher's written requirements: locks,
   state, retries, rate limits, the gate's pass summary).
@@ -72,8 +75,8 @@ the gate contract, incident-platform's adapter first. Exit: 3 PRs opened by it.
   factory change first run on a real item) names itself superseded by the dispatcher's own canary.
 - related: #0-256 (PR description opens with the problem; with #0-254, the template moves to `factory`), #0-239,
   #0-243 (the scripts move).
-- decided by ADR-0060, built by 4.1 to 4.7 (4.1 done by #0-267; no item yet past it, apart from its #0-268 and
-  #0-269): the `factory` repository (`profitbuild/factory`, 4.1); dispatcher v0 (claim,
+- decided by ADR-0060, built by 4.1 to 4.7 (4.1 done by #0-267; no item yet past it, apart from #0-268 and
+  #0-270): the `factory` repository (`profitbuild/factory`, 4.1); dispatcher v0 (claim,
   lease, containers, push, PR; no status the ruleset requires is set with builder-app's
   credential, ADR-0055; v0 sets none); builder-app and its key; the gate contract and the adapter;
   loading the factory as a read-only plugin; Claude's credential behind a proxy; the ADRs it amends (ADR-0055, ADR-0052,

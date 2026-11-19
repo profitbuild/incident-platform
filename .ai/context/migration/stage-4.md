@@ -3,7 +3,8 @@
 The decisions are ADR-0060 (D1–D8); this file is how each step carries them out, so an item is written from its
 section, not from memory. **A living plan:** an item that settles an open question or changes a step updates its
 section in the same PR, as it updates `.ai/context/migration.md`. Items are created one at a time, as their turn comes;
-4.1 (#0-267) is done, and its review left #0-268 and #0-269, both before 4.2.
+4.1 (#0-267) is done; its review left #0-268, before 4.2, and #0-269, done on 2026-11-19, whose review left #0-270,
+before 4.2's first PR to `factory`.
 
 Exit (ADR-0055): 3 PRs opened by the dispatcher. Rollback: today's `/backlog-autopilot` in the devcontainer, kept
 working until stage 5's exit. Rule of the migration: one factory change at a time, then application items.
@@ -48,8 +49,16 @@ state recorded → container removed.
   the owner's `gh api` read of 2026-11-18 being AC2's evidence until then.
 - **Left by its review, before 4.2:** #0-268 (`factory`'s CI is a copy with no drift check and without part of
   incident-platform's controls; the secret scan decided before 4.2), #0-269 (a session holding the owner's token
-  is an admin no ruleset binds: `factory`'s code is to be written with an app of its own, `profitbuild-factory-dev`, ADR-0060
+  is an admin no ruleset binds: `factory`'s code is written with an app of its own, `profitbuild-factory-dev`, ADR-0060
   D5 as amended). Moved to 4.2: the check that builder-app is not installed on `factory`.
+- **Done (2026-11-19, #0-269):** the app `profitbuild-factory-dev` and the ruleset `tag-creation` (PR #657 and the
+  owner's settings); `factory` PR #3: `.devcontainer/` (a clone in a volume of its own, the hour's token read-only
+  from the host, HTTPS to GitHub and Anthropic only, a tripwire for credentials a client forwards), the host's
+  `dispatcher/bin/dev-token.mjs` on `dispatcher/src/github/app-token.mjs`, `.claude/settings.json` with the denies
+  that apply there and the test that keeps them. The key stays on the Mac's host (ADR-0060 D5 as amended). AC3's
+  probes, run in that devcontainer, are in #0-269's Result. Left by its review: #0-270 (the review panel cannot review
+  a change to `factory`; before 4.2's first PR there); additions to #0-268 (three more copies, a deny for branch
+  deletion by push in both repositories) and to #0-249 (`factory`'s Dockerfile installs Claude Code the same way).
 
 ## 4.2 builder-app
 
@@ -75,6 +84,13 @@ state recorded → container removed.
 - **Tests:** a JWT verified against a key pair generated in the test; the token request against a fake server
   (`node:http`); a test that the token is absent from argv, from the environment of every child but git's, and from
   the state directory.
+- **From #0-269, for 4.2 and 4.3:** `app-token.mjs` exists (the JWT, the token request, the repository list, the
+  revoke; 30 s per call, no retry): 4.3's GitHub helper (#0-261) either grows from its `githubRequest` or replaces it,
+  so that one path calls GitHub. git gets the dev app's token from a credential helper that reads a file, while this
+  step plans `GIT_ASKPASS` with an environment variable of the git process: 4.2 picks one or records why both. The dev
+  app's identity (`APP_ID` in `dispatcher/bin/dev-token.mjs`, its bot's user id in `.devcontainer/devcontainer.json`)
+  stays out of `src/`, and `dev-token.mjs`, a tool of the Mac's host, sits in the package the VM runs: `provision.sh`
+  decides whether it ships there.
 - **Shows it also:** `gh api repos/profitbuild/factory/installation` with the app's JWT answers 404: the app is not on
   `factory` (moved from #0-267's AC2, which could not check an app that did not exist yet).
 - **Open:** rotation cadence (proposal: a new key each quarter, the old deleted after the switch); where the stage-C

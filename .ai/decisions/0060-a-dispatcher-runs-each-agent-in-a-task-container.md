@@ -1,7 +1,9 @@
 # ADR-0060: A dispatcher on the build VM runs each agent of a task in a container that holds no credential
 
 - **Status:** Accepted (2026-11-18, by the owner; D1–D8 below chosen by the owner on 2026-11-17, in an
-  interactive session); D5 amended on 2026-11-18 by backlog #0-269 (`factory`'s code is to be written with an app of its own)
+  interactive session); D5 amended on 2026-11-18 by backlog #0-269 (`factory`'s code is
+  written with an app of its own), its open points settled on 2026-11-19 (where the app's key lives, how the session
+  starts)
 - **Backlog:** #0-267 (stage 4.1); stage 4's later items are created as their turn comes, each from its step of the
   plan `.ai/context/migration/stage-4.md`
 - **Date:** 2026-11-17
@@ -73,8 +75,15 @@ and `--plugin-dir` (code.claude.com/docs/en/headless.md, cli-reference.md).
   owner's. ADR-0055 holds as decided: no builder credential (neither the bot's token nor builder-app) is on `factory`,
   so no agent that builds a product can propose a change to the factory's own rules. Text and plans are still
   prepared in the owner's sessions on the Mac, under the denies of their project's settings, and `factory` carries a
-  copy of those denies for a session started in its clone. Where that key lives and how its session starts are
-  #0-269's.
+  copy of those denies for a session started in its clone. Where that key lives and how its session starts (settled
+  by #0-269 on 2026-11-19): the key stays on the owner's Mac, outside every repository
+  (`~/.config/profitbuild-factory-dev/app.pem`, mode 600), not in the volumes of a devcontainer as first proposed; the
+  session works in `factory`'s own devcontainer, on a clone in a volume of its own, since a workspace bind-mounted from
+  the host would let the container change what the host runs next to the key, or plant a git hook the owner's next
+  `git` runs with the admin token. `factory`'s `dispatcher/bin/dev-token.mjs`, run on the host from the owner's clone on
+  `main`, mints the hour's token, checking against GitHub that the installation and the token hold exactly the three
+  permissions and reach `factory` alone, into a directory the devcontainer mounts read-only. Its limits are named in
+  `factory`'s README and #0-269's Result.
 - **D6. The product's adapter is `.factory/adapter.json`**: repository, gate command, changed-paths command, queue
   source (`BACKLOG.md` until stage 7), protected-paths file, `trustedPaths` (the product's scripts the dispatcher runs
   from `main` and a task branch may not change; for incident-platform `scripts/factory/`), task image, profile,
@@ -117,7 +126,7 @@ and `--plugin-dir` (code.claude.com/docs/en/headless.md, cli-reference.md).
 - ADR-0052 (`FACTORY_BOT_LOGIN`) and ADR-0034 (the ruleset's actors and bypass) are amended when builder-app lands
   (stage 4.2); ADR-0050 (the agents' command lists: no git writing commands once the dispatcher commits, 4.4) and
   ADR-0058 (the isolation probe's successor, 4.4) are amended by 4.4; ADR-0053 is superseded at stage 4's exit.
-- `factory` is to have one non-admin writer, `profitbuild-factory-dev` (D5 as amended by #0-269): a new credential, a
+- `factory` has one non-admin writer, `profitbuild-factory-dev` (D5 as amended by #0-269): a new credential, a
   private key whose tokens last an hour and reach `factory` alone; its PRs wait for the owner's review like the bot's on
   incident-platform. The bot's token still reaches incident-platform only.
 - Where it lives: ADR-0060 stays in incident-platform with ADR-0050 to ADR-0059 (written before `factory` existed);
