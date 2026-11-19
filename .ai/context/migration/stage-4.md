@@ -4,7 +4,7 @@ The decisions are ADR-0060 (D1–D8); this file is how each step carries them ou
 section, not from memory. **A living plan:** an item that settles an open question or changes a step updates its
 section in the same PR, as it updates `.ai/context/migration.md`. Items are created one at a time, as their turn comes;
 4.1 (#0-267) is done; its review left #0-268 and #0-269, both done on 2026-11-19, and #0-269's review left #0-270,
-before 4.2's first PR to `factory`.
+done the same day (`/review factory#<n>`).
 
 Exit (ADR-0055): 3 PRs opened by the dispatcher. Rollback: today's `/backlog-autopilot` in the devcontainer, kept
 working until stage 5's exit. Rule of the migration: one factory change at a time, then application items.
@@ -58,8 +58,9 @@ state recorded → container removed.
   from the host, HTTPS to GitHub and Anthropic only, a tripwire for credentials a client forwards), the host's
   `dispatcher/bin/dev-token.mjs` on `dispatcher/src/github/app-token.mjs`, `.claude/settings.json` with the denies
   that apply there and the test that keeps them. The key stays on the Mac's host (ADR-0060 D5 as amended). AC3's
-  probes, run in that devcontainer, are in #0-269's Result. Left by its review: #0-270 (the review panel cannot review
-  a change to `factory`; before 4.2's first PR there); additions to #0-268 (three more copies, a deny for branch
+  probes, run in that devcontainer, are in #0-269's Result. Left by its review: #0-270 (done 2026-11-19: `/review
+  factory#<n>` reviews a `factory` pull request from files, `scripts/factory-admin/fetch-factory-pr.sh`; how a `factory`
+  change is made, review and merge included, is `factory`'s CONTRIBUTING.md, factory PR #7); additions to #0-268 (three more copies, a deny for branch
   deletion by push in both repositories) and to #0-249 (`factory`'s Dockerfile installs Claude Code the same way).
 
 ## 4.2 builder-app

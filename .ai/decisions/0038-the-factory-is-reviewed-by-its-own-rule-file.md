@@ -37,7 +37,11 @@ owner's manual `/review`.
   `origin/main`, and an unreadable list means the rules apply) — not a list of the file's own. `_common.md` names
   the exception to "nothing else from `.ai/rules/review/`"; `security.md`, `architecture.md`, the two reviewers'
   definitions and `review-procedure` say when; `/review` decides it in its Step 2 and tells both reviewers
-  (Step 4).
+  (Step 4). **Amended by #0-270 (2026-11-19, the owner):** for a pull request of `profitbuild/factory`
+  (`/review factory#<n>`) it is read every time, whatever its paths. The Owner-only list draws the factory's edge
+  in this repository's layout; in `factory` every path is factory code, and its core, `dispatcher/` (builder-app's
+  key and tokens from 4.2), matches no entry, so the trigger would have judged it without `FAC-` rules (review round
+  1 of #0-270). Still decided by `/review` alone, in its `factory#<n>` section; no second path list.
 - **Nobody else reads it**: the architect reads every rule file but `factory.md`, the implementer never does
   (`implementation.md`); `RULE_FILE_OF` maps `FAC` to `factory` only so that an id is never dropped.
 - **Knowledge without ids** in `.ai/context/security.md`, "AI factory": why the rules are what they are (the
