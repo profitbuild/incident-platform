@@ -435,8 +435,8 @@ with `gh api repos/{owner}/{repo}/...` after changing anything in Settings).
   and git refs, backlog #0-269). These denies match a command's text, not the program it runs: `bash -c`, `git -C <dir>
   push`, a tag pushed by its bare name (`git push origin v1.2`, which reads as a branch) and tags a plain branch push
   sends once git's configuration says so (`push.followTags`, `remote.<r>.mirror`, `remote.<r>.push`) pass them. A session
-  holding the owner's token is an admin no ruleset binds, so the code of `factory` is to be written with an app of its
-  own instead (`profitbuild-factory-dev`, ADR-0060 D5 as amended, #0-269).
+  holding the owner's token is an admin no ruleset binds, so the code of `factory` is written with an app of its own
+  instead (`profitbuild-factory-dev`, in `factory`'s devcontainer; ADR-0060 D5 as amended, #0-269).
   `delete_branch_on_merge` on, `allow_auto_merge` off (phase 3, after #0-116). Lint Workflows compares GitHub
   with the files on every PR and push (`repository-settings.rb check`, main's files for a PR that does not
   change them), so a setting changed in the UI turns CI red, and refuses a required check that no job of a
@@ -696,7 +696,19 @@ security boundary, so every rule that matters is also enforced outside the model
   (`Test`, `Lint Workflows`, bound to GitHub Actions) and refuses force pushes and deletion; its ruleset `tags` has
   no bypass and refuses moving or deleting any tag, since a product loads the factory at a pinned tag. Secret
   scanning and push protection, private vulnerability reporting, immutable releases; Actions limited to GitHub's own,
-  pinned by SHA, with a read-only token; no bot and no GitHub App on it (builder-app is never installed there).
+  pinned by SHA, with a read-only token; a ruleset of its own restricts tag creation to the admin role. Its code is
+  written by a session holding the hour's token of the GitHub App `profitbuild-factory-dev` and no other GitHub
+  credential (#0-269, ADR-0060 D5 as amended): installed on `factory` alone, Contents and Pull requests write,
+  Metadata read; probed on 2026-11-19, GitHub refused it a push to `main`, the merge of its own unapproved pull
+  request, a change to `.github/workflows/` and a tag. The app's key stays on the owner's Mac, outside every
+  repository; `factory`'s `dispatcher/bin/dev-token.mjs`, run on the host from the owner's clone on `main`, checks
+  that the installation and the token hold exactly those permissions and reach `factory` alone, and writes the token
+  to a directory `factory`'s devcontainer mounts read-only. That devcontainer works on a clone in a volume of its own
+  (the host never runs a file it wrote), sends HTTPS to GitHub and Anthropic only (no port 22, and the addresses of
+  `ssh.github.com`, which serves SSH on 443, rejected), and refuses loudly a start into which a client forwarded the
+  host's git credential helper or SSH agent; its git helper stops git from asking any helper after it.
+  `factory/.claude/settings.json` holds the owner session's denies that apply there, kept by a test in its CI. No
+  other bot or app is on it (builder-app is never installed there).
   With one code owner, who cannot approve their own pull request, every merge is the owner's bypass (the admin role,
   through a pull request), which skips the review and the required checks: the owner merges only once
   `gh pr checks` is green. Set by the owner with `gh api` and read back on 2026-11-18; no `repository-settings`
@@ -726,12 +738,18 @@ the autopilot's settings allow the Grep and Glob tools, which no secret deny rul
 harmless while Claude Code gives them to no agent with Bash, unchecked if a version does (#0-225, frozen until
 ADR-0055 stages 2 and 4: no secret file in the task container; in the build VM the clone holds none of the owner's,
 ADR-0056, and the gitignored files a task itself creates there wait for stage 4); `factory`'s CI is a copy of this
-repository's with no drift check and without its secret scan, download and runtime checks (#0-268), a session in a
-`factory` clone has none of the owner's denies until #0-269, every interactive session of the owner holds the owner's
-token, an admin's, which no ruleset binds, so there only the text-matching denies stand (#0-269 moves `factory`'s
-code to an app of its own, not those sessions), and its settings are checked by no `repository-settings`
-file until stage T; the organisation does not require two-factor authentication yet, while the owner's account is
-the one way to `main` and to the rulesets of both repositories (the owner turns it on on 2026-11-19, #0-267).
+repository's with no drift check and without its secret scan, download and runtime checks (#0-268), and its copy of
+the owner's denies is checked one way only, against a list in its own test (#0-268);
+`profitbuild-factory-dev` may still publish a release on a tag that exists (not probed: `factory` has no tag yet) and
+delete a branch other than `main`, by a push or through the API, which no deny stops; VS Code's "Reopen in
+Container" forwards the host's git credential helper (the owner's admin token) and SSH agent into `factory`'s
+devcontainer, which only a tripwire refuses (and an SSH address of GitHub's in another region still passes its
+firewall), so the boundary there is starting it with the devcontainer CLI; the review panel cannot review a change to
+`factory` from its clone (#0-270); every interactive session of the owner holds the owner's token, an admin's, which
+no ruleset binds, so there only the text-matching denies stand; and `factory`'s settings are checked by no
+`repository-settings` file until stage T; the organisation does not require two-factor authentication yet, while the
+owner's account is the one way to `main` and to the rulesets of both repositories (the owner's to turn on, #0-267;
+planned for 2026-11-19 and postponed by the owner that day).
 Layers and their limits: docs/ai-factory.md, "What isolates what".
 
 ### Container images

@@ -170,6 +170,7 @@ Code, Javadoc, config comments and commits reference items as `backlog #N`.
 | [0-265](#0-265-a-task-back-after-a-pause-is-resumed-without-asking-whether-it-still-makes-sense) | A task back after a pause is resumed without asking whether it still makes sense | ci | Low | Open |
 | [0-268](#0-268-factorys-ci-is-a-copy-of-incident-platforms-with-no-drift-check-and-without-part-of-its-controls) | `factory`'s CI is a copy of incident-platform's, with no drift check and without part of its controls | ci | Medium | Open |
 | [0-269](#0-269-a-session-that-writes-factory-holds-the-owners-token-which-the-rulesets-do-not-bind) | A session that writes `factory` holds the owner's token, which the rulesets do not bind | ci | High | In progress |
+| [0-270](#0-270-the-review-panel-cannot-review-a-change-to-factory) | The review panel cannot review a change to `factory` | ci | High | Open |
 | [0-133](#0-133-incidentresolvedevent-carries-no-openedat) | `IncidentResolvedEvent` carries no `openedAt` | tech-debt | Low | Open |
 | [0-134](#0-134-diff-cover-is-installed-by-version-without-hashes) | `diff-cover` is installed by version, without hashes | ci | Low | Open |
 | [0-135](#0-135-kubectl-in-ci-is-downloaded-unverified) | kubectl in CI is downloaded unverified | ci | Low | Open |
@@ -3409,7 +3410,8 @@ change over time, and point to the criterion in `.ai/context/architecture.md` (#
 
 **Type:** ci · **Priority:** Medium · **Status:** Open. Found with #0-248 (owner, 2026-11-14).
 **Autopilot:** human-only · **Risk:** medium · **Complexity:** low · **Depends on:** —
-**Touches:** factory (.devcontainer/Dockerfile, owner-only), docs (docs/ai-factory.md "Pinned versions"), root
+**Touches:** factory (.devcontainer/Dockerfile, owner-only), the repository `profitbuild/factory` (.devcontainer/Dockerfile,
+which installs Claude Code the same way since #0-269), docs (docs/ai-factory.md "Pinned versions"), root
 (.ai/decisions/ ADR-0039 amended, if the floor 2.1.295 becomes a pin)
 
 **Problem.** `.devcontainer/Dockerfile` installs Claude Code with `curl -fsSL https://claude.ai/install.sh | bash`, the
@@ -3771,7 +3773,7 @@ AC2. On three resumed tasks the disposition agrees with the owner's.
 **Type:** ci · **Priority:** Medium · **Status:** Open (migration stage 4, before 4.2; ADR-0055, ADR-0060). Found by
 the review of `factory` PR #1 (FAC-A01, FAC-A05; owner, 2026-11-18).
 **Autopilot:** human-only · **Risk:** medium · **Complexity:** medium · **Depends on:** #0-267
-**Touches:** the repository `profitbuild/factory` (.github/), root (.ai/context/migration/stage-4.md), factory
+**Touches:** the repository `profitbuild/factory` (.github/, .claude/settings.json, .devcontainer/), root (.ai/context/migration/stage-4.md), factory
 (.github/workflows/factory-guards.yml, should the drift check live here: owner-only)
 
 **Problem.** `factory`'s CI copies incident-platform's pins (actionlint, shellcheck, zizmor, `actions/checkout`,
@@ -3783,7 +3785,11 @@ there leaves `factory` on the old pin, with no signal (the drift pattern of #0-1
 `check-pinned-tools.sh`, `repository-settings.rb check`. Harmless on a skeleton with one script; not once 4.2 brings
 the build VM's scripts and the code that handles builder-app's key. A copy of the owner session's denies joins the
 list with #0-269 (`factory/.claude/settings.json`, its AC5): it drifts from incident-platform's `.claude/settings.json`
-the same way.
+the same way. #0-269 added three more copies to the list: `factory`'s `.devcontainer/init-firewall.sh` (a cut of
+this repository's), its Dockerfile's `FROM node:<version>` (a second copy of `.node-version`, unchecked) and the dev
+app's identity in two files (`APP_ID` in `dispatcher/bin/dev-token.mjs`, the bot's user id in
+`.devcontainer/devcontainer.json`). And both repositories' denies miss the deletion of a branch by a push (`git push
+<r> --delete <b>`, `git push <r> :<b>`): a deny for it goes into both lists at once, or the copy drifts.
 
 **Work.** Decide per control: copy it now, check it from incident-platform (ADR-0055, ADR-0060 D5: `factory` names no product,
 so a drift check, if any, lives in incident-platform, for example Factory guards comparing the pins with `factory`'s
@@ -3798,7 +3804,9 @@ AC2. Before 4.2's first PR to `factory`, its CI scans a pull request's commits f
 AC3. A pin changed in incident-platform's `ci.yml` without the same change in `factory` fails a check, or stage T's
      template has replaced the copies.
 AC4. The denies of `factory/.claude/settings.json` and those of incident-platform's `.claude/settings.json` that apply
-     there differ in neither direction without a check failing, or stage T's template has replaced the copy.
+     there differ in neither direction without a check failing, compared with `factory/.claude/settings.json` itself, not
+     with the list in its test (`dispatcher/test/session-denies.test.mjs`, a third copy), or stage T's template has
+     replaced the copy.
 
 ### 0-269. A session that writes `factory` holds the owner's token, which the rulesets do not bind
 
@@ -3822,10 +3830,10 @@ reach it, and ADR-0055 keeps every builder credential off `factory`. Code for `f
 
 **Work** (ADR-0060 D5 as amended on 2026-11-18). `factory`'s code is written by a session holding the token of a
 GitHub App of its own, `profitbuild-factory-dev`: installed on `factory` alone; Contents and Pull requests read and
-write, Metadata read, nothing else; no webhook. Its key lives where neither the owner's credentials nor the
-autopilot's reach (proposal: a devcontainer of `factory`'s own on the Mac, whose volumes hold the key and nothing of
-the owner's; the alternative, a user of its own on the build VM), and a script there turns it into the hour's token
-for `git` and `gh`. A ruleset of its own on `factory` restricts tag creation to the admin role; the ruleset `tags`
+write, Metadata read, nothing else; no webhook. Its key lives where neither the autopilot's devcontainer nor
+the build VM's task code reaches it (ADR-0060 D5), and a script turns it into the hour's token for `git` and `gh` (first proposed: the key in the
+volumes of a devcontainer of `factory`'s own; settled on 2026-11-19 as the key on the Mac's host and the token read
+by that devcontainer, see the Result). A ruleset of its own on `factory` restricts tag creation to the admin role; the ruleset `tags`
 keeps no bypass (a bypass applies to every rule of its ruleset). So GitHub refuses the app a push to `main`, a merge,
 a counted review, a tag and a change to `.github/workflows/`. Text and plans stay in the owner's sessions on the Mac;
 their denies gain a tag push and the release commands, and `factory` carries a copy of those that apply there, for a
@@ -3836,7 +3844,7 @@ AC1. ADR-0060 D5 records who writes `factory`'s code, and ADR-0055's rule (no bu
 AC2. The app `profitbuild-factory-dev` exists with exactly the permissions above and is installed on `factory` alone;
      `factory` has a ruleset restricting tag creation whose one bypass is the admin role, `tags` has none, and `main`'s
      keeps `require_last_push_approval` and `dismiss_stale_reviews_on_push`; the owner reads all of it back.
-AC3. With the app's token, from where its key lives: a push to `main`, a tag push, a push that changes
+AC3. With the app's token, from where its session runs (`factory`'s devcontainer): a push to `main`, a tag push, a push that changes
      `.github/workflows/` and a merge of its own PR the owner has not approved are refused by GitHub; a branch push and
      `gh pr create` work; `gh release create` on an existing tag is tried and its answer recorded (ADR-0060 D5 names it
      as allowed); neither the owner's token nor the bot's is readable there.
@@ -3846,3 +3854,58 @@ AC4. incident-platform's `.claude/settings.json` denies a tag push (`--tags`, `-
 AC5. `factory` carries `.claude/settings.json` with the owner session's denies that apply there, and its CI fails a
      pull request that removes one (the drift between the two lists is #0-268's).
 AC6. Done before a session starts work on 4.2 in `factory`.
+
+**Result (owner, 2026-11-19).** AC1 and AC4: PR #657. AC2: the app `profitbuild-factory-dev` (App ID 5822112) with
+exactly Contents and Pull requests write and Metadata read and no event, and the rulesets `tag-creation` (id 27578438,
+tag creation, its one bypass the admin role), `tags` (no bypass) and `main` (`require_last_push_approval`,
+`dismiss_stale_reviews_on_push`), read back by the owner on 2026-11-18; the installation's scope is proven on every
+token, as `dev-token.mjs` refuses one that reaches more than `profitbuild/factory`. AC5: `factory` PR #3 (merged
+2026-11-19, 0b6e5a18): `factory/.claude/settings.json` holds the 41 denies of this repository's that apply there, and
+`dispatcher/test/session-denies.test.mjs` in job `Test` fails a pull request that removes one (shown by removing one).
+Where the key lives, settled here: on the owner's Mac, outside every repository (`~/.config/profitbuild-factory-dev/app.pem`,
+mode 600), not in the devcontainer's volumes as first proposed. A workspace bind-mounted from the host would let the
+container change the script the host runs next to the key, or plant a git hook that the owner's next `git` there runs
+with the admin token; so `factory`'s devcontainer works on a clone in a volume of its own, and
+`dispatcher/bin/dev-token.mjs`, run on the host from the owner's clone on `main`, writes the hour's token to a
+directory the container mounts read-only (`--watch` refreshes it; Ctrl-C, SIGTERM or SIGHUP revokes it and deletes
+the file). AC3, run by the owner in that devcontainer on 2026-11-19: its user `node` reads the token, `gh auth status`
+names `profitbuild-factory-dev[bot]`, there is no `~/.config/gh`, `~/.gitconfig` or `~/.ssh`, `SSH_AUTH_SOCK` is
+empty and the image's helper is the only credential helper; the firewall is up (126 networks, IPv6 closed). A branch
+push and `gh pr create` worked (`factory` PR #4, closed, its branch deleted by the app). Refused by GitHub: `gh pr
+merge` of that PR ("the base branch policy prohibits the merge"), `git push origin HEAD:main` (GH013, naming the
+merge-commit and required-checks rules), a push changing `.github/workflows/ci.yml` ("refusing to allow a GitHub App
+to create or update workflow ... without `workflows` permission") and a tag push (GH013, "Cannot create ref due to
+creations being restricted"). `gh release create` on an existing tag was not tried: `factory` has no tag yet; it is
+tried at the first (v0.1.0, stage T). AC6: done before any work on 4.2. Reviewed in four rounds (`/review 12567`,
+`12567`, `12`, `12`, with `review-k8s` added by the Dockerfile); left by them: #0-270 (the panel cannot review a change
+to `factory`), additions to #0-268 and #0-249, and known gaps in README "Infrastructure Hardening" (a release on a
+tag that exists, a branch deleted by a push or through the API, VS Code's "Reopen in Container").
+
+### 0-270. The review panel cannot review a change to `factory`
+
+**Type:** ci · **Priority:** High · **Status:** Open (migration stage 4, before 4.2's first PR to `factory`; ADR-0055,
+ADR-0060). Found by the review of `factory` PR #3 (#0-269; owner, 2026-11-19).
+**Autopilot:** human-only · **Risk:** medium · **Complexity:** medium · **Depends on:** #0-269
+**Touches:** factory (.claude/skills/review/SKILL.md, .claude/skills/review-procedure/SKILL.md, .claude/agents/verifier.md
+and its read hook, should its scope change: owner-only), docs (docs/ai-factory.md), root (.ai/context/migration/stage-4.md)
+
+**Problem.** `/review`, its agents, their rules and their hooks live in this repository and review its own working
+tree. `readonly-bash.sh` lets a reviewer run git only from this repository's root, never `git -C <dir>`, on purpose:
+git runs programs that the configuration of the repository it works in names (`core.fsmonitor`, `core.pager`,
+`diff.external`, a `.gitattributes` textconv driver), and another clone's `.git/config` is no file this repository
+vouches for; the clone `factory`'s devcontainer writes is exactly such a file. The test gate (`run-tests.sh`) is
+Maven's, and the verifier reads only `.ai/runs/**/gate-r*.json` and `dependency-tree-r*.txt`. So the four rounds on
+`factory` PR #3 worked around all of it by hand: the session wrote `git diff HEAD` of the owner's host clone and a gate
+of its own (`node --test`, the linters at CI's pins) under `.ai/runs/manual/`, and the verifier refused that gate's
+`gate.txt` until round 4 wrote `gate-r4.json`.
+
+**Work.** Until stage 5 splits the review rules into `factory`: `/review` takes a `factory` pull request and gives the
+panel files, not a clone: `gh pr diff <n> --repo profitbuild/factory` and the PR's CI results (its run's jobs and
+logs), written under `.ai/runs/manual/`, the gate as `gate-r<n>.json`; nothing of the change runs on the Mac, and no
+reviewer's guard is widened.
+
+**Acceptance criteria.**
+AC1. `/review` of a `factory` pull request gives every reviewer its diff and its CI's result as files under
+     `.ai/runs/manual/`, the result as a `gate-r<n>.json` the verifier reads, and runs nothing of the change on the host.
+AC2. `readonly-bash.sh` still refuses `git -C`, and a case in `test-hooks.sh` keeps it.
+AC3. Done before 4.2's first pull request to `factory`, or that PR's review is done as #0-269's was and this item says so.
