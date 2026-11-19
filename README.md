@@ -752,8 +752,12 @@ copy and the dev app's identity in two files are compared by nothing until stage
 delete a branch other than `main`, by a push or through the API, which no deny stops; VS Code's "Reopen in
 Container" forwards the host's git credential helper (the owner's admin token) and SSH agent into `factory`'s
 devcontainer, which only a tripwire refuses (and an SSH address of GitHub's in another region still passes its
-firewall), so the boundary there is starting it with the devcontainer CLI; the review panel cannot review a change to
-`factory` from its clone (#0-270); every interactive session of the owner holds the owner's token, an admin's, which
+firewall), so the boundary there is starting it with the devcontainer CLI; `factory`'s pull requests are reviewed by this
+repository's panel from files GitHub's API serves (`/review factory#<n>`, #0-270): the reviewers see the diff and the
+changed files at the head, not the rest of `factory` at that head (as `<path>.pr`, so none is loaded as this session's
+instructions or taken for a gate), the gate is the pull request's own CI, which a change under `factory`'s `.github/`
+writes itself (the gate flags it, `ciChanged`), and the copy check (ADR-0061) runs only after the
+merge; every interactive session of the owner holds the owner's token, an admin's, which
 no ruleset binds, so there only the text-matching denies stand; and `factory`'s settings are checked by no
 `repository-settings` file until stage T; the organisation does not require two-factor authentication yet, while the
 owner's account is the one way to `main` and to the rulesets of both repositories (the owner's to turn on, #0-267;

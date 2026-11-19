@@ -158,6 +158,7 @@ resolvable.
 | 0-267 | Migration stage 4.1 (ADR-0055, ADR-0060 Accepted): `profitbuild/factory`, public, with its baseline (rulesets on `main` and on every tag, required checks bound to GitHub Actions, secret scanning, Actions limited to GitHub's own) and the dispatcher's skeleton with its CI, Apache-2.0; details in [the section](#0-267-migration-stage-4-starts-without-the-factory-repository-and-its-decisions) | PR #656 |
 | 0-269 | `factory`'s code is written by a session holding only the hour's token of the GitHub App `profitbuild-factory-dev` (installed on `factory` alone, Contents and Pull requests write, Metadata read), in `factory`'s devcontainer (a clone in a volume of its own, the token minted on the Mac's host by `dev-token.mjs`, HTTPS to GitHub and Anthropic only); tag creation restricted to the admin role; the owner's sessions deny tag pushes and releases, and `factory` carries the denies that apply there; AC3 probed by GitHub's refusals; details in [the section](#0-269-a-session-that-writes-factory-holds-the-owners-token-which-the-rulesets-do-not-bind) | PRs #657, #658; `factory` PR #3 |
 | 0-268 | `profitbuild/factory` scans every commit for secrets before a merge (a required check) and keeps its devcontainer's Node equal to `.node-version`; `check-factory-copies.rb` in Lint Workflows here compares every copy of this repository's controls there (pins, actions' SHAs, scripts, setup-node, zizmor.yml, .node-version, the denies both ways), this repository leading: a PR fails only on a difference it brings (ADR-0061); details in [the section](#0-268-factorys-ci-is-a-copy-of-incident-platforms-with-no-drift-check-and-without-part-of-its-controls) | PR #659; `factory` PR #5 |
+| 0-270 | `/review factory#<n> <digits>` reviews a pull request of `profitbuild/factory` from files GitHub's API serves (`scripts/factory-admin/fetch-factory-pr.sh`: pinned to one head, every path checked, files as `<path>.pr`, the pull request's CI as its gate), and `factory.md` applies to every such review (ADR-0038 amended); details in [the section](#0-270-the-review-panel-cannot-review-a-change-to-factory) | PR #660 |
 
 Items completed before `BACKLOG.md` existed are not listed.
 
@@ -4000,3 +4001,83 @@ AC1, the decision per control:
 
 Left: `factory`'s own findings arrive after its merge, not on its pull request; a `factory` pull request that changes
 a copy first is only a warning here, caught by the owner's review of it (and #0-270's panel).
+
+### 0-270. The review panel cannot review a change to `factory`
+
+**Type:** ci · **Priority:** High · **Status:** Done, PR #660 (2026-11-19) (migration stage 4, before 4.2's first PR to
+`factory`; ADR-0055, ADR-0060). Found by the review of `factory` PR #3 (#0-269; owner, 2026-11-19).
+**Autopilot:** human-only · **Risk:** medium · **Complexity:** medium · **Depends on:** #0-269
+**Touches:** factory (.claude/skills/review/SKILL.md, .claude/skills/review-procedure/SKILL.md,
+scripts/factory-admin/fetch-factory-pr.sh, .github/scripts/test-fetch-factory-pr.sh, .github/workflows/factory-guards.yml,
+.claude/agents/verifier.md: owner-only), decisions (ADR-0038's amendment, .ai/decisions/README.md), docs (docs/ai-factory.md "The owner's routine"), root (README.md "Infrastructure Hardening",
+.ai/context/migration.md, .ai/context/migration/stage-4.md), the repository `profitbuild/factory` (CONTRIBUTING.md,
+its "Review" point, in a pull request of its own)
+
+**Problem.** `/review`, its agents, their rules and their hooks live in this repository and review its own working
+tree. `readonly-bash.sh` lets a reviewer run git only from this repository's root, never `git -C <dir>`, on purpose:
+git runs programs that the configuration of the repository it works in names (`core.fsmonitor`, `core.pager`,
+`diff.external`, a `.gitattributes` textconv driver), and another clone's `.git/config` is no file this repository
+vouches for; the clone `factory`'s devcontainer writes is exactly such a file. The test gate (`run-tests.sh`) is
+Maven's, and the verifier reads only `.ai/runs/**/gate-r*.json` and `dependency-tree-r*.txt`. So the four rounds on
+`factory` PR #3 worked around all of it by hand: the session wrote `git diff HEAD` of the owner's host clone and a gate
+of its own (`node --test`, the linters at CI's pins) under `.ai/runs/manual/`, and the verifier refused that gate's
+`gate.txt` until round 4 wrote `gate-r4.json`.
+
+**Work.** Until stage 5 splits the review rules into `factory`: `/review` takes a `factory` pull request and gives the
+panel files, not a clone: `gh pr diff <n> --repo profitbuild/factory` and the PR's CI results (its run's jobs and
+logs), written under `.ai/runs/manual/`, the gate as `gate-r<n>.json`; nothing of the change runs on the Mac, and no
+reviewer's guard is widened.
+
+**Acceptance criteria.**
+AC1. `/review` of a `factory` pull request gives every reviewer its diff and its CI's result as files under
+     `.ai/runs/manual/`, the result as a `gate-r<n>.json` the verifier reads, and runs nothing of the change on the host.
+AC2. `readonly-bash.sh` still refuses `git -C`, and a case in `test-hooks.sh` keeps it.
+AC3. Done before 4.2's first pull request to `factory`, or that PR's review is done as #0-269's was and this item says so.
+
+**Result (owner, 2026-11-19).** `/review factory#<n> <digits>` reviews a pull request of `profitbuild/factory`.
+- Its step 3 runs `scripts/factory-admin/fetch-factory-pr.sh <n> [--previous <head>]` in place of the Maven gate. It
+  reads GitHub's API only and runs no git, and writes one directory per head,
+  `.ai/runs/manual/factory-pr<n>-<head12>/`, never overwriting one. The directory holds:
+  - the diff, base...head by the compare API, pinned to the head (`gh pr diff` follows the current one), its files
+    counted against the pull request's, and the delta since the previous round's head, with `previousRewritten`
+    when a force-push left that head no ancestor (the delta then hides a dropped commit, so the round is judged on the
+    whole diff);
+  - every commit's full message, from the paginated commits API (`gh pr view`'s headline is cut, which gave PR #6's
+    review a false finding);
+  - the description;
+  - `files/<path>.pr`, each regular file added or modified, at the head. The `.pr` suffix is round 1's security
+    finding: under its own name a `CLAUDE.md` or skill of the pull request, written inside this project, could be
+    loaded as instructions by the reviewer reading it, and a file named `gate-r1.json` would pass the verifier's
+    read hook as a gate;
+  - `gate-r1.json`: head, author, draft, commits, files, every check, the Test job's counts from its log (colour
+    codes and carriage returns removed), `ciChanged` (the pull request changes something under `.github/`, its
+    workflows or the actions and scripts they run, so its own CI does not vouch for it; round 2 widened it from
+    `.github/workflows/`, which missed a composite action), and `pass` or `fixable`.
+- It writes nothing while the CI still runs or when the pull request moves while it fetches (exit 3: the head is
+  read again at the end), for a pull request that is not open, for a tree GitHub returns truncated, for two paths
+  that differ only in case (the owner's APFS would write them to one file), for a commit list it cannot read (a
+  failure inside `for x in $(...)` does not stop a script), for fewer files or commits listed than the pull request
+  has (GitHub caps both lists) or a diff of fewer files, or for a path that is outside ASCII (APFS also merges other letters' case and Unicode
+  normalisations, tried on the owner's Mac; `factory`'s paths are ASCII), absolute, holds `..` or a control
+  character (checked in jq, on whole paths: a shell loop split a path holding a newline, as its tests found). A symlink or a submodule, by its mode in the head's tree (the contents API
+  serves a symlink to a file as that file), is listed, not written.
+- `factory.md` applies to every `factory` pull request, whatever its paths (ADR-0038 amended): in `factory` every
+  path is factory code, and `dispatcher/` matches no Owner-only entry here (round 1's blocking architecture finding).
+- Not done (accepted by the owner after round 5):
+  - the panel's verdict on a `factory` pull request reaches no record kept here (there is no `/ship` for it); it
+    reaches the pull request only if the owner posts it;
+  - the lists of files and commits follow the pull request's current head, so a push and a force-push back to the
+    same head while it fetches (A-B-A) goes unseen; `factory.diff` and `files/` stay those of the pinned head;
+  - a diff cut inside its last file would pass the count of files (whether compare errs or truncates is in no source
+    the verifier may read); `files/` holds every changed file whole;
+  - `dirname` gets no `--`: a path starting with `-` stops the fetch, writing nothing.
+- The verifier reads that gate as it is, since its hook takes `gate-r*.json` under `.ai/runs/`: its scope is
+  unchanged. AC1.
+- `readonly-bash.sh` is untouched, `git -C` refused as before (`test-hooks.sh` keeps its case). AC2.
+- `review-procedure` names the third source of a change: the directory, read with the Read tool, never a clone.
+- The script's 55 cases run against a fake `gh` in Factory guards; 24 mutations of its safeguards are caught (6 in
+  round 1, 9 in round 2, 3 each in rounds 3, 4 and 5).
+- Done before any 4.2 work. AC3.
+- How a `factory` change is made, from the draft pull request to the owner's plain merge, is recorded in `factory`'s
+  CONTRIBUTING.md (factory PR #7, merged 2026-11-19). A `factory` pull request replaces its hand-made "Review"
+  point with `/review factory#<n>`.

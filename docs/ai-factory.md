@@ -328,6 +328,7 @@ history (for a BLOCKED item also its draft PR and the phase that stopped it, whi
 | every 10 items | `/audit <since> <date>`, tick decisions in the report, `/apply-audit <report>`, merge its PR | 20–30 min |
 | every 10–15 items | `/docs-audit <date>`; look at the architecture as a whole (what no single review sees) | ~1 h |
 | sometimes | do an item yourself, then `/review` and `/ship` — the knowledge should end up in you, not only in the repository | — |
+| per `factory` pull request | `/review factory#<n> <digits>` (the pull request fetched as files by `scripts/factory-admin/fetch-factory-pr.sh`, its CI as the gate, backlog #0-270); after a clean review `gh pr ready` from `factory`'s container, then approve it yourself and merge it without `--admin` (`factory`'s CONTRIBUTING.md) | 10–20 min |
 
 Spot checks must be real (read the diff, run the tests), or the `human:*` labels measure nothing.
 Add the labels from your own GitHub account: the audits count a `human:*` label only when the owner (the one

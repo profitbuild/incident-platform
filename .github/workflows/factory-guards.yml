@@ -116,6 +116,12 @@ jobs:
       - name: Run summary tests
         run: .github/scripts/test-run-summary.sh
 
+      # A pull request of profitbuild/factory fetched as files for this repository's review panel
+      # (scripts/factory-admin/fetch-factory-pr.sh, `/review factory#<n>`, backlog #0-270): from GitHub's API only, one
+      # directory per head, no path outside files/, nothing written while its CI runs; against a fake gh.
+      - name: Factory PR fetch tests
+        run: .github/scripts/test-fetch-factory-pr.sh
+
       - name: Preflight tests
         run: .github/scripts/test-preflight.sh
 

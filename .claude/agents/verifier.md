@@ -22,7 +22,10 @@ you are the one agent that can fetch from the web (ADR-0037).
 - **Read**, only the gate's files under `.ai/runs/` (a hook refuses anything else, the gate's logs included):
   its artifact (`gate-r<round>-<attempt>.json`, or `.ai/runs/manual/gate-r1.json`: the tested `head`, per module
   the tests run/failed/skipped and the JaCoCo line coverage) and the `dependency-tree-r….txt` file it names, in
-  the same directory.
+  the same directory. For a pull request of profitbuild/factory the artifact is
+  `.ai/runs/manual/factory-pr<n>-<head12>/gate-r1.json` instead (backlog #0-270): `head`, `status`, `ci` (each check of
+  the pull request's own CI and its result), `tests` (the Test job's counts) and `ciChanged`; no modules, no
+  coverage, no dependency tree; the files of the pull request beside it are `*.pr` and not yours to read.
 - **WebFetch**, only `https://` URLs under one of these prefixes, without a query string (a hook refuses
   anything else, and its refusal lists them): `api.osv.dev/v1/`, `osv.dev/vulnerability/`,
   `github.com/advisories/`, `repo1.maven.org/maven2/`, `tomcat.apache.org/security-`, `spring.io/security/`.

@@ -168,7 +168,6 @@ Code, Javadoc, config comments and commits reference items as `backlog #N`.
 | [0-263](#0-263-nothing-runs-a-bug-fixs-test-on-the-code-before-the-fix) | Nothing runs a bug fix's test on the code before the fix | ci | Medium | Open |
 | [0-264](#0-264-a-green-pr-is-merged-on-a-base-that-moved-under-it) | A green PR is merged on a base that moved under it | ci | Medium | Open |
 | [0-265](#0-265-a-task-back-after-a-pause-is-resumed-without-asking-whether-it-still-makes-sense) | A task back after a pause is resumed without asking whether it still makes sense | ci | Low | Open |
-| [0-270](#0-270-the-review-panel-cannot-review-a-change-to-factory) | The review panel cannot review a change to `factory` | ci | High | Open |
 | [0-133](#0-133-incidentresolvedevent-carries-no-openedat) | `IncidentResolvedEvent` carries no `openedAt` | tech-debt | Low | Open |
 | [0-134](#0-134-diff-cover-is-installed-by-version-without-hashes) | `diff-cover` is installed by version, without hashes | ci | Low | Open |
 | [0-135](#0-135-kubectl-in-ci-is-downloaded-unverified) | kubectl in CI is downloaded unverified | ci | Low | Open |
@@ -3764,33 +3763,3 @@ Thresholds to decide.
 
 AC1. The dispatcher runs the agent in the three cases and acts on MODERNIZE and REWORK; CLOSE reaches the owner.
 AC2. On three resumed tasks the disposition agrees with the owner's.
-
-
-### 0-270. The review panel cannot review a change to `factory`
-
-**Type:** ci · **Priority:** High · **Status:** Open (migration stage 4, before 4.2's first PR to `factory`; ADR-0055,
-ADR-0060). Found by the review of `factory` PR #3 (#0-269; owner, 2026-11-19).
-**Autopilot:** human-only · **Risk:** medium · **Complexity:** medium · **Depends on:** #0-269
-**Touches:** factory (.claude/skills/review/SKILL.md, .claude/skills/review-procedure/SKILL.md, .claude/agents/verifier.md
-and its read hook, should its scope change: owner-only), docs (docs/ai-factory.md), root (.ai/context/migration/stage-4.md)
-
-**Problem.** `/review`, its agents, their rules and their hooks live in this repository and review its own working
-tree. `readonly-bash.sh` lets a reviewer run git only from this repository's root, never `git -C <dir>`, on purpose:
-git runs programs that the configuration of the repository it works in names (`core.fsmonitor`, `core.pager`,
-`diff.external`, a `.gitattributes` textconv driver), and another clone's `.git/config` is no file this repository
-vouches for; the clone `factory`'s devcontainer writes is exactly such a file. The test gate (`run-tests.sh`) is
-Maven's, and the verifier reads only `.ai/runs/**/gate-r*.json` and `dependency-tree-r*.txt`. So the four rounds on
-`factory` PR #3 worked around all of it by hand: the session wrote `git diff HEAD` of the owner's host clone and a gate
-of its own (`node --test`, the linters at CI's pins) under `.ai/runs/manual/`, and the verifier refused that gate's
-`gate.txt` until round 4 wrote `gate-r4.json`.
-
-**Work.** Until stage 5 splits the review rules into `factory`: `/review` takes a `factory` pull request and gives the
-panel files, not a clone: `gh pr diff <n> --repo profitbuild/factory` and the PR's CI results (its run's jobs and
-logs), written under `.ai/runs/manual/`, the gate as `gate-r<n>.json`; nothing of the change runs on the Mac, and no
-reviewer's guard is widened.
-
-**Acceptance criteria.**
-AC1. `/review` of a `factory` pull request gives every reviewer its diff and its CI's result as files under
-     `.ai/runs/manual/`, the result as a `gate-r<n>.json` the verifier reads, and runs nothing of the change on the host.
-AC2. `readonly-bash.sh` still refuses `git -C`, and a case in `test-hooks.sh` keeps it.
-AC3. Done before 4.2's first pull request to `factory`, or that PR's review is done as #0-269's was and this item says so.
