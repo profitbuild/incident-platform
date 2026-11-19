@@ -169,7 +169,6 @@ Code, Javadoc, config comments and commits reference items as `backlog #N`.
 | [0-264](#0-264-a-green-pr-is-merged-on-a-base-that-moved-under-it) | A green PR is merged on a base that moved under it | ci | Medium | Open |
 | [0-265](#0-265-a-task-back-after-a-pause-is-resumed-without-asking-whether-it-still-makes-sense) | A task back after a pause is resumed without asking whether it still makes sense | ci | Low | Open |
 | [0-268](#0-268-factorys-ci-is-a-copy-of-incident-platforms-with-no-drift-check-and-without-part-of-its-controls) | `factory`'s CI is a copy of incident-platform's, with no drift check and without part of its controls | ci | Medium | Open |
-| [0-269](#0-269-a-session-that-writes-factory-holds-the-owners-token-which-the-rulesets-do-not-bind) | A session that writes `factory` holds the owner's token, which the rulesets do not bind | ci | High | In progress |
 | [0-270](#0-270-the-review-panel-cannot-review-a-change-to-factory) | The review panel cannot review a change to `factory` | ci | High | Open |
 | [0-133](#0-133-incidentresolvedevent-carries-no-openedat) | `IncidentResolvedEvent` carries no `openedAt` | tech-debt | Low | Open |
 | [0-134](#0-134-diff-cover-is-installed-by-version-without-hashes) | `diff-cover` is installed by version, without hashes | ci | Low | Open |
@@ -3807,79 +3806,6 @@ AC4. The denies of `factory/.claude/settings.json` and those of incident-platfor
      there differ in neither direction without a check failing, compared with `factory/.claude/settings.json` itself, not
      with the list in its test (`dispatcher/test/session-denies.test.mjs`, a third copy), or stage T's template has
      replaced the copy.
-
-### 0-269. A session that writes `factory` holds the owner's token, which the rulesets do not bind
-
-**Type:** ci · **Priority:** High · **Status:** In progress (migration stage 4, before any session works on 4.2 in
-`factory`; ADR-0034, ADR-0060 D5 as amended). Found by the review of `factory` PR #1 (security); reshaped by the owner
-on 2026-11-18.
-**Autopilot:** human-only · **Risk:** high · **Complexity:** medium · **Depends on:** #0-267
-**Touches:** factory (.claude/settings.json, .claude/settings.autopilot.json: owner-only), root
-(.ai/decisions/0060-a-dispatcher-runs-each-agent-in-a-task-container.md, .ai/decisions/README.md, README.md,
-.ai/context/migration.md, .ai/context/migration/stage-4.md, BACKLOG.md), the repository `profitbuild/factory`
-(.claude/settings.json, a CI test, README.md, a ruleset on tag creation), the organisation (the app
-`profitbuild-factory-dev` and its installation)
-
-**Problem.** A ruleset binds everyone but an admin, and every interactive session runs with the owner's `gh` token, an
-admin's. There only the session's deny rules keep it from merging with the bypass, approving a PR, changing a ruleset
-(the one on tags included, and then moving a tag a product loads) or a setting. Deny rules match the text of a command
-("not a security boundary around the program", Claude Code's permissions page): `bash -c` or `git -C . push` pass
-them. And a session started in the `factory` clone has none, since `factory` has no `.claude/`; neither repository's
-denies stop a tag push or a release. The bot is no way out: its token sits where the autopilot and the code it runs
-reach it, and ADR-0055 keeps every builder credential off `factory`. Code for `factory` starts with 4.2.
-
-**Work** (ADR-0060 D5 as amended on 2026-11-18). `factory`'s code is written by a session holding the token of a
-GitHub App of its own, `profitbuild-factory-dev`: installed on `factory` alone; Contents and Pull requests read and
-write, Metadata read, nothing else; no webhook. Its key lives where neither the autopilot's devcontainer nor
-the build VM's task code reaches it (ADR-0060 D5), and a script turns it into the hour's token for `git` and `gh` (first proposed: the key in the
-volumes of a devcontainer of `factory`'s own; settled on 2026-11-19 as the key on the Mac's host and the token read
-by that devcontainer, see the Result). A ruleset of its own on `factory` restricts tag creation to the admin role; the ruleset `tags`
-keeps no bypass (a bypass applies to every rule of its ruleset). So GitHub refuses the app a push to `main`, a merge,
-a counted review, a tag and a change to `.github/workflows/`. Text and plans stay in the owner's sessions on the Mac;
-their denies gain a tag push and the release commands, and `factory` carries a copy of those that apply there, for a
-session started in its clone, checked by its CI.
-
-**Acceptance criteria.**
-AC1. ADR-0060 D5 records who writes `factory`'s code, and ADR-0055's rule (no builder credential on `factory`) holds.
-AC2. The app `profitbuild-factory-dev` exists with exactly the permissions above and is installed on `factory` alone;
-     `factory` has a ruleset restricting tag creation whose one bypass is the admin role, `tags` has none, and `main`'s
-     keeps `require_last_push_approval` and `dismiss_stale_reviews_on_push`; the owner reads all of it back.
-AC3. With the app's token, from where its session runs (`factory`'s devcontainer): a push to `main`, a tag push, a push that changes
-     `.github/workflows/` and a merge of its own PR the owner has not approved are refused by GitHub; a branch push and
-     `gh pr create` work; `gh release create` on an existing tag is tried and its answer recorded (ADR-0060 D5 names it
-     as allowed); neither the owner's token nor the bot's is readable there.
-AC4. incident-platform's `.claude/settings.json` denies a tag push (`--tags`, `--follow-tags`, `--mirror` and every
-     abbreviation git accepts, `refs/tags/`, `tag <t>`), the writing `gh release` commands, and `gh api` on releases, git refs
-     and tags and the ref mutations; README names what these patterns do not see.
-AC5. `factory` carries `.claude/settings.json` with the owner session's denies that apply there, and its CI fails a
-     pull request that removes one (the drift between the two lists is #0-268's).
-AC6. Done before a session starts work on 4.2 in `factory`.
-
-**Result (owner, 2026-11-19).** AC1 and AC4: PR #657. AC2: the app `profitbuild-factory-dev` (App ID 5822112) with
-exactly Contents and Pull requests write and Metadata read and no event, and the rulesets `tag-creation` (id 27578438,
-tag creation, its one bypass the admin role), `tags` (no bypass) and `main` (`require_last_push_approval`,
-`dismiss_stale_reviews_on_push`), read back by the owner on 2026-11-18; the installation's scope is proven on every
-token, as `dev-token.mjs` refuses one that reaches more than `profitbuild/factory`. AC5: `factory` PR #3 (merged
-2026-11-19, 0b6e5a18): `factory/.claude/settings.json` holds the 41 denies of this repository's that apply there, and
-`dispatcher/test/session-denies.test.mjs` in job `Test` fails a pull request that removes one (shown by removing one).
-Where the key lives, settled here: on the owner's Mac, outside every repository (`~/.config/profitbuild-factory-dev/app.pem`,
-mode 600), not in the devcontainer's volumes as first proposed. A workspace bind-mounted from the host would let the
-container change the script the host runs next to the key, or plant a git hook that the owner's next `git` there runs
-with the admin token; so `factory`'s devcontainer works on a clone in a volume of its own, and
-`dispatcher/bin/dev-token.mjs`, run on the host from the owner's clone on `main`, writes the hour's token to a
-directory the container mounts read-only (`--watch` refreshes it; Ctrl-C, SIGTERM or SIGHUP revokes it and deletes
-the file). AC3, run by the owner in that devcontainer on 2026-11-19: its user `node` reads the token, `gh auth status`
-names `profitbuild-factory-dev[bot]`, there is no `~/.config/gh`, `~/.gitconfig` or `~/.ssh`, `SSH_AUTH_SOCK` is
-empty and the image's helper is the only credential helper; the firewall is up (126 networks, IPv6 closed). A branch
-push and `gh pr create` worked (`factory` PR #4, closed, its branch deleted by the app). Refused by GitHub: `gh pr
-merge` of that PR ("the base branch policy prohibits the merge"), `git push origin HEAD:main` (GH013, naming the
-merge-commit and required-checks rules), a push changing `.github/workflows/ci.yml` ("refusing to allow a GitHub App
-to create or update workflow ... without `workflows` permission") and a tag push (GH013, "Cannot create ref due to
-creations being restricted"). `gh release create` on an existing tag was not tried: `factory` has no tag yet; it is
-tried at the first (v0.1.0, stage T). AC6: done before any work on 4.2. Reviewed in four rounds (`/review 12567`,
-`12567`, `12`, `12`, with `review-k8s` added by the Dockerfile); left by them: #0-270 (the panel cannot review a change
-to `factory`), additions to #0-268 and #0-249, and known gaps in README "Infrastructure Hardening" (a release on a
-tag that exists, a branch deleted by a push or through the API, VS Code's "Reopen in Container").
 
 ### 0-270. The review panel cannot review a change to `factory`
 
