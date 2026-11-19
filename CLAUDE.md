@@ -48,6 +48,9 @@ actionlint -shellcheck="$(command -v shellcheck)"; zizmor --offline --persona re
 # ADR-0040; #0-163, ADR-0043);
 # the .rb checks need the Ruby of .ruby-version on the host (rbenv/asdf/chruby read it; the macOS system Ruby is not supported)
 ruby .github/scripts/check-shell.rb "$(command -v shellcheck)"; ruby .github/scripts/check-downloads.rb; ruby .github/scripts/check-runtime-setup.rb
+# profitbuild/factory's copies of this repository's pins, scripts and denies against a clone of it (backlog #0-268,
+# ADR-0061): as a push, so differences are warnings; CI fails a pull request only on a difference it brings
+.github/scripts/test-check-factory-copies.sh; d=$(mktemp -d) && git clone -q --depth 1 https://github.com/profitbuild/factory.git "$d" && ruby .github/scripts/check-factory-copies.rb "$d"
 # The autopilot workflow's logic (backlog #0-163): its helpers and whole runs against a fake agent(), on the Node of
 # .node-version (ADR-0043; Node's built-in modules only, no npm)
 node .github/scripts/test-autopilot-workflow.mjs

@@ -168,7 +168,6 @@ Code, Javadoc, config comments and commits reference items as `backlog #N`.
 | [0-263](#0-263-nothing-runs-a-bug-fixs-test-on-the-code-before-the-fix) | Nothing runs a bug fix's test on the code before the fix | ci | Medium | Open |
 | [0-264](#0-264-a-green-pr-is-merged-on-a-base-that-moved-under-it) | A green PR is merged on a base that moved under it | ci | Medium | Open |
 | [0-265](#0-265-a-task-back-after-a-pause-is-resumed-without-asking-whether-it-still-makes-sense) | A task back after a pause is resumed without asking whether it still makes sense | ci | Low | Open |
-| [0-268](#0-268-factorys-ci-is-a-copy-of-incident-platforms-with-no-drift-check-and-without-part-of-its-controls) | `factory`'s CI is a copy of incident-platform's, with no drift check and without part of its controls | ci | Medium | Open |
 | [0-270](#0-270-the-review-panel-cannot-review-a-change-to-factory) | The review panel cannot review a change to `factory` | ci | High | Open |
 | [0-133](#0-133-incidentresolvedevent-carries-no-openedat) | `IncidentResolvedEvent` carries no `openedAt` | tech-debt | Low | Open |
 | [0-134](#0-134-diff-cover-is-installed-by-version-without-hashes) | `diff-cover` is installed by version, without hashes | ci | Low | Open |
@@ -3766,46 +3765,6 @@ Thresholds to decide.
 AC1. The dispatcher runs the agent in the three cases and acts on MODERNIZE and REWORK; CLOSE reaches the owner.
 AC2. On three resumed tasks the disposition agrees with the owner's.
 
-
-### 0-268. `factory`'s CI is a copy of incident-platform's, with no drift check and without part of its controls
-
-**Type:** ci · **Priority:** Medium · **Status:** Open (migration stage 4, before 4.2; ADR-0055, ADR-0060). Found by
-the review of `factory` PR #1 (FAC-A01, FAC-A05; owner, 2026-11-18).
-**Autopilot:** human-only · **Risk:** medium · **Complexity:** medium · **Depends on:** #0-267
-**Touches:** the repository `profitbuild/factory` (.github/, .claude/settings.json, .devcontainer/), root (.ai/context/migration/stage-4.md), factory
-(.github/workflows/factory-guards.yml, should the drift check live here: owner-only)
-
-**Problem.** `factory`'s CI copies incident-platform's pins (actionlint, shellcheck, zizmor, `actions/checkout`,
-`actions/setup-node`), `install-pinned-tool.sh`, the `setup-node` action, `.node-version` and `zizmor.yml`; only
-comments keep them equal. Renovate and `check-pinned-tools.sh` run in incident-platform alone, so a security bump
-there leaves `factory` on the old pin, with no signal (the drift pattern of #0-122). And `factory` runs none of:
-`check-downloads.rb` (ADR-0033's rule, a tool is downloaded by `install-pinned-tool.sh` only, is unenforced there),
-`check-runtime-setup.rb`, shellcheck of the composite actions' steps, the secret scan (betterleaks, ADR-0036),
-`check-pinned-tools.sh`, `repository-settings.rb check`. Harmless on a skeleton with one script; not once 4.2 brings
-the build VM's scripts and the code that handles builder-app's key. A copy of the owner session's denies joins the
-list with #0-269 (`factory/.claude/settings.json`, its AC5): it drifts from incident-platform's `.claude/settings.json`
-the same way. #0-269 added three more copies to the list: `factory`'s `.devcontainer/init-firewall.sh` (a cut of
-this repository's), its Dockerfile's `FROM node:<version>` (a second copy of `.node-version`, unchecked) and the dev
-app's identity in two files (`APP_ID` in `dispatcher/bin/dev-token.mjs`, the bot's user id in
-`.devcontainer/devcontainer.json`). And both repositories' denies miss the deletion of a branch by a push (`git push
-<r> --delete <b>`, `git push <r> :<b>`): a deny for it goes into both lists at once, or the copy drifts.
-
-**Work.** Decide per control: copy it now, check it from incident-platform (ADR-0055, ADR-0060 D5: `factory` names no product,
-so a drift check, if any, lives in incident-platform, for example Factory guards comparing the pins with `factory`'s
-pinned tag), or leave it to stage T's template. The secret scan is decided before 4.2, and a token it needs lives in
-an environment limited to `main`, never in a repository secret: `profitbuild-factory-dev`'s pull requests run CI with
-the repository's secrets (ADR-0060 D5 as amended).
-
-**Acceptance criteria.**
-AC1. Each control listed above has a recorded decision, in this item or in `stage-4.md`: now, from incident-platform,
-     or stage T.
-AC2. Before 4.2's first PR to `factory`, its CI scans a pull request's commits for secrets, or this item records why not.
-AC3. A pin changed in incident-platform's `ci.yml` without the same change in `factory` fails a check, or stage T's
-     template has replaced the copies.
-AC4. The denies of `factory/.claude/settings.json` and those of incident-platform's `.claude/settings.json` that apply
-     there differ in neither direction without a check failing, compared with `factory/.claude/settings.json` itself, not
-     with the list in its test (`dispatcher/test/session-denies.test.mjs`, a third copy), or stage T's template has
-     replaced the copy.
 
 ### 0-270. The review panel cannot review a change to `factory`
 
