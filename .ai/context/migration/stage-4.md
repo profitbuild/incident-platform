@@ -63,41 +63,105 @@ state recorded → container removed.
   change is made, review and merge included, is `factory`'s CONTRIBUTING.md, factory PR #7); additions to #0-268 (three more copies, a deny for branch
   deletion by push in both repositories) and to #0-249 (`factory`'s Dockerfile installs Claude Code the same way).
 
-## 4.2 builder-app
+## 4.2 builder-app — #0-271 (4.2a, the code) and #0-272 (4.2b, the app, the VM and the rulesets)
 
-- **Owner (GitHub, organisation `profitbuild`):** create a GitHub App `profitbuild-builder`: no webhook; repository
-  permissions Contents read and write, Pull requests read and write, Issues read and write (labels on PRs), Metadata
-  read; nothing else (no Checks, no Statuses, no Workflows, no Administration). Install it on incident-platform only.
-  Generate a private key; on the VM: user `dispatcher` (provision.sh, see below), the key at
-  `/home/dispatcher/.config/factory/builder-app.pem`, `chmod 600`, and `FACTORY_APP_ID`, `FACTORY_INSTALLATION_ID` in
-  `/home/dispatcher/.config/factory/env` (mode 600).
-- **VM (`scripts/factory-admin/build-vm/provision.sh`, moving to `factory`):** a system user `dispatcher`, its home
-  mode 700; `factory` cannot read it. The dispatcher drives `factory`'s rootless Docker through its socket
-  (`/run/user/<factory uid>/docker.sock`) by a group ACL: control of `factory`'s containers, never the reverse.
-- **Code (`dispatcher/src/github/app-token.mjs`):** a JWT (`iat` = now − 60 s, `exp` = now + 9 min, `iss` = app id)
-  signed RS256 with `node:crypto`; `POST /app/installations/{id}/access_tokens` narrowed to the one repository and the
-  permissions above; cached until 5 minutes before expiry; never written to disk. `git push` gets it through
-  `GIT_ASKPASS` (a script printing an env var of the git process only), never in a URL or argv. Commits and the PR are
-  authored as `profitbuild-builder[bot]` with its noreply address (`<bot user id>+profitbuild-builder[bot]@users.noreply.github.com`).
-- **incident-platform changes (same item):** ADR-0052 amended (the preflight's identity is the app's, for the
-  dispatcher path; the bot's stays for the rollback); ADR-0034 amended (the app is not a bypass actor; it needs none:
-  its PRs wait for the owner's review like the bot's); `repository-settings.rb` knows the app's installation (it is
-  on incident-platform, not on `factory`); `audit-data.sh` reads the PR author `app/profitbuild-builder` as well as
-  the bot's login.
-- **Tests:** a JWT verified against a key pair generated in the test; the token request against a fake server
-  (`node:http`); a test that the token is absent from argv, from the environment of every child but git's, and from
-  the state directory.
-- **From #0-269, for 4.2 and 4.3:** `app-token.mjs` exists (the JWT, the token request, the repository list, the
-  revoke; 30 s per call, no retry): 4.3's GitHub helper (#0-261) either grows from its `githubRequest` or replaces it,
-  so that one path calls GitHub. git gets the dev app's token from a credential helper that reads a file, while this
-  step plans `GIT_ASKPASS` with an environment variable of the git process: 4.2 picks one or records why both. The dev
-  app's identity (`APP_ID` in `dispatcher/bin/dev-token.mjs`, its bot's user id in `.devcontainer/devcontainer.json`)
-  stays out of `src/`, and `dev-token.mjs`, a tool of the Mac's host, sits in the package the VM runs: `provision.sh`
-  decides whether it ships there.
-- **Shows it also:** `gh api repos/profitbuild/factory/installation` with the app's JWT answers 404: the app is not on
-  `factory` (moved from #0-267's AC2, which could not check an app that did not exist yet).
-- **Open:** rotation cadence (proposal: a new key each quarter, the old deleted after the switch); where the stage-C
-  secret store is.
+Split by the owner on 2026-11-19, after an analysis of the step. The cut follows the trust boundary:
+- the code that reads the key is written and reviewed first, tested with a key made in the test, before the real key
+  exists;
+- then the app, the key on the VM and the rulesets that confine the app.
+
+What the old single step also held moves to 4.5, where it describes real behaviour: ADR-0052 and ADR-0034 amended,
+`audit-data.sh` reading `app/profitbuild-builder`, and the Issues permission (labels).
+
+### 4.2a The code (#0-271, in `factory`)
+
+- **Code** (`dispatcher/src/github/`, grown from `app-token.mjs`, #0-269). It reads the key and refuses one readable by
+  others. A JWT (`iat` = now − 60 s, `exp` = now + 9 min, `iss` = app id), signed RS256 with `node:crypto`, buys the
+  token from `POST /app/installations/{id}/access_tokens`, narrowed to incident-platform and the three permissions.
+  Before the token is used it checks what `dev-token.mjs` checks for the dev app:
+  - the installation's exact permissions;
+  - exactly one repository;
+  - the token's own permissions.
+
+  It is cached in memory until 5 minutes before expiry and never written to disk. The app's id and its installation's
+  id come from `/home/dispatcher/.config/factory/env`; no identity sits in `src/`.
+- **git: `GIT_ASKPASS`**, a script printing a variable of the git process's own environment: the token is in no URL,
+  argv, file or other child's environment. Two mechanisms exist on purpose. The devcontainer's credential helper reads
+  a file because there the token crosses from the Mac's host into a container, and only a mounted file crosses; here
+  git is the dispatcher's own child, so nothing needs to cross.
+- **`check-app`:** mints, runs the checks, expects 404 from `GET /repos/profitbuild/factory/installation` with the
+  app's JWT (the app is never on `factory`, moved here from #0-267's AC2), revokes. It prints no token.
+- **Tests:** a JWT verified against a key pair made in the test; the requests against `testing/fake-github.mjs`; the
+  token absent from argv, from the environment of every child but git's, and from the state directory; each refusal
+  mutated.
+- `dev-token.mjs` stays a tool of the Mac's host, unchanged; whether it ships in the VM's package is `provision.sh`'s
+  call (4.2b).
+
+### 4.2b The app, the key and the confinement (#0-272, in incident-platform and on GitHub)
+
+- **Owner (GitHub, organisation `profitbuild`):** a GitHub App `profitbuild-builder`:
+  - no webhook;
+  - repository permissions Contents read and write, Pull requests read and write, Metadata read. Nothing else: no
+    Issues until 4.5, no Checks, no Statuses, no Workflows, no Administration;
+  - installed on incident-platform only.
+- **VM (`scripts/factory-admin/build-vm/provision.sh`, moving to `factory`):**
+  - a system user `dispatcher`, its home mode 700; `factory` cannot read it;
+  - the key at `/home/dispatcher/.config/factory/builder-app.pem` and the ids in `/home/dispatcher/.config/factory/env`,
+    both mode 600;
+  - the dispatcher drives `factory`'s rootless Docker through its socket (`/run/user/<factory uid>/docker.sock`) by a
+    group ACL: control of `factory`'s containers, never the reverse.
+- **Commits and the PR** (4.5) are authored as `profitbuild-builder[bot]` with its noreply address
+  (`<bot user id>+profitbuild-builder[bot]@users.noreply.github.com`).
+- **Rulesets of incident-platform** (new; `main`'s was the only one):
+  - **branches:** every branch but `main` and `factory/**`, with creation, update, deletion and non_fast_forward. The
+    bypass is the role Write (the owner and the bot account) and Renovate as an `Integration`;
+  - **tags:** creation, update and deletion, with the admin role as the only bypass.
+
+  Both are files in `.github/repository-settings/rulesets/`, and `repository-settings.rb` checks them and builder-app's
+  installation.
+- **ADR-0034 amended (in #0-272's PR).** It says today that `main` is guarded by one ruleset and that only the settings
+  guarding `main` are files. The amendment adds:
+  - the two rulesets and their bypass actors (the role Write; Renovate as an `Integration`; tags to the admin role);
+  - the probe's finding that a role's bypass covers no app;
+  - `repository-settings.rb check` widened to them and to builder-app's installation.
+
+  ADR-0060's Consequences, as amended on 2026-11-19, put this part of ADR-0034 at 4.2b and the rest at 4.5.
+- **Rotation:** a second key added, the dispatcher switched, the old key deleted; quarterly, and at once on any doubt.
+
+### What a probe settled before 4.2b (2026-11-19), and what follows from it
+
+**Why.** Confining builder-app by a ruleset works only if a bypass given to a repository role does not also let an app
+through. GitHub's documentation does not say either way (its pages on rulesets, the rules and the REST
+`bypass_actors`), so it was tried.
+
+**How.** On `factory`, with the dev app `profitbuild-factory-dev`, whose installation token holds Contents write, the
+case builder-app will be. A temporary ruleset 27640580 on `refs/heads/probe/**` held the rules creation, update and
+deletion; the owner created it, changed it and deleted it.
+
+| Bypass of the ruleset | Who pushed | Result |
+|---|---|---|
+| role Write | the dev app | refused: `GH013 … Cannot create ref due to creations being restricted` |
+| role Write | the owner (admin) | passed by bypass |
+| role Write and the dev app as `Integration` | the dev app | passed by bypass (the positive control: the rule holds against an app, and only the missing entry refused it) |
+
+**What it shows.** A role's bypass does not cover an app, which passes only as an `Integration` of its own. A role's
+bypass covers the roles above it.
+
+**What follows for the factory:**
+- **4.2b:** builder-app can be held to `factory/**` with no entry of its own. The owner and the bot account pass by
+  the role; Renovate, an app, must be listed by name, or its branches are refused too.
+- **Every app added later** (review-app at stage 5, any other) is refused by every ruleset until it is listed. Adding
+  it is a decision, made in `.github/repository-settings/` and checked, never a side effect of a role.
+- **Stage 5:** review-app's required status is bound to review-app by the ruleset's `integration_id`, as Actions' are
+  today (15368). builder-app (no Checks, no Statuses) cannot set it, and an app with Statuses could not either.
+- **Stage 10:** the conditions for auto-merge in `.ai/context/migration.md` rest on these facts.
+- **Stage T:** the template of a product repository carries both rulesets, its own app as the confined author.
+- **What the probe did not show:**
+  - deletion was tried by the owner only, and whether the dev app deleted its branch before the ruleset went is not
+    recorded;
+  - update and non_fast_forward were not tried at all.
+
+  AC2 of #0-272 tries every rule with builder-app's real tokens.
 
 ## 4.3 The dispatcher's core
 
@@ -162,8 +226,15 @@ state recorded → container removed.
   acceptance verdict JSON, the fields `audit-data.sh` reads.
 - **Push and PR:** `git push` as builder-app (4.2); `GET /pulls?head=profitbuild:<branch>` first, then `POST /pulls`
   or `PATCH`, labels by the issues API (`autopilot`, `shadow`, `risk-high`, `blocked`), a draft for a BLOCKED task.
+  The label call is the first that needs builder-app's Issues permission, added to the app here, not at 4.2 (#0-272);
+  whether Pull requests write alone suffices for a PR's labels is checked then, not assumed.
   No status the ruleset requires is set with builder-app's credential (ADR-0055); v0 sets none. The body is written by
   an agent with `ship-record`'s format and checked here.
+- **Moved here from 4.2 (2026-11-19, ADR-0060's Consequences as amended):**
+  - ADR-0052 amended: the preflight's identity is the app's on the dispatcher's path, the bot's on the rollback;
+  - ADR-0034 amended: the app is no bypass actor and needs none, since its PRs wait for the owner's review like the
+    bot's;
+  - `audit-data.sh` reads the PR author `app/profitbuild-builder` as well as the bot's login.
 - **Trace (#0-204):** one row per agent call in a `<details>` block: agent, phase, round, duration, tokens, commits added.
 - **Backlog edits** (moving the item to `BACKLOG-DONE.md`) stay an agent's file edits, committed by the dispatcher.
 - **Tests:** each check refuses its planted case (a merge, a protected path, a missing trailer, a body without
@@ -208,7 +279,8 @@ state recorded → container removed.
 ## Owner's steps, in order
 
 1. ADR-0060 Accepted; `profitbuild/factory` created with its baseline (4.1). Done 2026-11-18.
-2. builder-app created and installed on incident-platform; its key on the VM (4.2).
+2. builder-app created and installed on incident-platform, its key on the VM, the two rulesets applied (4.2b,
+   #0-272), after 4.2a's code is merged in `factory` (#0-271).
 3. A Console workspace with a spend limit and its key on the VM (4.6).
 4. Merging each item's PRs; the three exit runs started by hand (4.7).
 
@@ -218,7 +290,9 @@ state recorded → container removed.
 |---|---|---|
 | 4.1 | Licence of `factory` | settled 2026-11-18: Apache-2.0 |
 | 4.1 | `repository-settings` files for `factory` now or at stage T | settled 2026-11-18: stage T |
-| 4.2 | Key rotation cadence | quarterly |
+| 4.2 | Key rotation cadence | settled 2026-11-19: quarterly, and at once on any doubt (#0-272) |
+| 4.2 | Does a role's ruleset bypass cover an app? | settled 2026-11-19 by a probe: no (4.2, "What a probe settled") |
+| 4.5 | Does Pull requests write alone allow a PR's labels? | checked at 4.5, before Issues is added |
 | 4.3 | `next-item.sh`'s `gh pr list` without a token | the dispatcher passes the open PRs as a file |
 | 4.3 | Shared `~/.m2` cache | accept in v0 |
 | 4.4 | Running a plugin's named agent as `-p`'s main thread; hooks in that mode; the isolation check's successor | a spike first |

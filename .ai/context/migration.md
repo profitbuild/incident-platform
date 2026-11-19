@@ -54,7 +54,10 @@ Decided in ADR-0060 (2026-11-17, Accepted by the owner on 2026-11-18): D1 the di
 Claude's API key behind a proxy; D5 public `factory`, loaded read-only as a plugin; D6 `.factory/adapter.json`; D7
 checks before a push outside the container; D8 started by hand. The plan, step by step: `migration/stage-4.md`.
 Items in order: 4.1 #0-267 (done 2026-11-18: ADR-0060 accepted, `profitbuild/factory` and its baseline, PR #655 and
-`factory` PR #1), then, each created when its turn comes, 4.2 builder-app, 4.3 the dispatcher's core
+`factory` PR #1), then, each created when its turn comes, 4.2 builder-app (split on 2026-11-19: #0-271 the code that mints and
+checks its token, in `factory`; #0-272 the app, its key on the VM, and two rulesets here that hold it to `factory/**`
+and keep tags to the admin; moved from 4.2 to 4.5, where a PR is first opened: ADR-0052 and ADR-0034 amended for the
+app as a PR's author, `audit-data.sh` reading it, and the app's Issues permission), 4.3 the dispatcher's core
 (#0-261), 4.4 the control flow ported with its tests, 4.5 push, PR, trailers and trace (#0-212, #0-204), 4.6 the
 credential proxy and `stream-json` transcripts, 4.7 the adapter, the switch and the three runs of the exit.
 ADR-0055: the container has no token; push, PR and commit trailers by the dispatcher; builder-app (never on `factory`);
@@ -90,6 +93,9 @@ Exit: a `/seed-bugs` series on the new path catches at least what the old one di
 - superseded: #0-183.
 - gap: review-app; the review VM (no Docker, no Maven, reads CI's artifacts); the review rules split into the factory's
   core, the `spring-boot` profile and the product's own.
+- carries: review-app's required status is bound to review-app by `integration_id` in the ruleset of `main`. Every
+  ruleset refuses review-app until it is listed as an `Integration`, since a role's bypass covers no app (the probe of
+  2026-11-19, `migration/stage-4.md` "4.2").
 
 ### 6a. Lane, trace, human gate, CODEOWNERS, `/human-review`
 Exit: lane agrees with the owner on 3 PRs.
@@ -114,6 +120,8 @@ Exit: 3 items taken, claimed and closed.
 
 ### T. Template of a product repository and its bootstrap
 Exit: a new empty repository passes `repository-settings.rb check` and Factory guards.
+- carries: #0-272's two rulesets (the product's builder app held to `factory/**`, tags to the admin), with any app the
+  product uses listed as an `Integration` (a role's bypass covers no app).
 - gap: all of it.
 
 ### 8. Backlog Creator and features (sub-issues, flags)
@@ -146,6 +154,18 @@ Exit: a week unattended.
 
 ### 10. Auto-merge on the low-risk lane
 Exit: 9 of 10 PRs as the owner judges them.
+- conditions, before auto-merge is switched on (2026-11-19, the analysis of 4.2): no single key may be enough to merge
+  into `main`, so a leaked builder-app key yields at most a PR that waits:
+  1. the author is not the approver: builder-app (build VM) pushes; review-app (stage 5, review VM, another key)
+     approves. This waits for ADR-0034's phase 3, since the approval `main` requires today is the code owner's (the
+     CODEOWNERS catch-all, one approval);
+  2. every status the ruleset requires is bound to its app by `integration_id`, so no other credential sets one of the
+     same name;
+  3. an approval is bound to the head's SHA, so a new push needs a new one. Whether it is a status or a review with
+     `require_last_push_approval` is stage 5's choice;
+  4. "low risk" is decided by GitHub (a ruleset or a required check over the changed paths), never by the dispatcher's
+     word; CODEOWNERS still takes the owner for the Owner-only paths;
+  5. builder-app writes only `factory/**`, and tags are the admin's (#0-272's rulesets).
 - waits: #0-264, #0-153.
 - before (ADR-0055 "Consequences"): the stages that close #0-236 (4), #0-167 (6a) and #0-225 (2 and 4) have passed
   their exits.
