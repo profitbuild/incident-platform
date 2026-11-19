@@ -3,7 +3,8 @@
 - **Status:** Accepted (2026-11-18, by the owner; D1–D8 below chosen by the owner on 2026-11-17, in an
   interactive session); D5 amended on 2026-11-18 by backlog #0-269 (`factory`'s code is
   written with an app of its own), its open points settled on 2026-11-19 (where the app's key lives, how the session
-  starts)
+  starts); its Consequences amended on 2026-11-19 (step 4.2 split, #0-271 and #0-272: when ADR-0034 and
+  ADR-0052 are amended)
 - **Backlog:** #0-267 (stage 4.1); stage 4's later items are created as their turn comes, each from its step of the
   plan `.ai/context/migration/stage-4.md`
 - **Date:** 2026-11-17
@@ -126,6 +127,13 @@ and `--plugin-dir` (code.claude.com/docs/en/headless.md, cli-reference.md).
 - ADR-0052 (`FACTORY_BOT_LOGIN`) and ADR-0034 (the ruleset's actors and bypass) are amended when builder-app lands
   (stage 4.2); ADR-0050 (the agents' command lists: no git writing commands once the dispatcher commits, 4.4) and
   ADR-0058 (the isolation probe's successor, 4.4) are amended by 4.4; ADR-0053 is superseded at stage 4's exit.
+  **Amended (2026-11-19, the owner: 4.2 split into #0-271 and #0-272).** When each amendment lands:
+  - ADR-0034 at 4.2b (#0-272), for the rulesets beyond `main` that confine builder-app (branches, tags) and their
+    bypass actors;
+  - ADR-0034 again at 4.5, for the app as a PR's author with no bypass;
+  - ADR-0052 at 4.5.
+
+  At 4.2 nothing opens a PR yet (`migration/stage-4.md` "4.2").
 - `factory` has one non-admin writer, `profitbuild-factory-dev` (D5 as amended by #0-269): a new credential, a
   private key whose tokens last an hour and reach `factory` alone; its PRs wait for the owner's review like the bot's on
   incident-platform. The bot's token still reaches incident-platform only.
