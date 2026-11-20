@@ -306,7 +306,7 @@ bypass covers the roles above it.
 
 Split on 2026-11-20 (the owner's choice A), one `factory` pull request each, in this order:
 - **4.3a, #0-275:** CLI and configuration, state and lock, the retries (#0-261), the adapter's and the gate's
-  schemas; no Docker, no VM.
+  schemas; no Docker, no VM. Done 2026-11-20, `factory` PR #15 (merge `51ce6928`).
 - **4.3b, #0-276:** "Carried from #0-271's review" below: the trusted clone, the pinned refspec, the repository from
   the adapter, children from an allowlisted environment.
 - **4.3c, #0-277:** "Docker for the dispatcher" (an analysis and the owner's choice first, then `provision.sh`) and the
@@ -364,7 +364,7 @@ Split on 2026-11-20 (the owner's choice A), one `factory` pull request each, in 
 - **Open:** `next-item.sh` calls `gh pr list` for its locks and there is no token in a container (proposal: the
   dispatcher passes the open PRs as a file, a change to `next-item.sh`'s arguments).
 
-**Record (4.3, in progress: split 2026-11-20, PR #665).**
+**Record (4.3, in progress: split 2026-11-20, PR #665; 4.3a done 2026-11-20, `factory` PR #15).**
 - **Done:** the split into #0-275..#0-278 (above), in an order where each part is reviewed on its own and the first two
   need neither Docker nor the VM; #0-273 first (dev-token on the shared checks), so 4.3b changes one API with two
   callers rather than leaving a third copy.
@@ -375,7 +375,7 @@ Split on 2026-11-20 (the owner's choice A), one `factory` pull request each, in 
     which Node holds: the kernel frees it when the process dies, and a live run cannot lose it. The lock file's
     `dev` and `ino` are checked against its path after locking.
   - **One lock for the whole dispatcher in v0:** a narrowing of ADR-0060 D7's lock per task, equivalent while one task
-    runs at a time; the note in ADR-0060 lands with #0-275's pull request (its Touches). Probed 2026-11-20 in a Linux
+    runs at a time; ADR-0060 D7 amended by #0-275's closing pull request (its Touches). Probed 2026-11-20 in a Linux
     container: `flock(1)` exits 0 and the lock stays with Node's descriptor, a second lock is refused meanwhile, and
     `kill -9` of Node frees it.
   - **A secret-shaped value refused anywhere in the environment** (PEM, `ghs_`, `ghp_`, `gho_`, `ghu_`, `ghr_`,
@@ -393,8 +393,48 @@ Split on 2026-11-20 (the owner's choice A), one `factory` pull request each, in 
   - **`BUILDER_APP_KEY` keeps its default path:** ADR-0052 point 5's "no defaults" names the three limits; and
     ADR-0055's "configuration from the environment only" holds, since the variable overrides it and the default is
     a path, no secret: the key itself is a file of `dispatcher`'s (ADR-0060 D3), checked at every read.
-- **Not done:** all of 4.3's code.
-- **Why not:** in progress, one item at a time (#0-275 first).
+- **Done in 4.3a (`factory` PR #15, merge `51ce6928`; three review rounds, 163 tests, mutations of every check caught but
+  one equivalent):** `dispatcher/src/cli.mjs run`; settings through one mechanism (`config/settings.mjs`, `builder-env`
+  and `factory-env` on it); the state directory, atomic writes, the breaker, tasks and phases; the lock; the retry
+  helper; the adapter's and the gate's schemas and a validator of a subset of draft 2020-12 that refuses any keyword
+  it does not check. #0-261's requirements this step builds, each with its test:
+  - **the lock:** one `flock(2)` on `$FACTORY_STATE_DIR/lock` through the run's descriptor; a second run refused, a
+    killed one (SIGKILL) leaves it free, a live one never loses it, the inode checked after locking
+    (`lock.test.mjs`: "AC2: a second run is refused while another process holds the lock, and a killed run leaves it
+    free", "a lock file removed or replaced while a run takes it is refused"; `cli.test.mjs`: "AC2: a second run while
+    one holds the lock is refused; once that run is killed, a run goes ahead");
+  - **state that survives a restart:** `tasks/<runId>/task.json` and `state.json` written to a temporary file and
+    renamed; a restart resumes at the phase after the last completed one, a phase run twice writes the same state
+    (`tasks.test.mjs`: "AC3: a run killed between two phases resumes at the next one", "AC3: a run killed inside a
+    phase runs it again, and the phase run twice writes the same state"; `state.test.mjs`: "a write is atomic");
+  - **retries:** every GitHub call of the flow through `withRetries`/`githubCall`; 5xx, 429, a rate-limit 403, a
+    timeout and a network error retried with backoff (1 s doubling to 60 s), jitter and `Retry-After`, not counted;
+    ten in a row block the task with the reason; 404, 422 and a plain 403 are not retried (`retry.test.mjs`, its
+    "AC4" cases; `tasks.test.mjs`: "AC4/#0-261: GitHub out of reach in a phase blocks the task with the reason").
+- **Decided while building it:**
+  - a `state.json` that cannot be read is left as it is, not overwritten with a tripped count as `state.sh` does:
+    the refusal tells the owner to repair it or remove it knowingly (removing it resets the counts and history), so
+    nothing the owner may want to read is lost;
+  - `/usr/bin/flock` (util-linux) is needed on every host that runs the dispatcher (the VM has it: util-linux 2.39.3);
+  - the breaker refuses `--resume` too (ADR-0060 D7 as amended);
+  - the adapter's paths refuse control characters and line separators as well as `..` (review round 1, sec-4a81:
+    a `..` after a line break passed the first pattern, and `path.join` then left the product); a command's first
+    argument is a script of the product, with a `/`, so never a program found on `PATH`; the repository's name is
+    neither `.` nor `..`;
+  - the secret shapes need a boundary and a token's length, and include `sk-ant-` (the Anthropic key reaches
+    `dispatcher` at 4.6); a token glued to a letter or `_` is not caught, a stated price of the boundary, this check
+    being a second layer behind "no secret in the environment".
+- **ADRs changed:** ADR-0060 D7 amended: v0's one lock for the whole dispatcher (this step's closing PR; its Status
+  line and index row name #0-275).
+- **Not done:** 4.3b, 4.3c, 4.3d; and, from 4.3a's review, `taskImage` bounded, symlinks under the adapter's paths, a
+  reason without GitHub's text, resuming by `runId` or one running task at most, a blocked task counted by the
+  breaker, a retried mint's leftover token, a script whose last segment is `.`, the item-id format tied to the
+  queue's kind, and a check that `gate.schema.json` matches what `run-tests.sh` prints.
+- **Why not:** one item at a time (#0-276 next); `taskImage` is read first by 4.3c (#0-277), the adapter's paths by
+  4.3d (#0-278), the reason, the resume, the breaker's count, the mint's retries and the running of a command by 4.4's
+  flow (its section, "Carried from 4.3a's review"); the item id belongs to the `backlog-md` queue, so it moves with
+  the queue's kind before a second product or stage 7 (`migration.md`, stage 7's gap); the gate's schema and its
+  producer are two repositories, so their check is an item of its own (#0-280).
 
 ## 4.4 The control flow, ported
 
@@ -416,6 +456,14 @@ Split on 2026-11-20 (the owner's choice A), one `factory` pull request each, in 
   thread (`--agent <name>`, or the definition's body as `--append-system-prompt-file` with its tools and model);
   whether hooks of the plugin run in that mode (they stay a second layer until 6c); what replaces ADR-0058's isolation
   probe (proposal: the init event's agent and tools).
+
+- **Carried from 4.3a's review (`factory` PR #15), to build here:** a BLOCKED task's `reason` never carries GitHub's
+  text into a pull request; a new task refused while one is `running`, or resume by `runId` (a task killed before its
+  branch is recorded can be resumed by neither today); `blockTask` counts the block in `state.json`, so an outage
+  trips the breaker; a mint retried after a timeout may leave a token unrevoked (it expires within the hour: revoke
+  what can be found, or accept it knowingly); a command is spawned with the product's root as `cwd` and its script
+  joined to it, and a script whose last segment is `.` is refused. #0-280 (the gate's schema checked against
+  `run-tests.sh`) lands before this step first reads a gate's answer.
 
 **Record (4.4):** not started; it waits for 4.3.
 

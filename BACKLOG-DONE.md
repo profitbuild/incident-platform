@@ -162,6 +162,7 @@ resolvable.
 | 0-271 | builder-app's token is minted by `factory` code that checks its scope before use (settings from the environment via `node --env-file`, the key's file checks, `checked-token.mjs`, the token cache, a push limited to https with an allowlisted environment, `check-app`; step 4.2a); details in [the section](#0-271-builder-apps-token-is-minted-by-code-that-checks-its-scope-step-42a) | factory PR #9; PR #662 |
 | 0-272 | builder-app `profitbuild-builder` exists, its key has one copy on the build VM for the user `dispatcher` (under the VM's egress chain, its home 700, `install-builder-app.sh`, `check-app` passed), and rulesets hold it to `factory/**` and `factory/**` to it (`branches`, `renovate`, `tags`, `tag-creation`, `factory`, the writers); every app of the organization is a file (`apps/`, Renovate narrowed); step 4.2b; details in [the section](#0-272-builder-app-exists-its-key-is-the-vms-and-it-can-write-only-its-own-branches-step-42b) | PR #663; PR #664 |
 | 0-273 | `dev-token.mjs` on the dispatcher's shared token checks, stricter (the key's file, the installation's app and id); details in [the section](#0-273-dev-tokenmjs-keeps-its-own-copy-of-the-token-checks) | factory PR #14; PR #665 |
+| 0-275 | the dispatcher's foundation: CLI, settings through one mechanism, the state and its lock, the retries, the adapter's and the gate's schemas (step 4.3a); details in [the section](#0-275-the-dispatchers-foundation-cli-configuration-state-lock-retries-and-the-adapters-schema-step-43a) | factory PR #15; PR #667 |
 
 Items completed before `BACKLOG.md` existed are not listed.
 
@@ -4390,3 +4391,73 @@ twice, all APPROVE:
   they run on the owner's host too, next to the dev key; factory's README lists dev-token's checks. AC2 met.
 - Left: the mint sequence is written in `dev-token.mjs` too (not checks; review round 1, accepted), and the dev app's
   ids and permissions have no drift check (#0-279).
+
+### 0-275. The dispatcher's foundation: CLI, configuration, state, lock, retries and the adapter's schema (step 4.3a)
+
+**Type:** ci · **Priority:** High · **Status:** Done, PR #667 (2026-11-20) (migration stage 4, step 4.3a; `factory` PR #15;
+ADR-0055, ADR-0060 D1, D6, D8;
+split from 4.3 on 2026-11-20, the owner's choice A).
+**Autopilot:** human-only (`factory` code, written interactively in its devcontainer) · **Risk:** medium ·
+**Complexity:** medium · **Depends on:** #0-272
+**Touches:** the repository `profitbuild/factory` (`dispatcher/src/cli.mjs`, `dispatcher/src/config/`,
+`dispatcher/src/state/`, `dispatcher/src/github/` (one request helper), `schemas/adapter.schema.json` and
+`schemas/gate.schema.json`, their tests; a draft pull request from its container, `/review factory#<n>`), decisions
+(ADR-0060 D7 amended: v0's lock), root (`.ai/context/migration/stage-4.md` "4.3", `.ai/context/migration.md`,
+BACKLOG #0-261)
+
+**Problem.** `factory`'s dispatcher has its token code (4.2a) and nothing that runs a task: no entry point, no state,
+no lock, no adapter. Every later step of 4.3 and 4.4 builds on these, and none of them needs Docker or the VM, so they
+can be written and tested first, on their own.
+
+**Work.** `stage-4.md` "4.3", parts CLI, state, retries and adapter:
+- `node dispatcher/src/cli.mjs run [--item 0-N] [--resume <branch>] --adapter <path>`; configuration from the
+  environment only: `FACTORY_STATE_DIR`, `FACTORY_REPO_DIR`, `FACTORY_MAX_BLOCKED`, `FACTORY_AUDIT_EVERY`,
+  `FACTORY_MAX_MERGES_PER_DAY` with no defaults (ADR-0052 point 5), and `BUILDER_APP_*` as 4.2a reads them
+  (`BUILDER_APP_KEY` keeps its default path, `stage-4.md` "4.3" Record); each refused by name, never value;
+- `$FACTORY_STATE_DIR`: `lock` (one `flock`, one task at a time), `state.json` (the breaker's counts, today's
+  `state.sh`), `tasks/<runId>/task.json`, each written to a temporary file and renamed; a restart resumes at the last
+  completed phase, and every phase is safe to run twice;
+- one helper for every GitHub call: 5xx, 429, a timeout or a DNS error retried with backoff and jitter (1 s doubling
+  to 60 s), not counted as an attempt; ten in a row stop the task as BLOCKED with the reason (#0-261);
+- the adapter's and the gate's schemas, checked by code of Node's built-ins (ADR-0060 D2); v0's `run` stops after the
+  adapter and the state are set up, since its phases are 4.4's;
+- the env file holds no secret, ever (`stage-4.md` "4.3"): anything there reaches `process.env`, which every child would
+  inherit but for #0-276's allowlist; a value shaped like one is refused;
+- `FACTORY_PROXY_ADDR` (`stage-4.md` "4.3") comes with 4.6, the credential proxy: until then AC1 refuses it as unknown,
+  and 4.6 adds it to the list;
+- one `flock` for the whole dispatcher in v0: a narrowing of ADR-0060 D7's lock per task, equivalent while one task runs
+  at a time, written into ADR-0060 as an amendment of D7 (review of the split of 4.3).
+
+**Acceptance criteria.**
+AC1. A setting missing, malformed or unknown (`FACTORY_*` misspelt) is refused by its name, never its value (tests).
+AC2. A second `run` while one holds the lock is refused; a killed run's lock is free again (tests).
+AC3. A run killed between two phases resumes at the last completed one, and a phase run twice writes the same state
+     (tests, with a fake phase).
+AC4. A retried 503, 429, timeout or DNS error is not counted; ten in a row make the task BLOCKED with the reason; a
+     404 or 422 is not retried (tests against the fake GitHub).
+AC5. The schemas refuse a missing or unknown field, and incident-platform's adapter as `stage-4.md` describes it passes.
+AC6. The requirements of #0-261 this step builds (the lock, the state that survives a restart, the retries) are in
+     `stage-4.md` "4.3", each with the test that shows it.
+AC7. A variable of the dispatcher's environment, any of them and not only its settings, whose value is shaped like
+     a secret (a PEM block, a value starting `ghs_`, `ghp_`, `gho_`, `ghu_`, `ghr_` or `github_pat_`) is refused by
+     its name, never its value or its prefix (tests).
+
+**Result.** `factory` PR #15 (merged 2026-11-20, merge `51ce6928`, head `d97ed0db`), reviewed three times
+(`/review factory#15 127` twice, then `2`):
+- AC1: `config/settings.mjs` is the one mechanism, `builder-env` and `factory-env` on it; every refusal names a
+  variable, never a value; `FACTORY_PROXY_ADDR` is unknown until 4.6.
+- AC2: the lock through `/usr/bin/flock` on the run's descriptor (probed before the code: the lock stays with the
+  descriptor after `flock(1)` exits, a second is refused, SIGKILL frees it); the inode checked after locking.
+- AC3: atomic writes (temporary file, `fsync`, rename, `fsync` of the directory), resume at the next phase, a phase
+  run twice writing the same bytes.
+- AC4: `withRetries`/`githubCall` (5xx, 429, a rate-limit 403, timeout, network; `Retry-After` up to 60 s; ten in a
+  row block the task); `check-app` and the mint outside it, as decided.
+- AC5: the adapter's and the gate's schemas, and a validator that refuses any keyword it does not check (with
+  `prefixItems`); review round 1's blocking sec-4a81 (a `..` after a line break passed the path pattern) fixed, and a
+  command's first argument bound to a product script with a `/`.
+- AC6: #0-261's requirements built here are in `stage-4.md` "4.3", each with its test.
+- AC7: the whole environment, PEM, `ghs_`, `ghp_`, `gho_`, `ghu_`, `ghr_`, `github_pat_` and `sk-ant-`, with a boundary
+  and a token's length (a token glued to a letter or `_` passes: stated).
+- The secret scan failed the first push on test fixtures shaped like secrets; the branch, not yet reviewed, was
+  rewritten with each fixture built from parts at run time (no `gitleaks:allow`), the owner's force push.
+- Left, with where each went: `stage-4.md` "4.3" Record and "4.4", #0-277, #0-278, #0-280.
