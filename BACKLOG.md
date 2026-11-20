@@ -169,7 +169,6 @@ Code, Javadoc, config comments and commits reference items as `backlog #N`.
 | [0-264](#0-264-a-green-pr-is-merged-on-a-base-that-moved-under-it) | A green PR is merged on a base that moved under it | ci | Medium | Open |
 | [0-265](#0-265-a-task-back-after-a-pause-is-resumed-without-asking-whether-it-still-makes-sense) | A task back after a pause is resumed without asking whether it still makes sense | ci | Low | Open |
 | [0-274](#0-274-dispatcher-passes-the-egress-list-of-factory-wider-than-it-needs) | `dispatcher` passes the egress list of `factory`, wider than it needs | ci | Low | Open |
-| [0-276](#0-276-builder-apps-push-only-from-a-push-repository-the-dispatcher-owns-to-the-tasks-own-branch-step-43b) | builder-app's push only from a push repository the dispatcher owns, to the task's own branch (step 4.3b) | ci | High | Open |
 | [0-277](#0-277-the-dispatcher-drives-factorys-docker-and-a-task-container-step-43c) | The dispatcher drives `factory`'s Docker and a task container (step 4.3c) | ci | High | Open |
 | [0-278](#0-278-the-products-code-runs-only-from-main-step-43d) | The product's code runs only from `main` (step 4.3d) | ci | High | Open |
 | [0-279](#0-279-the-dev-apps-ids-and-permissions-are-kept-in-two-places-with-no-check) | The dev app's ids and permissions are kept in two places with no check | ci | Low | Open |
@@ -3804,78 +3803,6 @@ AC2. A VM whose rule for `dispatcher` cannot be set refuses to start `dispatcher
      session does today.
 AC3. README "Infrastructure Hardening" drops the gap #0-272 named ("`dispatcher`'s traffic passes the egress chain of
      `factory`, whose list is wider than it needs").
-
-### 0-276. builder-app's push only from a push repository the dispatcher owns, to the task's own branch (step 4.3b)
-
-**Type:** ci · **Priority:** High · **Status:** In progress (migration stage 4, step 4.3b; ADR-0060 D7; carried from #0-271's
-review, `factory` PR #9).
-**Autopilot:** human-only · **Risk:** high · **Complexity:** medium · **Depends on:** #0-275, #0-273
-**Touches:** the repository `profitbuild/factory` (`dispatcher/src/github/builder-token.mjs`, `git-push`, a module for
-the push repository, a module for child processes' environment, their tests; a draft pull request,
-`/review factory#<n>`), root (`stage-4.md` "4.3", README "Infrastructure Hardening"), decisions (ADR-0060 D7 amended,
-2026-11-20)
-
-**Problem.** 4.2a's code holds as preconditions what 4.3 must make checks (`stage-4.md` "4.3", "Carried from #0-271's
-review"): a git run with builder-app's token reads the clone's config, which can send the token elsewhere; the
-refspec refuses only a leading `-`, so `+` and `:ref` pass, bounded by #0-272's rulesets alone; the repository and the
-push URL are incident-platform's constants; and a child process could inherit `process.env`, which holds the settings.
-
-**Work** (how, decided with the owner on 2026-11-20 before the code: `stage-4.md` "4.3", the Record's "Decided for
-4.3b"; ADR-0060 D7 amended). The task's commits arrive as a bundle file, never fetched from the task's clone; a push
-repository made fresh for each push (`git init --bare` under `$FACTORY_STATE_DIR`, `alternates` onto
-`FACTORY_REPO_DIR`), the bundle read into it and its own objects, only those, checked strictly before any ref names
-them (`index-pack --strict` or the like: a plain `fsck` walks `alternates`, so all of `main`; and never git's
-`fsckObjects` settings, which git 2.43 ignores when reading a bundle), its prerequisites exactly the head given and
-its one ref the task's branch; one reader of bundles, which 4.4 uses for each call's bundle into the task's own
-repository too (the push repository is filled from that one, by the dispatcher, never from the container: 4.3's
-"Decided for 4.3b"); that repository's config held, by an allowlist, to what a
-reference `git init --bare` by the same git writes;
-the push takes `{ sha, branch }` and builds `<sha>:refs/heads/factory/<the task's branch>` itself;
-`BUILDER_REPOSITORY` and `PUSH_URL` from the adapter's `repository`; one builder of every child's environment from
-an allowlist (`childEnv`), `gitPushCommand` and `lock.mjs` on it. Making the bundle in the container and reading it
-from `docker exec`'s stdout is 4.3c's (#0-277 AC6); checking each call's commit against the recorded head is 4.4's;
-here the bundle comes from a test's git.
-
-**Acceptance criteria.**
-AC1. A key outside the allowlist (a reference `git init --bare`'s, by the same git) in the push repository's config
-     refuses the push before the token is asked for:
-     a test each for `http.proxy`, `http.<url>.sslVerify`, `http.sslCAInfo`, `http.curloptResolve`, `include.path`,
-     `remote."<url>".pushurl`, `core.fsmonitor`, and one key no list names; a value of an allowed key changed refuses
-     too.
-AC2. A `sha` not 40 hex or not the bundle's ref, a `branch` not the task's, or one with `+`, `:` or `..` is refused
-     (tests); the task's own is pushed, to `refs/heads/factory/<branch>`, not forced.
-AC3. The repository and the push URL come from the adapter, and the token checks take them (tests with two adapters).
-AC4. A variable of `process.env` outside the allowlist reaches no child (a test with a marker variable).
-AC5. README "Infrastructure Hardening" names the push's controls.
-AC6. A bundle whose prerequisites are not exactly the task's base, with more than one ref or another ref, or with an
-     object the strict check refuses (a commit with no author email: git 2.43 lets it through a fetch), is refused before
-     the push repository holds its ref, and the check reads the bundle's objects only, not `FACTORY_REPO_DIR`'s through
-     `alternates` (tests, passing on the VM's git 2.43 as on CI's: an old object of the alternates that `--strict`
-     would refuse does not fail a good bundle); no git runs in the directory
-     the bundle came from (a test: a planted `.git/config` there with `core.fsmonitor` is never run).
-AC7. Every function of `node:child_process` called in `dispatcher/src/` (`spawn`, `exec`, `execFile`, `fork` and
-     their `Sync` forms) takes its `env` from `childEnv` (a static test, which a planted `env: process.env` and a
-     planted `exec` without `env` fail).
-AC8. Each push has a repository of its own: a key planted in one push's repository is not there at the next, and
-     the repository is gone after a pushed and after a refused push (tests).
-
-**Result.** `factory` PR #16 (merged 2026-11-20, merge `3c588db3`, head `fd6d933f`), five review rounds
-(`/review factory#16 127`), the last all APPROVE; 219 tests, also on git 2.43.0 as an ordinary user (the owner's job
-`Test (git 2.43)`, a required check since); 65 mutations, 64 caught, 1 equivalent.
-- AC1: the config against a reference `git init --bare` of the same git, after init and before the token; each named
-  key, an unknown one, a changed value and a duplicate refuse with no token asked and no request made.
-- AC2: `{ sha, branch }`, the refspec `<sha>:refs/heads/factory/<branch>` built by the code, never forced.
-- AC3: the repository and the push URL from the adapter, two products; `check-app --repository` (decided on the plan).
-- AC4: `childEnv`, a marker reaching neither git nor `flock`; git by its full path.
-- AC5: README "Infrastructure Hardening", "builder-app's push", from the PR's list.
-- AC6: the header, `index-pack --strict` on the bundle's own pack, ancestry; proven on git 2.43 by the job.
-- AC7: every `node:child_process` call of `src/` through `childEnv`, git only from `run-git.mjs`, test-only options
-  given by no module of `src/` or `bin/`.
-- AC8: a fresh repository per push, removed after any end.
-- Beyond the ACs: one host rule for the API and the push (`pinnedOrLoopback`), after the verifier refuted that
-  `checkApiUrl` pinned GitHub (round 4).
-- Left, with where each went: `stage-4.md` "4.3" Record, 4.4's "Carried from 4.3b's decisions", #0-277 AC8,
-  #0-278 AC7, #0-281.
 
 ### 0-277. The dispatcher drives `factory`'s Docker and a task container (step 4.3c)
 
