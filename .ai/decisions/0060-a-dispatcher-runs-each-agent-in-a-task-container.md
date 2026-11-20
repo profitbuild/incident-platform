@@ -4,7 +4,8 @@
   interactive session); D5 amended on 2026-11-18 by backlog #0-269 (`factory`'s code is
   written with an app of its own), its open points settled on 2026-11-19 (where the app's key lives, how the session
   starts); its Consequences amended on 2026-11-19 (step 4.2 split, #0-271 and #0-272: when ADR-0034 and
-  ADR-0052 are amended); D7 amended on 2026-11-20 by #0-275 (v0's one lock for the whole dispatcher)
+  ADR-0052 are amended); D7 amended on 2026-11-20 by #0-275 (v0's one lock for the whole dispatcher) and by #0-276
+  (the commits cross as a bundle into a fresh push repository)
 - **Backlog:** #0-267 (stage 4.1); stage 4's later items are created as their turn comes, each from its step of the
   plan `.ai/context/migration/stage-4.md`
 - **Date:** 2026-11-17
@@ -101,6 +102,18 @@ and `--plugin-dir` (code.claude.com/docs/en/headless.md, cli-reference.md).
   refuses any run while another holds it, which equals one lock per task while one task runs at a time (D8). A lock
   per task comes back with more than one task at a time. Apart from the lock, the breaker (today's, ported with the
   flow, D1) refuses a new task and a resumed one while it is tripped.
+  **Amended (2026-11-20, #0-276, the owner): where the checks and the push run.** No git with the dispatcher's
+  rights runs in a repository an agent wrote (its config, attributes and hooks can make git run a program as the uid
+  that reads builder-app's key). The task's commits leave its container only as a bundle on `docker exec`'s stdout,
+  into the dispatcher's own task repository, each bundle's objects checked explicitly and strictly, never by git's
+  `fsckObjects` settings when reading a bundle; the push repository, made fresh for each push (`git init --bare`, the
+  base's objects through `alternates` from the dispatcher's clone of `main`), is filled from that task repository by
+  the dispatcher, never from the container; the checks above run there, its config is held to what a reference `git init --bare` writes, and the
+  refspec is the code's, `<sha>:refs/heads/factory/<branch>`. The dispatcher's commit after a call is made by the
+  task's git in its container, with the dispatcher's flags, trailers, author and committer, and read back the same
+  way: accepted only as one commit whose only parent is the head the dispatcher recorded, carrying exactly its
+  trailers, author and committer, so the trace and `Factory-Agent`
+  stay the dispatcher's, not the container's (review round 1 of #0-276's decisions).
 - **D8. v0 starts by hand** (`dispatcher run [#0-N]`), one task at a time, in shadow; a timer comes with stage 7's
   queue. #0-261's restart and idempotence requirements hold from v0 (an existing PR for the branch is reused).
 
@@ -151,4 +164,6 @@ and `--plugin-dir` (code.claude.com/docs/en/headless.md, cli-reference.md).
   start commit (#0-212); the exact adapter schema (4.3).
 - A reviewer recognises a violation as: a credential mounted or passed into a task container, a push or `gh` write from
   inside one, product code from a task branch run outside its container, task state inside a repository, an agent's
-  answer taken as the trace, or `factory` code naming incident-platform's paths or modules.
+  answer taken as the trace, a head or commit read from the container's git and not checked against the recorded
+  chain, a git with the dispatcher's rights run in a repository an agent wrote, or `factory` code naming
+  incident-platform's paths or modules.

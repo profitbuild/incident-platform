@@ -72,7 +72,7 @@ and keep tags to the admin, in two pull requests, the rulesets first (the first 
 created that day; `factory` PR #13 its permissions as a file), and every app of the organization written as a file;
 #0-274 a narrower egress list of `dispatcher`'s own (the VM's chain takes it already, its uid being an ordinary one); moved from 4.2 to 4.5, where a PR is first opened: ADR-0052 and ADR-0034 amended for the
 app as a PR's author, `audit-data.sh` reading it, and the app's Issues permission), 4.3 the dispatcher's core
-(split on 2026-11-20: #0-275 the foundation, with #0-261; #0-276 the push from a trusted clone; #0-277 Docker and the
+(split on 2026-11-20: #0-275 the foundation, with #0-261; #0-276 the push from a push repository the dispatcher owns; #0-277 Docker and the
 task container; #0-278 the product's code from `main`; #0-273, done 2026-11-20 by `factory` PR #14, moved dev-token onto
 the shared checks first; #0-280, from 4.3a's review, the gate's schema checked against `run-tests.sh` before 4.4 reads
 a gate's answer), 4.4 the control flow ported with its tests, 4.5 push, PR, trailers and trace (#0-212, #0-204), 4.6 the

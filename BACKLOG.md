@@ -169,7 +169,7 @@ Code, Javadoc, config comments and commits reference items as `backlog #N`.
 | [0-264](#0-264-a-green-pr-is-merged-on-a-base-that-moved-under-it) | A green PR is merged on a base that moved under it | ci | Medium | Open |
 | [0-265](#0-265-a-task-back-after-a-pause-is-resumed-without-asking-whether-it-still-makes-sense) | A task back after a pause is resumed without asking whether it still makes sense | ci | Low | Open |
 | [0-274](#0-274-dispatcher-passes-the-egress-list-of-factory-wider-than-it-needs) | `dispatcher` passes the egress list of `factory`, wider than it needs | ci | Low | Open |
-| [0-276](#0-276-builder-apps-push-only-from-a-trusted-clone-to-the-tasks-own-branch-step-43b) | builder-app's push only from a trusted clone, to the task's own branch (step 4.3b) | ci | High | Open |
+| [0-276](#0-276-builder-apps-push-only-from-a-push-repository-the-dispatcher-owns-to-the-tasks-own-branch-step-43b) | builder-app's push only from a push repository the dispatcher owns, to the task's own branch (step 4.3b) | ci | High | Open |
 | [0-277](#0-277-the-dispatcher-drives-factorys-docker-and-a-task-container-step-43c) | The dispatcher drives `factory`'s Docker and a task container (step 4.3c) | ci | High | Open |
 | [0-278](#0-278-the-products-code-runs-only-from-main-step-43d) | The product's code runs only from `main` (step 4.3d) | ci | High | Open |
 | [0-279](#0-279-the-dev-apps-ids-and-permissions-are-kept-in-two-places-with-no-check) | The dev app's ids and permissions are kept in two places with no check | ci | Low | Open |
@@ -3804,32 +3804,59 @@ AC2. A VM whose rule for `dispatcher` cannot be set refuses to start `dispatcher
 AC3. README "Infrastructure Hardening" drops the gap #0-272 named ("`dispatcher`'s traffic passes the egress chain of
      `factory`, whose list is wider than it needs").
 
-### 0-276. builder-app's push only from a trusted clone, to the task's own branch (step 4.3b)
+### 0-276. builder-app's push only from a push repository the dispatcher owns, to the task's own branch (step 4.3b)
 
 **Type:** ci · **Priority:** High · **Status:** Open (migration stage 4, step 4.3b; ADR-0060 D7; carried from #0-271's
 review, `factory` PR #9).
 **Autopilot:** human-only · **Risk:** high · **Complexity:** medium · **Depends on:** #0-275, #0-273
 **Touches:** the repository `profitbuild/factory` (`dispatcher/src/github/builder-token.mjs`, `git-push`, a module for
-child processes' environment, their tests; a draft pull request, `/review factory#<n>`), root (`stage-4.md` "4.3",
-README "Infrastructure Hardening")
+the push repository, a module for child processes' environment, their tests; a draft pull request,
+`/review factory#<n>`), root (`stage-4.md` "4.3", README "Infrastructure Hardening"), decisions (ADR-0060 D7 amended,
+2026-11-20)
 
 **Problem.** 4.2a's code holds as preconditions what 4.3 must make checks (`stage-4.md` "4.3", "Carried from #0-271's
 review"): a git run with builder-app's token reads the clone's config, which can send the token elsewhere; the
 refspec refuses only a leading `-`, so `+` and `:ref` pass, bounded by #0-272's rulesets alone; the repository and the
 push URL are incident-platform's constants; and a child process could inherit `process.env`, which holds the settings.
 
-**Work.** A clone the dispatcher owns, whose `.git/config` no agent's uid writes, the task's commits fetched into it;
-refused when its config sets `http.proxy`, `http.<url>.sslVerify`, `http.sslCAInfo`, `http.curloptResolve`,
-`include.path` or a section named after the push URL (`remote."<url>".pushurl`, `.proxy`); the refspec only
-`<sha>:refs/heads/factory/<the task's branch>`; `BUILDER_REPOSITORY` and `PUSH_URL` from the adapter's `repository`;
-one builder of every child's environment from an allowlist, as `gitPushCommand`'s.
+**Work** (how, decided with the owner on 2026-11-20 before the code: `stage-4.md` "4.3", the Record's "Decided for
+4.3b"; ADR-0060 D7 amended). The task's commits arrive as a bundle file, never fetched from the task's clone; a push
+repository made fresh for each push (`git init --bare` under `$FACTORY_STATE_DIR`, `alternates` onto
+`FACTORY_REPO_DIR`), the bundle read into it and its own objects, only those, checked strictly before any ref names
+them (`index-pack --strict` or the like: a plain `fsck` walks `alternates`, so all of `main`; and never git's
+`fsckObjects` settings, which git 2.43 ignores when reading a bundle), its prerequisites exactly the head given and
+its one ref the task's branch; one reader of bundles, which 4.4 uses for each call's bundle into the task's own
+repository too (the push repository is filled from that one, by the dispatcher, never from the container: 4.3's
+"Decided for 4.3b"); that repository's config held, by an allowlist, to what a
+reference `git init --bare` by the same git writes;
+the push takes `{ sha, branch }` and builds `<sha>:refs/heads/factory/<the task's branch>` itself;
+`BUILDER_REPOSITORY` and `PUSH_URL` from the adapter's `repository`; one builder of every child's environment from
+an allowlist (`childEnv`), `gitPushCommand` and `lock.mjs` on it. Making the bundle in the container and reading it
+from `docker exec`'s stdout is 4.3c's (#0-277 AC6); checking each call's commit against the recorded head is 4.4's;
+here the bundle comes from a test's git.
 
 **Acceptance criteria.**
-AC1. Each of the config keys above, set in the clone, refuses the push before the token is asked for (a test each).
-AC2. A refspec with `+`, `:`, another ref or another branch name is refused (tests); the task's own is pushed.
+AC1. A key outside the allowlist (a reference `git init --bare`'s, by the same git) in the push repository's config
+     refuses the push before the token is asked for:
+     a test each for `http.proxy`, `http.<url>.sslVerify`, `http.sslCAInfo`, `http.curloptResolve`, `include.path`,
+     `remote."<url>".pushurl`, `core.fsmonitor`, and one key no list names; a value of an allowed key changed refuses
+     too.
+AC2. A `sha` not 40 hex or not the bundle's ref, a `branch` not the task's, or one with `+`, `:` or `..` is refused
+     (tests); the task's own is pushed, to `refs/heads/factory/<branch>`, not forced.
 AC3. The repository and the push URL come from the adapter, and the token checks take them (tests with two adapters).
 AC4. A variable of `process.env` outside the allowlist reaches no child (a test with a marker variable).
 AC5. README "Infrastructure Hardening" names the push's controls.
+AC6. A bundle whose prerequisites are not exactly the task's base, with more than one ref or another ref, or with an
+     object the strict check refuses (a commit with no author email: git 2.43 lets it through a fetch), is refused before
+     the push repository holds its ref, and the check reads the bundle's objects only, not `FACTORY_REPO_DIR`'s through
+     `alternates` (tests, passing on the VM's git 2.43 as on CI's: an old object of the alternates that `--strict`
+     would refuse does not fail a good bundle); no git runs in the directory
+     the bundle came from (a test: a planted `.git/config` there with `core.fsmonitor` is never run).
+AC7. Every function of `node:child_process` called in `dispatcher/src/` (`spawn`, `exec`, `execFile`, `fork` and
+     their `Sync` forms) takes its `env` from `childEnv` (a static test, which a planted `env: process.env` and a
+     planted `exec` without `env` fail).
+AC8. Each push has a repository of its own: a key planted in one push's repository is not there at the next, and
+     the repository is gone after a pushed and after a refused push (tests).
 
 ### 0-277. The dispatcher drives `factory`'s Docker and a task container (step 4.3c)
 
@@ -3864,6 +3891,12 @@ AC3. A task container is made from a fresh clone, holds `factory` read-only and 
 AC4. README "Infrastructure Hardening" names the access and its limits.
 AC5. The adapter's `taskImage` is bounded where this step reads it first: never a value starting with `-` (an option
      to `docker` or `devcontainer`), and of the form the task container's start takes (tests; from 4.3a's review).
+AC6. The task's commits leave the container only as `git bundle create -` on `docker exec`'s stdout, written into
+     the dispatcher's own directory, never read from a file in a directory an agent writes (a test; from the review of
+     #0-276's decisions).
+AC7. The task's clone shares no inode with `FACTORY_REPO_DIR` (`--no-hardlinks`, or a clone made inside the
+     container): a test that a file of the clone's `objects/` is not one of `FACTORY_REPO_DIR`'s; `FACTORY_REPO_DIR`
+     feeds every push through `alternates` (#0-276).
 
 ### 0-278. The product's code runs only from `main` (step 4.3d)
 
@@ -3889,6 +3922,9 @@ AC4. README "Infrastructure Hardening" names the control: a task cannot change t
 AC5. A path the adapter names that is a symlink, or reaches one, resolving outside the product's clone is refused
      (its `realpath` checked against the clone, or opened with `O_NOFOLLOW`); the schema checks spelling only
      (tests; from 4.3a's review).
+AC6. `changed-paths` runs against the push repository (#0-276) with the base and the head given as SHAs (a fresh bare
+     repository has no refs and an unborn `HEAD`), and where it runs (as `dispatcher` or in a short-lived container,
+     which cannot read `$FACTORY_STATE_DIR`) is decided and stated (a test of each SHA given).
 
 ### 0-279. The dev app's ids and permissions are kept in two places with no check
 
