@@ -31,8 +31,7 @@ no item yet.
 ## Where we are
 
 Stages 0 to 3 are done. **Current: stage 4**: 4.1 done (2026-11-18, with #0-268, #0-269 and #0-270 on 2026-11-19);
-4.2 done (4.2a 2026-11-19, 4.2b 2026-11-20); 4.3 next, split into #0-275..#0-278, 4.3a (#0-275) in progress (its plan agreed with the
-owner, its code being written in `factory`). Each
+4.2 done (4.2a 2026-11-19, 4.2b 2026-11-20); 4.3 in progress, split into #0-275..#0-278: 4.3a (#0-275) done 2026-11-20 by `factory` PR #15; 4.3b (#0-276) next. Each
 step's record: `migration/stage-4.md`.
 
 ## Stages
@@ -75,7 +74,8 @@ created that day; `factory` PR #13 its permissions as a file), and every app of 
 app as a PR's author, `audit-data.sh` reading it, and the app's Issues permission), 4.3 the dispatcher's core
 (split on 2026-11-20: #0-275 the foundation, with #0-261; #0-276 the push from a trusted clone; #0-277 Docker and the
 task container; #0-278 the product's code from `main`; #0-273, done 2026-11-20 by `factory` PR #14, moved dev-token onto
-the shared checks first), 4.4 the control flow ported with its tests, 4.5 push, PR, trailers and trace (#0-212, #0-204), 4.6 the
+the shared checks first; #0-280, from 4.3a's review, the gate's schema checked against `run-tests.sh` before 4.4 reads
+a gate's answer), 4.4 the control flow ported with its tests, 4.5 push, PR, trailers and trace (#0-212, #0-204), 4.6 the
 credential proxy and `stream-json` transcripts, 4.7 the adapter, the switch and the three runs of the exit.
 ADR-0055: the container has no token; push, PR and commit trailers by the dispatcher; builder-app (never on `factory`);
 the gate contract, incident-platform's adapter first. Exit: 3 PRs opened by it.
@@ -131,6 +131,9 @@ Exit: each catches its seeded case.
 Exit: 3 items taken, claimed and closed.
 - superseded: #0-201.
 - waits: #0-265 (a task back after a pause), #0-261's GraphQL rate-limit requirement.
+- gap: the item id's format moves to the queue's kind: the dispatcher's CLI and its task schema take `^[0-9]+-[0-9]+$`,
+  incident-platform's `BACKLOG.md` ids, which belong to the queue kind `backlog-md` (4.3a's review, `factory` PR #15); an
+  issue's number is another, and a second product's queue may be a third.
 - gap: the Issues/Project schema (Feature, Task, fields, blocked-by); the move of the open items; `BACKLOG.md` frozen as
   an archive; dispatcher v1; this map's item references moved to the issues, or the map frozen with `BACKLOG.md` (its
   "Keep it true" rule is prose, checked by nothing).

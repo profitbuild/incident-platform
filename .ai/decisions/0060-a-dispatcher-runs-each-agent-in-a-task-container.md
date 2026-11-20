@@ -4,7 +4,7 @@
   interactive session); D5 amended on 2026-11-18 by backlog #0-269 (`factory`'s code is
   written with an app of its own), its open points settled on 2026-11-19 (where the app's key lives, how the session
   starts); its Consequences amended on 2026-11-19 (step 4.2 split, #0-271 and #0-272: when ADR-0034 and
-  ADR-0052 are amended)
+  ADR-0052 are amended); D7 amended on 2026-11-20 by #0-275 (v0's one lock for the whole dispatcher)
 - **Backlog:** #0-267 (stage 4.1); stage 4's later items are created as their turn comes, each from its step of the
   plan `.ai/context/migration/stage-4.md`
 - **Date:** 2026-11-17
@@ -96,6 +96,11 @@ and `--plugin-dir` (code.claude.com/docs/en/headless.md, cli-reference.md).
   it writes the `Factory-Run` and `Factory-Agent` trailers and the per-call trace (head before and after each call);
   the PR body keeps the fields `audit-data.sh` reads. Task state lives in the dispatcher's own directory, outside any
   repository, one `flock` per task (#0-261).
+  **Amended (2026-11-20, #0-275, the owner): v0's lock.** One `flock` for the whole dispatcher,
+  `$FACTORY_STATE_DIR/lock`, taken through `/usr/bin/flock` on a descriptor the run holds (Node has no `flock`); it
+  refuses any run while another holds it, which equals one lock per task while one task runs at a time (D8). A lock
+  per task comes back with more than one task at a time. Apart from the lock, the breaker (today's, ported with the
+  flow, D1) refuses a new task and a resumed one while it is tripped.
 - **D8. v0 starts by hand** (`dispatcher run [#0-N]`), one task at a time, in shadow; a timer comes with stage 7's
   queue. #0-261's restart and idempotence requirements hold from v0 (an existing PR for the branch is reused).
 

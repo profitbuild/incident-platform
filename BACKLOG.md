@@ -174,6 +174,7 @@ Code, Javadoc, config comments and commits reference items as `backlog #N`.
 | [0-277](#0-277-the-dispatcher-drives-factorys-docker-and-a-task-container-step-43c) | The dispatcher drives `factory`'s Docker and a task container (step 4.3c) | ci | High | Open |
 | [0-278](#0-278-the-products-code-runs-only-from-main-step-43d) | The product's code runs only from `main` (step 4.3d) | ci | High | Open |
 | [0-279](#0-279-the-dev-apps-ids-and-permissions-are-kept-in-two-places-with-no-check) | The dev app's ids and permissions are kept in two places with no check | ci | Low | Open |
+| [0-280](#0-280-the-gates-schema-in-factory-and-run-testssh-here-are-checked-against-each-other-by-nothing) | The gate's schema in `factory` and `run-tests.sh` here are checked against each other by nothing | ci | Medium | Open |
 | [0-133](#0-133-incidentresolvedevent-carries-no-openedat) | `IncidentResolvedEvent` carries no `openedAt` | tech-debt | Low | Open |
 | [0-134](#0-134-diff-cover-is-installed-by-version-without-hashes) | `diff-cover` is installed by version, without hashes | ci | Low | Open |
 | [0-135](#0-135-kubectl-in-ci-is-downloaded-unverified) | kubectl in CI is downloaded unverified | ci | Low | Open |
@@ -3666,7 +3667,8 @@ AC2. A shipped PR has the ledger table; a stopped one's notification holds both 
 
 **Type:** ci · **Priority:** Medium · **Status:** Open. Source: the owner's analysis of tstack (github.com/t3dotgg/tstack, 2026-11-16, "Zapożyczenia z tstack"), change 6 (`pr-wait`'s patterns), and #0-251, #0-253.
 **Autopilot:** human-only · **Risk:** low · **Complexity:** low · **Depends on:** ADR-0055 stage 4 (#0-212): written
-into its brief, built with it. Which step builds which requirement (review of the split of 4.3, 2026-11-20): the lock,
+into its brief, built with it; the lock, the state and the retries are built (#0-275, `factory` PR #15, 2026-11-20,
+their tests in `stage-4.md` "4.3"). Which step builds which requirement (review of the split of 4.3, 2026-11-20): the lock,
 the state that survives a restart and the retries, #0-275 (4.3a); the per-task baseline, "a pass with no new event
 writes nothing" and the gate's `summary` kept short, 4.4 (the flow, where passes and the gate's answer are read); the
 GraphQL rate limit, stage 7 (v0 uses REST). AC1 is met when the last of them is written with its test; AC2 by 4.7's runs
@@ -3813,7 +3815,7 @@ split from 4.3 on 2026-11-20, the owner's choice A).
 **Touches:** the repository `profitbuild/factory` (`dispatcher/src/cli.mjs`, `dispatcher/src/config/`,
 `dispatcher/src/state/`, `dispatcher/src/github/` (one request helper), `schemas/adapter.schema.json` and
 `schemas/gate.schema.json`, their tests; a draft pull request from its container, `/review factory#<n>`), decisions
-(a note of v0's lock in ADR-0060 D7), root (`.ai/context/migration/stage-4.md` "4.3", `.ai/context/migration.md`,
+(ADR-0060 D7 amended: v0's lock), root (`.ai/context/migration/stage-4.md` "4.3", `.ai/context/migration.md`,
 BACKLOG #0-261)
 
 **Problem.** `factory`'s dispatcher has its token code (4.2a) and nothing that runs a task: no entry point, no state,
@@ -3837,7 +3839,7 @@ can be written and tested first, on their own.
 - `FACTORY_PROXY_ADDR` (`stage-4.md` "4.3") comes with 4.6, the credential proxy: until then AC1 refuses it as unknown,
   and 4.6 adds it to the list;
 - one `flock` for the whole dispatcher in v0: a narrowing of ADR-0060 D7's lock per task, equivalent while one task runs
-  at a time, written into ADR-0060 as a note of v0 (review of the split of 4.3).
+  at a time, written into ADR-0060 as an amendment of D7 (review of the split of 4.3).
 
 **Acceptance criteria.**
 AC1. A setting missing, malformed or unknown (`FACTORY_*` misspelt) is refused by its name, never its value (tests).
@@ -3852,6 +3854,26 @@ AC6. The requirements of #0-261 this step builds (the lock, the state that survi
 AC7. A variable of the dispatcher's environment, any of them and not only its settings, whose value is shaped like
      a secret (a PEM block, a value starting `ghs_`, `ghp_`, `gho_`, `ghu_`, `ghr_` or `github_pat_`) is refused by
      its name, never its value or its prefix (tests).
+
+**Result.** `factory` PR #15 (merged 2026-11-20, merge `51ce6928`, head `d97ed0db`), reviewed three times
+(`/review factory#15 127` twice, then `2`):
+- AC1: `config/settings.mjs` is the one mechanism, `builder-env` and `factory-env` on it; every refusal names a
+  variable, never a value; `FACTORY_PROXY_ADDR` is unknown until 4.6.
+- AC2: the lock through `/usr/bin/flock` on the run's descriptor (probed before the code: the lock stays with the
+  descriptor after `flock(1)` exits, a second is refused, SIGKILL frees it); the inode checked after locking.
+- AC3: atomic writes (temporary file, `fsync`, rename, `fsync` of the directory), resume at the next phase, a phase
+  run twice writing the same bytes.
+- AC4: `withRetries`/`githubCall` (5xx, 429, a rate-limit 403, timeout, network; `Retry-After` up to 60 s; ten in a
+  row block the task); `check-app` and the mint outside it, as decided.
+- AC5: the adapter's and the gate's schemas, and a validator that refuses any keyword it does not check (with
+  `prefixItems`); review round 1's blocking sec-4a81 (a `..` after a line break passed the path pattern) fixed, and a
+  command's first argument bound to a product script with a `/`.
+- AC6: #0-261's requirements built here are in `stage-4.md` "4.3", each with its test.
+- AC7: the whole environment, PEM, `ghs_`, `ghp_`, `gho_`, `ghu_`, `ghr_`, `github_pat_` and `sk-ant-`, with a boundary
+  and a token's length (a token glued to a letter or `_` passes: stated).
+- The secret scan failed the first push on test fixtures shaped like secrets; the branch, not yet reviewed, was
+  rewritten with each fixture built from parts at run time (no `gitleaks:allow`), the owner's force push.
+- Left, with where each went: `stage-4.md` "4.3" Record and "4.4", #0-277, #0-278, #0-280.
 
 ### 0-276. builder-app's push only from a trusted clone, to the task's own branch (step 4.3b)
 
@@ -3911,6 +3933,8 @@ AC2. On a new VM, `create.sh` checks that `dispatcher` runs a container through 
 AC3. A task container is made from a fresh clone, holds `factory` read-only and no credential, and is removed with its
      volumes at the end, a BLOCKED end included (tests where the code allows; the rest tried on the VM, recorded).
 AC4. README "Infrastructure Hardening" names the access and its limits.
+AC5. The adapter's `taskImage` is bounded where this step reads it first: never a value starting with `-` (an option
+     to `docker` or `devcontainer`), and of the form the task container's start takes (tests; from 4.3a's review).
 
 ### 0-278. The product's code runs only from `main` (step 4.3d)
 
@@ -3933,6 +3957,9 @@ AC1. A task branch that changes a file of `trustedPaths` is refused before its g
 AC2. The commands run are `main`'s, shown by a test where the branch's copy differs.
 AC3. `next-item.sh` takes the open pull requests from a file, its tests covering both forms.
 AC4. README "Infrastructure Hardening" names the control: a task cannot change the scripts that judge it.
+AC5. A path the adapter names that is a symlink, or reaches one, resolving outside the product's clone is refused
+     (its `realpath` checked against the clone, or opened with `O_NOFOLLOW`); the schema checks spelling only
+     (tests; from 4.3a's review).
 
 ### 0-279. The dev app's ids and permissions are kept in two places with no check
 
@@ -3959,3 +3986,27 @@ user id stays deferred to stage T.
 **Acceptance criteria.**
 AC1. `check-factory-copies.rb` fails a pull request here that changes the dev app's file while `factory` differs,
      and warns otherwise (ADR-0061), with tests.
+
+### 0-280. The gate's schema in `factory` and `run-tests.sh` here are checked against each other by nothing
+
+**Type:** ci · **Priority:** Medium · **Status:** Open (found by the review of `factory` PR #15, #0-275, 2026-11-20).
+**Autopilot:** human-only · **Risk:** medium · **Complexity:** low · **Depends on:** #0-275
+**Touches:** factory (.github/scripts/test-autopilot-workflow.mjs's check of a factory script's keys against its schema,
+.github/scripts/test-run-tests.sh, the Lint Workflows step that clones `factory@main`: owner-only), decisions (an
+amendment of ADR-0061: a contract held in `factory` whose producer is here)
+
+**Problem.** `factory`'s `schemas/gate.schema.json` is the contract of `run-tests.sh`'s answer (status, exitCode,
+modules, log, head, artifact, summary), with `additionalProperties: false`. A field added to `run-tests.sh` here, or
+one renamed, would make every gate answer refused once 4.4's flow reads them, and nothing in either repository checks
+the two against each other until then (FAC-A01's spirit: a contract kept in one repository, its producer in another).
+
+**Work.** Extend the check that already holds a factory script's printed keys against the schema they are read
+with (`.github/scripts/test-autopilot-workflow.mjs`, #0-175): the keys `run-tests.sh` prints (pass, fixable, stop) held
+against `factory@main`'s `gate.schema.json`, read from the clone Lint Workflows already makes as data (its properties,
+required and `additionalProperties`), never by running `factory`'s validator or any of its code (ADR-0061 point 5: the
+clone is input, read, never run). No second validator here. ADR-0061's leading rule holds: a pull request here that
+changes the answer's shape fails until `factory` matches; a difference `factory` starts warns.
+
+**Acceptance criteria.**
+AC1. A field added to or removed from `run-tests.sh`'s answer, without the schema in `factory`, fails a pull request
+     here; the shapes of today pass (tests).
