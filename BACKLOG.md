@@ -168,7 +168,6 @@ Code, Javadoc, config comments and commits reference items as `backlog #N`.
 | [0-263](#0-263-nothing-runs-a-bug-fixs-test-on-the-code-before-the-fix) | Nothing runs a bug fix's test on the code before the fix | ci | Medium | Open |
 | [0-264](#0-264-a-green-pr-is-merged-on-a-base-that-moved-under-it) | A green PR is merged on a base that moved under it | ci | Medium | Open |
 | [0-265](#0-265-a-task-back-after-a-pause-is-resumed-without-asking-whether-it-still-makes-sense) | A task back after a pause is resumed without asking whether it still makes sense | ci | Low | Open |
-| [0-273](#0-273-dev-tokenmjs-keeps-its-own-copy-of-the-token-checks) | `dev-token.mjs` keeps its own copy of the token checks | ci | Low | Open |
 | [0-274](#0-274-dispatcher-passes-the-egress-list-of-factory-wider-than-it-needs) | `dispatcher` passes the egress list of `factory`, wider than it needs | ci | Low | Open |
 | [0-275](#0-275-the-dispatchers-foundation-cli-configuration-state-lock-retries-and-the-adapters-schema-step-43a) | The dispatcher's foundation: CLI, configuration, state, lock, retries and the adapter's schema (step 4.3a) | ci | High | Open |
 | [0-276](#0-276-builder-apps-push-only-from-a-trusted-clone-to-the-tasks-own-branch-step-43b) | builder-app's push only from a trusted clone, to the task's own branch (step 4.3b) | ci | High | Open |
@@ -3775,48 +3774,6 @@ Thresholds to decide.
 
 AC1. The dispatcher runs the agent in the three cases and acts on MODERNIZE and REWORK; CLOSE reaches the owner.
 AC2. On three resumed tasks the disposition agrees with the owner's.
-
-### 0-273. `dev-token.mjs` keeps its own copy of the token checks
-
-**Type:** ci · **Priority:** Low · **Status:** Open (migration stage 4; left by #0-271, `factory` PR #9, review
-arc-2d71; `factory`'s `checked-token.mjs` cites this item).
-**Autopilot:** human-only · **Risk:** medium · **Complexity:** low · **Depends on:** #0-271
-**Touches:** the repository `profitbuild/factory` (`dispatcher/bin/dev-token.mjs` and its tests, a draft pull request
-from its container, `/review factory#<n>`)
-
-**Problem.** #0-271 wrote the checks a GitHub App token must pass before it is used as parametrised functions,
-`checked-token.mjs` and `url-policy.mjs`. AC4 of #0-271 kept `dev-token.mjs`, the tool that mints the dev app's token
-on the Mac, unchanged, so it still has its own copy: the key's mode, the installation's exact permissions, exactly one
-repository, the token's permissions, and the https-or-loopback rule. Two copies of a check drift. The dev app's
-values differ on purpose (its token is not narrowed to a repository; it will never hold Issues), and the parameters
-carry that.
-
-**Work.** `dev-token.mjs` calls `checked-token.mjs` and `url-policy.mjs` with the dev app's values. It also gains what
-4.2a added for builder-app's key: `lstat`, `O_NOFOLLOW|O_NONBLOCK`, `fstat`. Its behaviour, its file and its
-`--watch` stay as they are.
-
-**Acceptance criteria.**
-AC1. `dev-token.mjs` holds no check of its own that `checked-token.mjs` or `url-policy.mjs` has; its tests pass
-     unchanged, plus the key-file refusals 4.2a has (a symlink, a FIFO, another owner where testable).
-AC2. `checked-token.mjs` no longer cites this item.
-
-**Result.** `factory` PR #14 (merged 2026-11-20, merge `1cc32f10`; head `ea1b6a38`), reviewed `/review factory#14 127`
-twice, all APPROVE:
-- `dev-token.mjs` calls `requireHttpsOrLoopback` (with `--api` in its message, unchanged), `readAppKey` (the key read at
-  the path given, so a symlink is refused; its real path only for the check that `--out` does not hold it),
-  `checkInstallation`, `checkTokenRepositories` and `checkTokenPermissions`, and the shared `RefusedError`, so a
-  refusal in `--watch` still drops the token. It does not use `mintCheckedToken`, which narrows the token: the dev
-  app's is not narrowed, on purpose. AC1 met.
-- Stricter than before: the key must be a regular file of the user (no symlink, no FIFO); the installation's `app_id`
-  and id are checked (`INSTALLATION_ID` 183439507, `--installation-id`; a reinstalled app is refused until it is
-  changed, fail-closed); the key-mode message is the shared one (`has mode 644 … chmod 600`), the one test regex that
-  changed.
-- `checkInstallation` and `mintCheckedToken` take `installationIdFrom`, required, so a refusal names the caller's own
-  setting (review round 1, all three dimensions).
-- `checked-token.mjs` describes both callers and no longer cites this item; `own-file.mjs` and `url-policy.mjs` say
-  they run on the owner's host too, next to the dev key; factory's README lists dev-token's checks. AC2 met.
-- Left: the mint sequence is written in `dev-token.mjs` too (not checks; review round 1, accepted), and the dev app's
-  ids and permissions have no drift check (#0-279).
 
 ### 0-274. `dispatcher` passes the egress list of `factory`, wider than it needs
 
