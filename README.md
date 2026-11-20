@@ -723,7 +723,10 @@ security boundary, so every rule that matters is also enforced outside the model
   Metadata read; probed on 2026-11-19, GitHub refused it a push to `main`, the merge of its own unapproved pull
   request, a change to `.github/workflows/` and a tag. The app's key stays on the owner's Mac, outside every
   repository; `factory`'s `dispatcher/bin/dev-token.mjs`, run on the host from the owner's clone on `main`, checks
-  that the installation and the token hold exactly those permissions and reach `factory` alone, and writes the token
+  through the dispatcher's shared token checks (#0-273) that the key is a regular file of the owner's readable by no
+  one else (no symlink, no FIFO), that the installation is the expected one of the expected app (a reinstalled app is
+  refused until its id is changed in the script) and that it and the token hold exactly those permissions and reach
+  `factory` alone, and writes the token
   to a directory `factory`'s devcontainer mounts read-only. That devcontainer works on a clone in a volume of its own
   (the host never runs a file it wrote), sends HTTPS to GitHub and Anthropic only (no port 22, and the addresses of
   `ssh.github.com`, which serves SSH on 443, rejected), and refuses loudly a start into which a client forwarded the

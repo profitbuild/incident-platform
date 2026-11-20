@@ -112,7 +112,8 @@ What was built, in `dispatcher/` (Node built-ins only):
 - **`check-app`** (`bin/check-app.mjs`): mints, checks, expects 404 for an installation on `profitbuild/factory`,
   revokes; prints its eight lines and no token; exit 1 at the first failure, a failed final revoke included.
 - **Tests:** 86, and 48 of 50 mutations caught (the two that live are each one half of the layered symlink guard;
-  removing both is caught). `dev-token.mjs` is unchanged; moving it onto `checked-token.mjs` is #0-273.
+  removing both is caught). `dev-token.mjs` moved onto `checked-token.mjs` with `factory` PR #14 (#0-273, done
+  2026-11-20); its ids and permissions against `apps/profitbuild-factory-dev.json` are #0-279.
 - **Left for a real app** (#0-272's AC5): GitHub's 404 for `factory`, the narrowed token's one repository, and
   `metadata: read` in its answer.
 
@@ -233,6 +234,15 @@ bypass covers the roles above it.
   conditions in `.ai/context/migration.md` now name it.
 
 ## 4.3 The dispatcher's core
+
+Split on 2026-11-20 (the owner's choice A), one `factory` pull request each, in this order:
+- **4.3a, #0-275:** CLI and configuration, state and lock, the retries (#0-261), the adapter's and the gate's
+  schemas; no Docker, no VM.
+- **4.3b, #0-276:** "Carried from #0-271's review" below: the trusted clone, the pinned refspec, the repository from
+  the adapter, children from an allowlisted environment.
+- **4.3c, #0-277:** "Docker for the dispatcher" (an analysis and the owner's choice first, then `provision.sh`) and the
+  task container.
+- **4.3d, #0-278:** "Product code from `main` only" and `next-item.sh`'s open pull requests as a file.
 
 - **CLI:** `node dispatcher/src/cli.mjs run [--item 0-N] [--resume <branch>] --adapter <product>/.factory/adapter.json`.
   Configuration from the environment only (ADR-0055): `FACTORY_STATE_DIR`, `FACTORY_REPO_DIR` (the product clone the
