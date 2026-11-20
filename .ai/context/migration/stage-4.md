@@ -651,6 +651,43 @@ owner 2026-11-20, before its code, and done the same day, `factory` PR #16).**
   this ADR is written before its code; they take effect with its merge, and the ADR follows if the PR changes them.
   Kept for the end state: the task container checked before anything runs (#0-284), and what persists
   across tasks once a task holds a credential (#0-285).
+- **Done in 4.3c, the dispatcher's side (`factory` PR #18, merge `c5fe3264`, head `9b917c1f`; two review rounds; 268
+  tests in round 1 and 50 mutations, all caught; 273 tests at the head, the fixes' mutations judged by round 2):** the
+  dispatcher's half of "Decided for 4.3c" above, as decided:
+  - `src/container/run-container.mjs`: the one starter of container commands, `/usr/bin/sudo -n -H -u factory --`
+    and `/usr/bin/docker` or `/usr/local/bin/devcontainer` by their paths, `childEnv`'s environment, no argument shaped
+    like a secret (sudo logs them), output and time bounded (AC9; a static test that nothing else starts them);
+  - `work-dir.mjs`: the work directory by one-shot helpers of `FACTORY_HELPER_IMAGE` by digest (`--pull=never`, no
+    network, three capabilities, a constant script, the runId as an argument, the bundle and the override on stdin, no
+    write through a planted link), `git clone -b base` from the base's bundle (`git/base-bundle.mjs`), `chown -R -h
+    1000:1000`, removed whole and checked (AC7, AC10, AC12);
+  - `task-config.mjs` with `task-config-list.json` and `jsonc.mjs`: the closed list of ADR-0062 point 4 (`${env:...}`
+    refused beside the ADR's two, as the spec's alias of `localEnv`), the features in the configuration by digest, and
+    the image's `devcontainer.metadata` label held to the list, a feature's entry whole;
+  - `task-container.mjs`: the configuration read from the base as blobs and a tree, never links; `devcontainer up`
+    and the container checked (its label, no privilege, the configuration's capabilities, exactly the dispatcher's
+    mounts, `/opt/factory` read-only); the image's ID in `task.json` and a resumed task run from it; the `timeout`
+    probe; every call under `timeout`, its containers killed by label past it and the task BLOCKED (AC3, AC5, AC11);
+  - `task-bundle.mjs`: the commits out as `git bundle create -` on `docker exec`'s stdout (AC6);
+  - `daemon.mjs` and `environment.mjs`: the rollback by time (refused, swept, the labelled network, checked again)
+    and the sweep at both ends; `cli.mjs sweep [--force]` (AC13);
+  - choices of its own, inside ADR-0062, put to the owner in its description and accepted with the merge: the dispatcher's mounts as `--mount` in
+    `runArgs` (point 4, as amended), the task's network a marker the task container does not join, `imageId` in
+    `task.json` at `version: 1`, a resumed task's fresh clone (its commits carried over are 4.4's).
+- **Changed on `factory` PR #18's review, round 1 (2026-11-20, the owner's choice of the recommendations):** a
+  listed feature's entry in the image's label is the artifact's whole, `customizations` included, from the feature's
+  OCI layer at its digest, never from a label built on the daemon (arc-c7d1; a test whose label comes from the
+  artifact's fixture); the sweep's command in every refusal runs as pasted (gen-9a47); the rollback's refusal after the
+  run's network always wins, a failed removal of the run's own objects told in it and no sweep after it (gen-5c1e);
+  no stderr of the agent's side in an error or a task's `reason`, only the program, its subcommand and the exit code
+  (N1, SEC-31); the starter's header and the README on the rule's own environment. **Not in that pull request,
+  the owner's choice:** build, then the label checked, then `up` by the image's ID, and all of `HostConfig` checked,
+  into #0-284 (4.4); what `factory` keeps outside the daemon across tasks into #0-285 (before 4.6); round 2's
+  non-blocking findings (refusals naming a position, a static guard on stderr, an owner-only copy of a failed call's
+  stderr, the differing keys named) into #0-284; the rest of round 1's non-blocking findings (exit 124 and a lockfile
+  name with a dot untested, `onTimeout` in `upContainer`, two `firstLines`, two 256 MiB constants, container names
+  blocking a sweep, bidi characters) left, as minor. Why: one change per pull request, and the end state's checks
+  before the state that needs them, not before the trial.
 - **Decided for #0-277's last part, the move of `FACTORY_COMMIT` (2026-11-20, the owner, after `factory` PR #18
   merged as `c5fe3264`; before its code):**
   - **The pin:** `FACTORY_COMMIT` moves to `c5fe32646b99d49fe4bfb7dab4d4e2b1f73372d1`, the merge of PR #18
