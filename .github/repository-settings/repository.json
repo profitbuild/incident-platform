@@ -4,5 +4,6 @@
     "allow_auto_merge": false
   },
   "admins": ["lukaszplawiak"],
+  "writers": ["lukaszplawiakbot"],
   "repository_secrets": []
 }

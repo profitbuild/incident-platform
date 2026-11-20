@@ -170,6 +170,7 @@ Code, Javadoc, config comments and commits reference items as `backlog #N`.
 | [0-265](#0-265-a-task-back-after-a-pause-is-resumed-without-asking-whether-it-still-makes-sense) | A task back after a pause is resumed without asking whether it still makes sense | ci | Low | Open |
 | [0-272](#0-272-builder-app-exists-its-key-is-the-vms-and-it-can-write-only-its-own-branches-step-42b) | builder-app exists, its key is the VM's, and it can write only its own branches (step 4.2b) | ci | High | Open |
 | [0-273](#0-273-dev-tokenmjs-keeps-its-own-copy-of-the-token-checks) | `dev-token.mjs` keeps its own copy of the token checks | ci | Low | Open |
+| [0-274](#0-274-dispatcher-on-the-build-vm-passes-no-egress-filter) | `dispatcher` on the build VM passes no egress filter | ci | Medium | Open |
 | [0-133](#0-133-incidentresolvedevent-carries-no-openedat) | `IncidentResolvedEvent` carries no `openedAt` | tech-debt | Low | Open |
 | [0-134](#0-134-diff-cover-is-installed-by-version-without-hashes) | `diff-cover` is installed by version, without hashes | ci | Low | Open |
 | [0-135](#0-135-kubectl-in-ci-is-downloaded-unverified) | kubectl in CI is downloaded unverified | ci | Low | Open |
@@ -1154,7 +1155,9 @@ Someone who finds a vulnerability has only public issues to report it in, and Gi
 alert on the dependency graph. Renovate updates dependencies but is not an alerting channel.
 
 **Approach.** Add `SECURITY.md` (supported versions, how to report, expected response), turn on private vulnerability
-reporting and Dependabot alerts (alerts only; Renovate keeps doing the updates).
+reporting and Dependabot alerts (alerts only; Renovate keeps doing the updates). Should Dependabot's security updates
+be turned on as well, its `dependabot/**` branches are refused by the ruleset `branches` (#0-272, ADR-0034 as
+amended): the same change lists the Dependabot app as an `Integration` in its bypass.
 
 ---
 
@@ -3771,12 +3774,13 @@ AC2. On three resumed tasks the disposition agrees with the owner's.
 **Type:** ci · **Priority:** High · **Status:** Open (migration stage 4, step 4.2b; ADR-0055, ADR-0060 D3). Split from
 4.2 by the owner on 2026-11-19; the rulesets were added by the same analysis.
 **Autopilot:** human-only · **Risk:** high · **Complexity:** medium · **Depends on:** #0-271
-**Touches:** factory (scripts/factory-admin/build-vm/provision.sh, .github/repository-settings/rulesets/,
-.github/scripts/repository-settings.rb and its test: owner-only), decisions (ADR-0034 amended: the rulesets beyond
-`main`, their bypass actors, the probe's finding that a role's bypass covers no app, the wider `check`;
-.ai/decisions/README.md), root (README.md "Infrastructure Hardening",
-.ai/context/migration/stage-4.md "4.2", .ai/context/migration.md), the owner's settings on GitHub (the app, its
-installation, the rulesets, by `repository-settings.rb plan`/`apply`)
+**Touches:** factory (scripts/factory-admin/build-vm/provision.sh, install-builder-app.sh and verify-pins.sh,
+.github/repository-settings/ (rulesets/, repository.json, apps/), .github/scripts/repository-settings.rb,
+check-factory-copies.rb and their tests, a comment in .github/workflows/ci.yml: owner-only), decisions (ADR-0034 amended: the rulesets beyond `main`, their
+bypass actors, the probes' findings, the writers, the wider `check`; .ai/decisions/README.md), root (README.md
+"Infrastructure Hardening", .ai/context/migration/stage-4.md "4.2" and "4.3", .ai/context/migration.md), the repository
+`profitbuild/factory` (`BUILDER_PERMISSIONS` as a JSON file, a draft pull request from its container), the owner's
+settings on GitHub (the app, its installation, the rulesets, by `repository-settings.rb plan`/`apply`)
 
 **Problem.** With Contents write, builder-app can push to every branch that `main`'s ruleset does not cover, which
 today is every other branch (`.github/repository-settings/rulesets/` holds only `main`). It could create, force-push
@@ -3805,58 +3809,92 @@ The ruleset was deleted afterwards and no `probe/` branch is left. So a ruleset 
 the owner and the bot account through, and builder-app, not listed, is refused. Renovate is an app, so it must be
 listed as an `Integration`.
 
-**Work.**
+**Known since the analysis (2026-11-19; owner's choices A2, C2, D2, E2, F2, G2).** Two more probes on `factory`, both
+cleaned up:
+- **P1, `delete_branch_on_merge` under a `deletion` rule:** with no bypass, the head branch of the owner's merge stayed
+  (60 s); with the bypass "role Write" it was deleted. GitHub deletes it as the one who merged.
+- **P2, an app's approval:** on a pull request to a branch whose ruleset asked one approval and no code owner's, the
+  dev app's approval made it APPROVED and mergeable. Only a code owner's review (or a required reviewer) stops that.
+
+**Work, in two pull requests** (the confinement first, so the key never exists without it):
+
+*Pull request 1, the confinement (no app needed):*
+- **Four rulesets**, files in `.github/repository-settings/rulesets/`, bypass mode `always`:
+  - **`branches`:** every branch but `main`, `factory/**` and `renovate/**`; creation, update, deletion,
+    non_fast_forward. Bypass: the role Write (the owner and the bot account).
+  - **`renovate`:** `renovate/**`, the same rules. Bypass: the role Write and the Renovate app (`Integration` 2740).
+    Renovate gets its own namespace instead of the role's reach over every branch (C2).
+  - **`tags`:** update, deletion, non_fast_forward, no bypass; **`tag-creation`:** creation, the admin role. As
+    `factory`'s: a ruleset's bypass applies to all its rules (D2).
+- **`repository.json` lists the writers** (Write or Maintain, today `lukaszplawiakbot`), compared by `check` with an
+  admin token as the admins are: the role Write's bypass names a role, so a new writer would bypass `branches`.
+- ADR-0034 amended and retitled; README "Infrastructure Hardening".
+- The owner runs `repository-settings.rb plan`, then `apply` from the branch just before the merge (ADR-0034).
+
+*Pull request 2, the app, the key and the VM:*
 - **The owner creates the GitHub App `profitbuild-builder`:**
   - no webhook;
   - Contents read and write, Pull requests read and write, Metadata read; nothing else (no Issues until 4.5, no
     Checks, Statuses, Workflows or Administration);
   - installed on incident-platform alone.
-- **`provision.sh`** adds a system user `dispatcher`:
-  - its home is mode 700, and `factory` cannot read it;
-  - the key is at `/home/dispatcher/.config/factory/builder-app.pem`, and the app's id and its installation's id are
-    in `.../env`, both mode 600;
-  - `dispatcher` drives `factory`'s rootless Docker through its socket by a group ACL, never the reverse.
-- **Two rulesets in incident-platform:**
-  - **branches:** every branch but `main` and `factory/**`, with the rules creation, update, deletion and
-    non_fast_forward. The bypass is the role Write (the owner and the bot account, the rollback's) and Renovate as an
-    `Integration`.
-  - **tags:** creation, update and deletion, with the admin role as the only bypass.
-
-  Both are recorded in `.github/repository-settings/rulesets/` and checked by `repository-settings.rb check`, which
-  also checks builder-app's installation (its permissions and its one repository). The role Write lets the bot
-  account through on every branch but `main`, as its Write role does today. This item does not widen that, but its
-  security review judges it, since the rollback's bot keeps that reach until stage 5's exit.
-- **Rotation:** a second key is added, the dispatcher switched to it, and the old key deleted; once a quarter, and at
-  once on any doubt.
+- **`provision.sh`** adds a system user `dispatcher`: its home mode 700, `/home/dispatcher/.config/factory` mode 700,
+  both its own; `factory` cannot read them. It clones `profitbuild/factory` as `dispatcher` at a commit pinned in
+  `provision.sh` (checked by `verify-pins.sh`), until 4.7's tag, so `check-app` has code to run.
+- **The key has one copy, on the VM (E2).** The owner generates it in the app's settings and sends it on stdin
+  straight into the file (`limactl shell factory-build sudo -u dispatcher sh -c 'umask 077; cat > …'`), never through
+  `/tmp` (`limactl copy` lands there with the default umask, readable by `factory` for a moment), and deletes the
+  download. A new VM (`delete.sh`, `create.sh`) gets a new key and the old one is deleted on GitHub, so recreating the
+  VM is the rotation; otherwise a second key is added, the dispatcher switched and the old key deleted once a
+  quarter, and at once on any doubt.
+- **`build-vm/install-builder-app.sh`** (on the Mac, the owner's): writes the key as above and the ids into `.../env`,
+  both mode 600, checks the modes and owners, and runs `check-app` as `dispatcher`.
+- **One source for the permissions (G2):** `factory` moves `BUILDER_PERMISSIONS` into a JSON file that
+  `builder-token.mjs` imports; incident-platform's `.github/repository-settings/apps/profitbuild-builder.json` is what
+  `repository-settings.rb` checks the installation against, and `check-factory-copies.rb` fails when the two differ.
+- **A fifth ruleset, `factory`,** on `factory/**`: creation, update, deletion, non_fast_forward; bypass builder-app as
+  `Integration` (its id, known once the app exists) and the admin role, `always`. Without it the confinement holds one
+  way only: builder-app writes only `factory/**`, but every actor with Contents write (the bot account, Renovate, a
+  later app) may create, force-push or delete builder-app's branches, which 4.3 fetches into its trusted clone (review
+  of pull request 1, round 1, security).
+- **Moved to 4.3 (F2):** `dispatcher`'s access to `factory`'s rootless Docker. Nothing in 4.2b uses or tests it, and
+  `/run/user/<uid>` is a tmpfs recreated at every boot, so an ACL there must be set at every start of the daemon,
+  whose unit `factory` itself can change (ADR-0057).
 
 **Acceptance criteria.**
-AC1. The app exists with exactly the permissions above and is installed on incident-platform alone; `check-app` (#0-271)
-     run as `dispatcher` on the VM passes, its 404 for `factory` included.
-AC2. As builder-app, with real tokens, recorded in the Result:
-     - a push to a branch outside `factory/**` is refused by GitHub;
-     - a push to `factory/<x>` is accepted (the probe's positive control, again);
-     - the creation of a tag is refused.
-AC3. As the owner and as the bot account: a push to a branch of their own still works, and a merged PR's head branch
-     is still deleted automatically (`delete_branch_on_merge`).
-AC4. `repository-settings.rb check` fails when either ruleset or builder-app's installation differs from the files
-     (tests).
-AC5. As `factory`, the user of the task containers, on the VM: reading `/home/dispatcher` is refused.
-AC6. ADR-0034 is amended for the two rulesets, their bypass actors and the wider `check` (ADR-0060's Consequences, as
-     amended on 2026-11-19, put that part of ADR-0034 here), and its title changed to match: it names one ruleset
-     guarding `main` (review of the plan, round 2).
-AC7. On the VM, set by `provision.sh` and checked after it, the result in the Result:
-     - the env file is mode 600;
-     - `/home/dispatcher/.config/factory` is mode 700;
-     - both are owned by `dispatcher`.
+*Pull request 1:*
+AC1. The four rulesets are files and on GitHub; the owner's `repository-settings.rb check` passes on `main` after the
+     merge.
+AC2. As the owner and as the bot account: a push to a branch of their own still works, and a merged pull request's
+     head branch is still deleted automatically (`delete_branch_on_merge`).
+AC3. `repository-settings.rb check` fails when a ruleset or the writers differ from the files (tests).
+AC4. ADR-0034 is amended for the rulesets, their bypass actors, the probes' findings and the writers (ADR-0060's
+     Consequences, as amended on 2026-11-19, put that part of ADR-0034 here), and its title changed to match: it named
+     one ruleset guarding `main` (review of the plan, round 2).
 
-     The file is trusted as code (it can set `NODE_OPTIONS`, #0-271), and 4.2a's code cannot check it in time, since
-     Node loads it first (review of `factory` PR #9, round 3).
-AC8. One source for builder-app's permissions: `repository-settings.rb` checks the installation against the same list
-     `check-app` enforces (`BUILDER_PERMISSIONS` in `factory`'s `builder-token.mjs`), by reading it or by a test that
-     compares the two, not a second hand-kept copy (review of `factory` PR #9, arc-a01b).
-AC9. README "Infrastructure Hardening" names the controls added and the gaps left:
+*Pull request 2:*
+AC5. The app exists with exactly the permissions above and is installed on incident-platform alone; `check-app` (#0-271)
+     run as `dispatcher` on the VM passes, its 404 for `factory` included.
+AC6. As builder-app, with real tokens, recorded in the Result:
+     - a push to a branch outside `factory/**` is refused by GitHub (creation, update, deletion and force push);
+     - a push to `factory/<x>` is accepted;
+     - the creation of a tag is refused;
+     - as the bot account, a push to `factory/<x>` is refused (the `factory` ruleset), and the owner's passes.
+AC7. As `factory`, the user of the task containers, on the VM: reading `/home/dispatcher` is refused.
+AC8. On the VM, set by `provision.sh` and `install-builder-app.sh` and checked after them, the result in the Result:
+     - the env file and the key are mode 600;
+     - `/home/dispatcher/.config/factory` is mode 700;
+     - all are owned by `dispatcher`.
+
+     The env file is trusted as code (it can set `NODE_OPTIONS`, #0-271), and 4.2a's code cannot check it in time,
+     since Node loads it first (review of `factory` PR #9, round 3).
+AC9. One source for builder-app's permissions (G2 above): `repository-settings.rb check` fails when the installation
+     differs from `apps/profitbuild-builder.json`, and `check-factory-copies.rb` when that file differs from
+     `factory`'s (tests); not a second hand-kept copy (review of `factory` PR #9, arc-a01b).
+AC10. README "Infrastructure Hardening" names the controls added and the gaps left:
      - the key at rest is protected by the Mac's FileVault, since the VM's disk is a file under `~/.lima`;
      - root on the VM reads the key;
+     - `dispatcher`'s traffic passes no egress filter (#0-274);
+     - builder-app's Pull requests write lets it edit, close and dismiss reviews on any pull request;
      - a secret store waits for stage C.
 
 ### 0-273. `dev-token.mjs` keeps its own copy of the token checks
@@ -3882,3 +3920,26 @@ carry that.
 AC1. `dev-token.mjs` holds no check of its own that `checked-token.mjs` or `url-policy.mjs` has; its tests pass
      unchanged, plus the key-file refusals 4.2a has (a symlink, a FIFO, another owner where testable).
 AC2. `checked-token.mjs` no longer cites this item.
+
+### 0-274. `dispatcher` on the build VM passes no egress filter
+
+**Type:** ci · **Priority:** Medium · **Status:** Open (migration stage 4; found by the analysis of #0-272, 2026-11-19).
+**Autopilot:** human-only · **Risk:** medium · **Complexity:** low · **Depends on:** #0-272
+**Touches:** factory (scripts/factory-admin/build-vm/provision.sh and its checks: owner-only), root (README.md
+"Infrastructure Hardening", .ai/context/migration/stage-4.md)
+
+**Problem.** The VM's egress filter (`factory-egress.sh` and `factory-dns.sh` in `provision.sh`) matches one uid,
+`factory`'s (`-m owner --uid-owner "$FILTERED"`), because everything a task runs runs as `factory` (ADR-0057). #0-272
+adds the user `dispatcher`, which holds builder-app's key and, from 4.6, the Anthropic API key behind the credential
+proxy. Its traffic matches no rule, so a process running as `dispatcher` reaches any host. The dispatcher has no
+dependencies (Node built-ins only), so that is code of ours gone wrong, not a package; but it is the one process with
+both keys, and its reach is the widest on the VM.
+
+**Work.** The filter also covers `dispatcher`'s uid, with its own list: GitHub (the API and git, as for `factory`) and
+from 4.6 Anthropic's API. The list is checked the way `check-allowlists.sh` checks today's two.
+
+**Acceptance criteria.**
+AC1. As `dispatcher` on the VM: a request to a host outside its list fails; `check-app` passes.
+AC2. A VM whose filter for `dispatcher` cannot start refuses to start `dispatcher`'s work, as `factory`'s session does
+     today (fail closed).
+AC3. README "Infrastructure Hardening" drops the gap that #0-272 named.

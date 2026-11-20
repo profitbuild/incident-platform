@@ -842,8 +842,9 @@ jobs:
       # copy, and a pull request that changes them is checked with its own
       # (red until the owner applies them, ADR-0034). The token
       # is read-only: GitHub shows it neither the bypass actors, nor the
-      # repository settings, nor the admins, so those are compared only when
-      # the owner runs it (the summary names them). Last in the job, so a
+      # repository settings, nor the admins, nor the writers (#0-272), so
+      # those are compared only when the owner runs it (the summary names
+      # them). Last in the job, so a
       # GitHub outage or a changed setting hides no lint finding above. Its
       # cases run first, in the step above.
       - name: The repository settings match .github/repository-settings/

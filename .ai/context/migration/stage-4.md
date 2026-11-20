@@ -113,7 +113,7 @@ What was built, in `dispatcher/` (Node built-ins only):
   revokes; prints its eight lines and no token; exit 1 at the first failure, a failed final revoke included.
 - **Tests:** 86, and 48 of 50 mutations caught (the two that live are each one half of the layered symlink guard;
   removing both is caught). `dev-token.mjs` is unchanged; moving it onto `checked-token.mjs` is #0-273.
-- **Left for a real app** (#0-272's AC1): GitHub's 404 for `factory`, the narrowed token's one repository, and
+- **Left for a real app** (#0-272's AC5): GitHub's 404 for `factory`, the narrowed token's one repository, and
   `metadata: read` in its answer.
 
 ### 4.2b The app, the key and the confinement (#0-272, in incident-platform and on GitHub)
@@ -123,26 +123,42 @@ What was built, in `dispatcher/` (Node built-ins only):
   - repository permissions Contents read and write, Pull requests read and write, Metadata read. Nothing else: no
     Issues until 4.5, no Checks, no Statuses, no Workflows, no Administration;
   - installed on incident-platform only.
+- **The order (the owner's choice A2, 2026-11-19):** two pull requests, the confinement first (the rulesets below, no
+  app needed), then the app, the key and the VM, so the key never exists without the rulesets.
 - **VM (`scripts/factory-admin/build-vm/provision.sh`, moving to `factory`):**
-  - a system user `dispatcher`, its home mode 700; `factory` cannot read it;
+  - a system user `dispatcher`, its home and `.config/factory` mode 700; `factory` cannot read them;
+  - a clone of `profitbuild/factory` as `dispatcher`, at a commit pinned in `provision.sh` until 4.7's tag, so
+    `check-app` has code to run;
   - the key at `/home/dispatcher/.config/factory/builder-app.pem` and the ids in `/home/dispatcher/.config/factory/env`,
-    both mode 600;
-  - the dispatcher drives `factory`'s rootless Docker through its socket (`/run/user/<factory uid>/docker.sock`) by a
-    group ACL: control of `factory`'s containers, never the reverse.
+    both mode 600, written by `build-vm/install-builder-app.sh` (the owner's, on the Mac), which then runs `check-app`
+    as `dispatcher`;
+  - **one copy of the key** (E2): sent on stdin straight into its file (`sudo -u dispatcher sh -c 'umask 077; cat >
+    …'`), never through `/tmp`, and the download deleted. A new VM gets a new key and the old one is deleted on
+    GitHub, so recreating the VM is a rotation;
+  - `dispatcher`'s access to `factory`'s rootless Docker moved to 4.3 (F2): nothing in 4.2b uses it.
 - **Commits and the PR** (4.5) are authored as `profitbuild-builder[bot]` with its noreply address
   (`<bot user id>+profitbuild-builder[bot]@users.noreply.github.com`).
-- **Rulesets of incident-platform** (new; `main`'s was the only one):
-  - **branches:** every branch but `main` and `factory/**`, with creation, update, deletion and non_fast_forward. The
-    bypass is the role Write (the owner and the bot account) and Renovate as an `Integration`;
-  - **tags:** creation, update and deletion, with the admin role as the only bypass.
+- **Rulesets of incident-platform** (new; `main`'s was the only one), bypass mode `always`:
+  - **`branches`:** every branch but `main`, `factory/**` and `renovate/**`, with creation, update, deletion and
+    non_fast_forward. The bypass is the role Write (the owner and the bot account);
+  - **`renovate`:** `renovate/**`, the same rules; the role Write and Renovate as an `Integration` (2740). Renovate
+    gets its own namespace, as builder-app does (C2);
+  - **`tags`:** update, deletion and non_fast_forward, no bypass; **`tag-creation`:** creation, the admin role. As
+    `factory`'s two (D2): a bypass applies to every rule of its ruleset;
+  - **`factory`** (the second pull request, once builder-app's id exists): `factory/**`, the rules of `branches`;
+    builder-app as an `Integration` and the admin role. Without it every actor with Contents write may write
+    builder-app's branches, which 4.3 fetches into its trusted clone.
 
-  Both are files in `.github/repository-settings/rulesets/`, and `repository-settings.rb` checks them and builder-app's
-  installation.
+  All are files in `.github/repository-settings/rulesets/`; `repository.json` also lists the writers (Write or
+  Maintain), whom the role Write's bypass reaches. `repository-settings.rb` checks them, and builder-app's
+  installation against `apps/profitbuild-builder.json`, which `check-factory-copies.rb` compares with `factory`'s
+  JSON of `BUILDER_PERMISSIONS` (G2).
 - **ADR-0034 amended (in #0-272's PR).** It says today that `main` is guarded by one ruleset and that only the settings
   guarding `main` are files. The amendment adds:
-  - the two rulesets and their bypass actors (the role Write; Renovate as an `Integration`; tags to the admin role);
-  - the probe's finding that a role's bypass covers no app;
-  - `repository-settings.rb check` widened to them and to builder-app's installation.
+  - the rulesets and their bypass actors (four in the first pull request, `factory` in the second);
+  - the probes' findings (below);
+  - the writers, and `repository-settings.rb check` widened to them and, in the second pull request, to builder-app's
+    installation.
 
   ADR-0060's Consequences, as amended on 2026-11-19, put this part of ADR-0034 at 4.2b and the rest at 4.5.
 - **Rotation:** a second key added, the dispatcher switched, the old key deleted; quarterly, and at once on any doubt.
@@ -174,13 +190,28 @@ bypass covers the roles above it.
 - **Stage 5:** review-app's required status is bound to review-app by the ruleset's `integration_id`, as Actions' are
   today (15368). builder-app (no Checks, no Statuses) cannot set it, and an app with Statuses could not either.
 - **Stage 10:** the conditions for auto-merge in `.ai/context/migration.md` rest on these facts.
-- **Stage T:** the template of a product repository carries both rulesets, its own app as the confined author.
+- **Stage T:** the template of a product repository carries the rulesets (`branches`, `renovate`, `tags`,
+  `tag-creation`, and `factory` from #0-272's second pull request), its own app as the confined author.
 - **What the probe did not show:**
   - deletion was tried by the owner only, and whether the dev app deleted its branch before the ruleset went is not
     recorded;
   - update and non_fast_forward were not tried at all.
 
-  AC2 of #0-272 tries every rule with builder-app's real tokens.
+  AC6 of #0-272 tries every rule with builder-app's real tokens.
+
+**Two more, from the analysis of 4.2b (2026-11-19, on `factory`, base branch `probe-base`, all cleaned up):**
+
+| Probe | Setup | Result |
+|---|---|---|
+| P1, `delete_branch_on_merge` under a `deletion` rule | ruleset on `refs/heads/probe/**`, rule deletion only; the owner merges | no bypass: the head branch stayed (60 s); bypass "role Write": deleted |
+| P2, an app's approval | ruleset on `probe-base`: one approval, no code owner's; the owner's pull request | the dev app's approval made it APPROVED and mergeable |
+
+- **P1:** GitHub deletes a merged pull request's head branch as the one who merged it. The owner's and the bot's
+  merges still clean up (they are in the bypass); `factory/**` is under no ruleset. A branch under `branches` or
+  `renovate` merged by an app, or by an auto-merge in an app's name, stays: stage 10's concern.
+- **P2:** an app's approval counts. Today the code owner's review (`* @lukaszplawiak` on every path) is what keeps
+  builder-app (Pull requests write) from approving the bot's or Renovate's pull requests into a merge. Stage 10's
+  conditions in `.ai/context/migration.md` now name it.
 
 ## 4.3 The dispatcher's core
 
@@ -188,6 +219,12 @@ bypass covers the roles above it.
   Configuration from the environment only (ADR-0055): `FACTORY_STATE_DIR`, `FACTORY_REPO_DIR` (the product clone the
   dispatcher reads `main` from), the app's ids (`BUILDER_APP_*`, 4.2a), `FACTORY_PROXY_ADDR`, and today's limits
   `FACTORY_MAX_BLOCKED`, `FACTORY_AUDIT_EVERY`, `FACTORY_MAX_MERGES_PER_DAY` (no defaults, ADR-0052 point 5).
+- **Docker for the dispatcher** (moved from 4.2b, the owner's choice F2): `dispatcher` drives `factory`'s rootless
+  Docker (`/run/user/<factory uid>/docker.sock`), control of `factory`'s containers, never the reverse. Open: how. An
+  ACL on the socket must be set at every start of the daemon (`/run/user/<uid>` is a tmpfs, and the daemon's unit is
+  `factory`'s own, which code a test runs can change, ADR-0057), so the setting belongs to a root-owned unit; the
+  alternative is a sudoers rule letting `dispatcher` run `docker` as `factory`. Tested here, where `docker exec` is
+  first used.
 - **Carried from #0-271's review** (`factory` PR #9; the code holds them as preconditions, 4.3 makes them checks):
   - **A trusted clone for the push.** The token goes only to a git run in a clone the dispatcher owns, whose
     `.git/config` no agent's uid can write. The task's commits are fetched into it. The rest of an agent-written
@@ -311,8 +348,11 @@ bypass covers the roles above it.
 ## Owner's steps, in order
 
 1. ADR-0060 Accepted; `profitbuild/factory` created with its baseline (4.1). Done 2026-11-18.
-2. builder-app created and installed on incident-platform, its key on the VM, the two rulesets applied (4.2b,
-   #0-272), after 4.2a's code is merged in `factory` (#0-271).
+2. The confinement and the app (4.2b, #0-272), in this order:
+   1. the four rulesets and the writers applied (`repository-settings.rb plan`, then `apply`, from the branch just
+      before the merge; pull request 1);
+   2. builder-app created and installed on incident-platform, its key on the VM, the `factory` ruleset applied
+      (pull request 2), after 4.2a's code is merged in `factory` (#0-271).
 3. A Console workspace with a spend limit and its key on the VM (4.6).
 4. Merging each item's PRs; the three exit runs started by hand (4.7).
 

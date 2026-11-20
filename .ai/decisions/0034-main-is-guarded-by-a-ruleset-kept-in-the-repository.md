@@ -1,8 +1,10 @@
-# ADR-0034: `main` is guarded by one ruleset kept in the repository, bypassed at merge only by the owner's admin role; CI compares GitHub with the files (backlog #0-113)
+# ADR-0034: The rulesets are kept in the repository: `main` is bypassed at merge only by the owner's admin role, every other branch and tag is confined to named actors; CI compares GitHub with the files (backlog #0-113, #0-272)
 
 - **Status:** Accepted (2026-10-18); amended by ADR-0035 (the files and the check also hold the environments and which secrets exist)
-  and by #0-237 (the admins list is also the owner's identity, below)
-- **Backlog:** #0-113 (follow-ups #0-153, #0-154)
+  and by #0-237 (the admins list is also the owner's identity, below), and by #0-272 (2026-11-19: the rulesets of every other
+  branch and of the tags, the writers list; "Amendment (#0-272)" below). Title changed by that amendment: it named one
+  ruleset guarding `main`.
+- **Backlog:** #0-113 (follow-ups #0-153, #0-154; amended by #0-272)
 - **Date:** 2026-10-18
 - **Author:** human (owner chose one ruleset, every CI job as a required check, and that only their own account may bypass it, at merge; written up by Claude Code in the owner's session)
 - **Reversible:** yes
@@ -160,9 +162,71 @@ that PR needs a new push or an update from `main`.
   (Actions' `sha_pinning_required` and allowed actions, the default token permissions, secret scanning, fork PR
   approval) stays a list checked by hand: each comes from another endpoint, most need an admin token to read, and
   each workflow already declares its own `permissions:`. A setting that decides who can merge belongs in the files.
-  (Amended by ADR-0035: the environments and which secrets exist are files too.)
+  (Amended by ADR-0035: the environments and which secrets exist are files too. Amended by #0-272: so are the rulesets
+  of every other branch and of the tags, and the writers.)
 - Not covered by the ruleset, which guards merges into `main`: a workflow run on another branch. `snyk.yml` and
   `owasp-dependency-check.yml` can be dispatched by hand on any branch, which runs that branch's unreviewed
   build next to their secrets (#0-154). (Amended by ADR-0035: closed, the secrets live in an environment only
   `main` may use, kept as a file with the ruleset.)
 - The CLAUDE.md rule "delete the branch after every merge" now finds the remote branch deleted by GitHub.
+
+## Amendment (#0-272, 2026-11-19): every other branch and every tag
+
+**Why.** builder-app (ADR-0060 D3, stage 4.2b) holds Contents write on this repository, which reaches every ref no
+ruleset covers: until now every branch but `main`, and every tag. It could create, force-push or delete the owner's
+working branches, the bot's and Renovate's, and create, move or delete any tag. `main` itself waits for the owner's
+review of its last push, but a branch that another, approved pull request takes its code from is a way to `main`
+once stage 10's auto-merge takes that review away from part of the pull requests. So the app's reach is closed
+before its key exists.
+
+**Three facts, tried on `factory` (2026-11-19; GitHub's documentation states none of them):**
+- **A role's bypass covers no app.** With the bypass "role Write", the dev app's push was refused
+  (`GH013 … Cannot create ref due to creations being restricted`) and the owner's (admin) passed; with the app also
+  listed as an `Integration`, its push passed. An app passes only when it is named.
+- **GitHub deletes a merged pull request's head branch as the one who merged it.** Under a ruleset with the rule
+  `deletion` and no bypass, the branch was still there 60 s after the owner's merge; with the bypass "role Write" it
+  was deleted. So `delete_branch_on_merge` keeps working for whoever is in the bypass, and only for them.
+- **An app's approval counts as a required review.** On a pull request to a branch whose ruleset asked one approval
+  and no code owner's, the dev app's `gh pr review --approve` gave `reviewDecision` APPROVED and a mergeable pull
+  request. Here, the code owner's review that `* @lukaszplawiak` asks on every path is what keeps an app's approval
+  from merging anything.
+
+**Decision.** Four more rulesets, files in `.github/repository-settings/rulesets/` like `main.json`, compared and
+applied by the same script:
+
+| Ruleset | Refs | Rules | Bypass (`always`) |
+|---|---|---|---|
+| `branches` | every branch but `main`, `factory/**`, `renovate/**` | creation, update, deletion, non_fast_forward | the role Write (the owner and the bot account) |
+| `renovate` | `renovate/**` | the same | the role Write, the Renovate app (`Integration` 2740) |
+| `tags` | every tag | update, deletion, non_fast_forward | none |
+| `tag-creation` | every tag | creation | the admin role |
+
+- `factory/**` is builder-app's: it creates, rebases and deletes its own branches. Their pull requests to `main`
+  meet `main`'s ruleset like any other. Under these four rulesets the confinement holds one way only: builder-app
+  writes no branch or tag but `factory/**` (Contents write also reaches releases and `repository_dispatch`, which no
+  ruleset guards: README "Known gaps of the rulesets"), yet every actor with Contents write (the bot account, Renovate, a later app) may
+  still write `factory/**` too. A fifth ruleset, `factory`, closes it to all but builder-app (an `Integration`) and
+  the admin role; it needs builder-app's id, so it comes with #0-272's second pull request, before 4.3 fetches those
+  branches (review of the first, round 1).
+- Renovate gets its own namespace, as builder-app does, instead of the role's reach over every branch; excluding
+  `renovate/**` from `branches` alone would have opened it to builder-app.
+- The tags follow `factory`'s two rulesets: a ruleset's bypass applies to all its rules, so the admin's bypass for
+  creating a tag would also let it move or delete one. No tag moves, whoever asks.
+- The bypass mode is `always`: these rulesets guard pushes, which `pull_request` mode does not cover.
+- **The writers** join the admins in `repository.json` (`writers`: the logins with Write or Maintain, today
+  `lukaszplawiakbot`). The bypass "role Write" names a role, not a login, so whoever got Write would bypass
+  `branches`; with an admin token `check` fails when GitHub's list differs, and `plan`/`apply` refuse to run, as for
+  the admins.
+
+**Consequences.**
+- The bot account keeps the reach over the owner's branches its Write role gives it today; this amendment does not
+  widen it, and stage 5's exit takes it away with the bot.
+- A pull request whose head branch is under `branches` or `renovate`, merged by an actor outside their bypass (an
+  app, or an auto-merge in its name), leaves its branch: stage 10 decides who merges, and that the branch is deleted.
+- Before stage 10 lets a pull request merge without the owner, its approval must be one no app can give: a code
+  owner's review, or a ruleset's required reviewer, since an app's approval counts (`.ai/context/migration.md`, stage
+  10).
+- An app in no bypass is refused on every branch `branches` covers: an app added later (Dependabot's security updates,
+  if #0-74 turns them on) is listed as an `Integration` in `branches` in the same change.
+- What CI's token cannot see stays as before: the bypass actors of every ruleset, the admins and now the writers are
+  compared only when the owner runs `check`.

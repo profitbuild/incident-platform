@@ -1,0 +1,21 @@
+{
+  "name": "renovate",
+  "target": "branch",
+  "enforcement": "active",
+  "conditions": {
+    "ref_name": {
+      "include": ["refs/heads/renovate/**"],
+      "exclude": []
+    }
+  },
+  "bypass_actors": [
+    { "actor_id": 4, "actor_type": "RepositoryRole", "bypass_mode": "always" },
+    { "actor_id": 2740, "actor_type": "Integration", "bypass_mode": "always" }
+  ],
+  "rules": [
+    { "type": "creation" },
+    { "type": "update", "parameters": { "update_allows_fetch_and_merge": false } },
+    { "type": "deletion" },
+    { "type": "non_fast_forward" }
+  ]
+}
