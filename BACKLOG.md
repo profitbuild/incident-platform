@@ -168,8 +168,12 @@ Code, Javadoc, config comments and commits reference items as `backlog #N`.
 | [0-263](#0-263-nothing-runs-a-bug-fixs-test-on-the-code-before-the-fix) | Nothing runs a bug fix's test on the code before the fix | ci | Medium | Open |
 | [0-264](#0-264-a-green-pr-is-merged-on-a-base-that-moved-under-it) | A green PR is merged on a base that moved under it | ci | Medium | Open |
 | [0-265](#0-265-a-task-back-after-a-pause-is-resumed-without-asking-whether-it-still-makes-sense) | A task back after a pause is resumed without asking whether it still makes sense | ci | Low | Open |
-| [0-273](#0-273-dev-tokenmjs-keeps-its-own-copy-of-the-token-checks) | `dev-token.mjs` keeps its own copy of the token checks | ci | Low | Open |
 | [0-274](#0-274-dispatcher-passes-the-egress-list-of-factory-wider-than-it-needs) | `dispatcher` passes the egress list of `factory`, wider than it needs | ci | Low | Open |
+| [0-275](#0-275-the-dispatchers-foundation-cli-configuration-state-lock-retries-and-the-adapters-schema-step-43a) | The dispatcher's foundation: CLI, configuration, state, lock, retries and the adapter's schema (step 4.3a) | ci | High | Open |
+| [0-276](#0-276-builder-apps-push-only-from-a-trusted-clone-to-the-tasks-own-branch-step-43b) | builder-app's push only from a trusted clone, to the task's own branch (step 4.3b) | ci | High | Open |
+| [0-277](#0-277-the-dispatcher-drives-factorys-docker-and-a-task-container-step-43c) | The dispatcher drives `factory`'s Docker and a task container (step 4.3c) | ci | High | Open |
+| [0-278](#0-278-the-products-code-runs-only-from-main-step-43d) | The product's code runs only from `main` (step 4.3d) | ci | High | Open |
+| [0-279](#0-279-the-dev-apps-ids-and-permissions-are-kept-in-two-places-with-no-check) | The dev app's ids and permissions are kept in two places with no check | ci | Low | Open |
 | [0-133](#0-133-incidentresolvedevent-carries-no-openedat) | `IncidentResolvedEvent` carries no `openedAt` | tech-debt | Low | Open |
 | [0-134](#0-134-diff-cover-is-installed-by-version-without-hashes) | `diff-cover` is installed by version, without hashes | ci | Low | Open |
 | [0-135](#0-135-kubectl-in-ci-is-downloaded-unverified) | kubectl in CI is downloaded unverified | ci | Low | Open |
@@ -3662,7 +3666,10 @@ AC2. A shipped PR has the ledger table; a stopped one's notification holds both 
 
 **Type:** ci · **Priority:** Medium · **Status:** Open. Source: the owner's analysis of tstack (github.com/t3dotgg/tstack, 2026-11-16, "Zapożyczenia z tstack"), change 6 (`pr-wait`'s patterns), and #0-251, #0-253.
 **Autopilot:** human-only · **Risk:** low · **Complexity:** low · **Depends on:** ADR-0055 stage 4 (#0-212): written
-into its brief, built with it
+into its brief, built with it. Which step builds which requirement (review of the split of 4.3, 2026-11-20): the lock,
+the state that survives a restart and the retries, #0-275 (4.3a); the per-task baseline, "a pass with no new event
+writes nothing" and the gate's `summary` kept short, 4.4 (the flow, where passes and the gate's answer are read); the
+GraphQL rate limit, stage 7 (v0 uses REST). AC1 is met when the last of them is written with its test; AC2 by 4.7's runs
 **Touches:** docs (the brief of ADR-0055 stage 4, in the `factory` repository)
 
 **Problem.** The dispatcher (ADR-0055 stage 4) will run from a timer around the clock and poll GitHub, Projects v2
@@ -3768,30 +3775,6 @@ Thresholds to decide.
 AC1. The dispatcher runs the agent in the three cases and acts on MODERNIZE and REWORK; CLOSE reaches the owner.
 AC2. On three resumed tasks the disposition agrees with the owner's.
 
-### 0-273. `dev-token.mjs` keeps its own copy of the token checks
-
-**Type:** ci · **Priority:** Low · **Status:** Open (migration stage 4; left by #0-271, `factory` PR #9, review
-arc-2d71; `factory`'s `checked-token.mjs` cites this item).
-**Autopilot:** human-only · **Risk:** medium · **Complexity:** low · **Depends on:** #0-271
-**Touches:** the repository `profitbuild/factory` (`dispatcher/bin/dev-token.mjs` and its tests, a draft pull request
-from its container, `/review factory#<n>`)
-
-**Problem.** #0-271 wrote the checks a GitHub App token must pass before it is used as parametrised functions,
-`checked-token.mjs` and `url-policy.mjs`. AC4 of #0-271 kept `dev-token.mjs`, the tool that mints the dev app's token
-on the Mac, unchanged, so it still has its own copy: the key's mode, the installation's exact permissions, exactly one
-repository, the token's permissions, and the https-or-loopback rule. Two copies of a check drift. The dev app's
-values differ on purpose (its token is not narrowed to a repository; it will never hold Issues), and the parameters
-carry that.
-
-**Work.** `dev-token.mjs` calls `checked-token.mjs` and `url-policy.mjs` with the dev app's values. It also gains what
-4.2a added for builder-app's key: `lstat`, `O_NOFOLLOW|O_NONBLOCK`, `fstat`. Its behaviour, its file and its
-`--watch` stay as they are.
-
-**Acceptance criteria.**
-AC1. `dev-token.mjs` holds no check of its own that `checked-token.mjs` or `url-policy.mjs` has; its tests pass
-     unchanged, plus the key-file refusals 4.2a has (a symlink, a FIFO, another owner where testable).
-AC2. `checked-token.mjs` no longer cites this item.
-
 ### 0-274. `dispatcher` passes the egress list of `factory`, wider than it needs
 
 **Type:** ci · **Priority:** Low · **Status:** Open (migration stage 4; found by the analysis of #0-272, 2026-11-19;
@@ -3819,3 +3802,156 @@ AC2. A VM whose rule for `dispatcher` cannot be set refuses to start `dispatcher
      session does today.
 AC3. README "Infrastructure Hardening" drops the gap #0-272 named ("`dispatcher`'s traffic passes the egress chain of
      `factory`, whose list is wider than it needs").
+
+### 0-275. The dispatcher's foundation: CLI, configuration, state, lock, retries and the adapter's schema (step 4.3a)
+
+**Type:** ci · **Priority:** High · **Status:** Open (migration stage 4, step 4.3a; ADR-0055, ADR-0060 D1, D6, D8;
+split from 4.3 on 2026-11-20, the owner's choice A).
+**Autopilot:** human-only (`factory` code, written interactively in its devcontainer) · **Risk:** medium ·
+**Complexity:** medium · **Depends on:** #0-272
+**Touches:** the repository `profitbuild/factory` (`dispatcher/src/cli.mjs`, `dispatcher/src/config/`,
+`dispatcher/src/state/`, `dispatcher/src/github/` (one request helper), `schemas/adapter.schema.json` and
+`schemas/gate.schema.json`, their tests; a draft pull request from its container, `/review factory#<n>`), decisions
+(a note of v0's lock in ADR-0060 D7), root (`.ai/context/migration/stage-4.md` "4.3", `.ai/context/migration.md`,
+BACKLOG #0-261)
+
+**Problem.** `factory`'s dispatcher has its token code (4.2a) and nothing that runs a task: no entry point, no state,
+no lock, no adapter. Every later step of 4.3 and 4.4 builds on these, and none of them needs Docker or the VM, so they
+can be written and tested first, on their own.
+
+**Work.** `stage-4.md` "4.3", parts CLI, state, retries and adapter:
+- `node dispatcher/src/cli.mjs run [--item 0-N] [--resume <branch>] --adapter <path>`; configuration from the
+  environment only (`FACTORY_STATE_DIR`, `FACTORY_REPO_DIR`, `BUILDER_APP_*`, `FACTORY_MAX_BLOCKED`,
+  `FACTORY_AUDIT_EVERY`, `FACTORY_MAX_MERGES_PER_DAY`, no defaults, ADR-0052 point 5), refused by name, never value;
+- `$FACTORY_STATE_DIR`: `lock` (one `flock`, one task at a time), `state.json` (the breaker's counts, today's
+  `state.sh`), `tasks/<runId>/task.json`, each written to a temporary file and renamed; a restart resumes at the last
+  completed phase, and every phase is safe to run twice;
+- one helper for every GitHub call: 5xx, 429, a timeout or a DNS error retried with backoff and jitter (1 s doubling
+  to 60 s), not counted as an attempt; ten in a row stop the task as BLOCKED with the reason (#0-261);
+- the adapter's and the gate's schemas, checked by code of Node's built-ins (ADR-0060 D2); v0's `run` stops after the
+  adapter and the state are set up, since its phases are 4.4's;
+- the env file holds no secret, ever (`stage-4.md` "4.3"): anything there reaches `process.env`, which every child would
+  inherit but for #0-276's allowlist; a value shaped like one is refused;
+- `FACTORY_PROXY_ADDR` (`stage-4.md` "4.3") comes with 4.6, the credential proxy: until then AC1 refuses it as unknown,
+  and 4.6 adds it to the list;
+- one `flock` for the whole dispatcher in v0: a narrowing of ADR-0060 D7's lock per task, equivalent while one task runs
+  at a time, written into ADR-0060 as a note of v0 (review of the split of 4.3).
+
+**Acceptance criteria.**
+AC1. A setting missing, malformed or unknown (`FACTORY_*` misspelt) is refused by its name, never its value (tests).
+AC2. A second `run` while one holds the lock is refused; a killed run's lock is free again (tests).
+AC3. A run killed between two phases resumes at the last completed one, and a phase run twice writes the same state
+     (tests, with a fake phase).
+AC4. A retried 503, 429, timeout or DNS error is not counted; ten in a row make the task BLOCKED with the reason; a
+     404 or 422 is not retried (tests against the fake GitHub).
+AC5. The schemas refuse a missing or unknown field, and incident-platform's adapter as `stage-4.md` describes it passes.
+AC6. The requirements of #0-261 this step builds (the lock, the state that survives a restart, the retries) are in
+     `stage-4.md` "4.3", each with the test that shows it.
+AC7. A setting whose value is shaped like a secret (a PEM block, a value starting `ghs_`, `ghp_`, `gho_` or
+     `github_pat_`) is refused by its name, never its value (tests).
+
+### 0-276. builder-app's push only from a trusted clone, to the task's own branch (step 4.3b)
+
+**Type:** ci · **Priority:** High · **Status:** Open (migration stage 4, step 4.3b; ADR-0060 D7; carried from #0-271's
+review, `factory` PR #9).
+**Autopilot:** human-only · **Risk:** high · **Complexity:** medium · **Depends on:** #0-275, #0-273
+**Touches:** the repository `profitbuild/factory` (`dispatcher/src/github/builder-token.mjs`, `git-push`, a module for
+child processes' environment, their tests; a draft pull request, `/review factory#<n>`), root (`stage-4.md` "4.3",
+README "Infrastructure Hardening")
+
+**Problem.** 4.2a's code holds as preconditions what 4.3 must make checks (`stage-4.md` "4.3", "Carried from #0-271's
+review"): a git run with builder-app's token reads the clone's config, which can send the token elsewhere; the
+refspec refuses only a leading `-`, so `+` and `:ref` pass, bounded by #0-272's rulesets alone; the repository and the
+push URL are incident-platform's constants; and a child process could inherit `process.env`, which holds the settings.
+
+**Work.** A clone the dispatcher owns, whose `.git/config` no agent's uid writes, the task's commits fetched into it;
+refused when its config sets `http.proxy`, `http.<url>.sslVerify`, `http.sslCAInfo`, `http.curloptResolve`,
+`include.path` or a section named after the push URL (`remote."<url>".pushurl`, `.proxy`); the refspec only
+`<sha>:refs/heads/factory/<the task's branch>`; `BUILDER_REPOSITORY` and `PUSH_URL` from the adapter's `repository`;
+one builder of every child's environment from an allowlist, as `gitPushCommand`'s.
+
+**Acceptance criteria.**
+AC1. Each of the config keys above, set in the clone, refuses the push before the token is asked for (a test each).
+AC2. A refspec with `+`, `:`, another ref or another branch name is refused (tests); the task's own is pushed.
+AC3. The repository and the push URL come from the adapter, and the token checks take them (tests with two adapters).
+AC4. A variable of `process.env` outside the allowlist reaches no child (a test with a marker variable).
+AC5. README "Infrastructure Hardening" names the push's controls.
+
+### 0-277. The dispatcher drives `factory`'s Docker and a task container (step 4.3c)
+
+**Type:** ci · **Priority:** High · **Status:** Open (migration stage 4, step 4.3c; ADR-0057, ADR-0060 D1; the Docker
+access moved here from 4.2b, the owner's choice F2).
+**Autopilot:** human-only · **Risk:** high · **Complexity:** high · **Depends on:** #0-275, #0-276
+**Touches:** factory (scripts/factory-admin/build-vm/provision.sh and create.sh: owner-only), decisions (an ADR for
+the Docker access), the repository `profitbuild/factory` (the task container's code and tests), root (README
+"Infrastructure Hardening", `stage-4.md` "4.3", docs/ai-factory.md "Build VM")
+
+**Problem.** The dispatcher runs each agent in a container of `factory`'s rootless Docker, whose socket
+(`/run/user/<factory uid>/docker.sock`) is `factory`'s: `dispatcher` cannot reach it today. Granting it is a
+decision of its own (`stage-4.md` "4.3", open): an ACL on the socket must be set at every start of the daemon, since
+`/run/user/<uid>` is a tmpfs and the daemon's unit is `factory`'s, which code a test runs can change (ADR-0057), so it
+belongs to a root-owned unit; the alternative is a sudoers rule letting `dispatcher` run `docker` as `factory`. Either
+way `dispatcher` controls `factory`'s containers, never the reverse.
+
+**Work.** An analysis of the two (and any other) ways, the owner's choice in an ADR, then: `provision.sh` sets it and
+`create.sh` checks it; the task container: a fresh clone of the product at the base into
+`$FACTORY_STATE_DIR/tasks/<runId>/work`, owned by the uid the container's `dev` maps to, `devcontainer up` with
+`factory` mounted read-only at `/opt/factory`, a per-task `~/.claude` volume, the shared `~/.m2` cache (accepted in
+v0), all removed at the end, BLOCKED or not; the container and every process started in it get their environment from
+#0-276's allowlisted builder, never `process.env`.
+
+**Acceptance criteria.**
+AC1. An ADR records the way `dispatcher` reaches `factory`'s Docker and why, the owner's choice.
+AC2. On a new VM, `create.sh` checks that `dispatcher` runs a container through `factory`'s daemon and that `factory`
+     reads nothing of `dispatcher`'s (as #0-272's AC7).
+AC3. A task container is made from a fresh clone, holds `factory` read-only and no credential, and is removed with its
+     volumes at the end, a BLOCKED end included (tests where the code allows; the rest tried on the VM, recorded).
+AC4. README "Infrastructure Hardening" names the access and its limits.
+
+### 0-278. The product's code runs only from `main` (step 4.3d)
+
+**Type:** ci · **Priority:** High · **Status:** Open (migration stage 4, step 4.3d; ADR-0060 D6).
+**Autopilot:** human-only · **Risk:** high · **Complexity:** medium · **Depends on:** #0-277
+**Touches:** the repository `profitbuild/factory` (reading the adapter's commands and `trustedPaths` at the base
+commit, the queue's short-lived container, tests), factory (scripts/factory/next-item.sh and its tests:
+owner-only), root (`stage-4.md` "4.3", README "Infrastructure Hardening")
+
+**Problem.** The dispatcher runs the product's own scripts (for incident-platform `next-item.sh`, `changed-paths.sh`,
+`run-tests.sh`). Run from a task's branch, a task could rewrite the scripts that judge it. And `next-item.sh` calls
+`gh pr list` for its locks, while a container holds no token (`stage-4.md` "4.3", open).
+
+**Work.** The adapter's commands and the files of `trustedPaths` read from the base commit, never the task branch, a
+task branch that changes one refused; the queue command run in a short-lived container from `main`; the dispatcher
+passes the open pull requests to `next-item.sh` as a file (a new argument, the old call kept until 4.7's switch).
+
+**Acceptance criteria.**
+AC1. A task branch that changes a file of `trustedPaths` is refused before its gate runs (a test).
+AC2. The commands run are `main`'s, shown by a test where the branch's copy differs.
+AC3. `next-item.sh` takes the open pull requests from a file, its tests covering both forms.
+AC4. README "Infrastructure Hardening" names the control: a task cannot change the scripts that judge it.
+
+### 0-279. The dev app's ids and permissions are kept in two places with no check
+
+**Type:** ci · **Priority:** Low · **Status:** Open (found by the review of `factory` PR #14, #0-273, 2026-11-20).
+**Autopilot:** human-only · **Risk:** low · **Complexity:** low · **Depends on:** #0-273
+**Touches:** factory (.github/scripts/check-factory-copies.rb and its tests: owner-only), decisions (an amendment of
+ADR-0061, as #0-272's), the repository `profitbuild/factory` (`dispatcher/bin/dev-token.mjs`, perhaps a permissions
+file like builder-app's)
+
+**Problem.** `dev-token.mjs` holds the dev app's `APP_ID`, `INSTALLATION_ID` and `EXPECTED_PERMISSIONS`;
+`.github/repository-settings/apps/profitbuild-factory-dev.json` here holds what GitHub's installation must be.
+`check-factory-copies.rb`'s check 5 holds builder-app's permissions equal both ways, not the dev app's, so the two can
+drift unseen (FAC-A01). A change of either fails safe today (dev-token refuses a token GitHub does not match), but
+the owner's `check` and dev-token would then disagree with no message saying why.
+
+**Work.** The dev app's permissions in a JSON file of `factory`'s, imported by `dev-token.mjs` as builder-app's are,
+and check 5 widened to it and to its `app_id`; or check 5 reads the values from `dev-token.mjs`. Its installation id
+(`INSTALLATION_ID`) has no counterpart here (the files of `apps/` hold none), so it is not compared.
+ADR-0061's Consequences defer "the dev app's identity in two files" to stage T, because #0-268's table could not derive
+the bot's user id offline (`.devcontainer/devcontainer.json`); the app's id has an offline counterpart now
+(`apps/profitbuild-factory-dev.json`, #0-272), so it is compared here and ADR-0061 is amended to say so; the bot's
+user id stays deferred to stage T.
+
+**Acceptance criteria.**
+AC1. `check-factory-copies.rb` fails a pull request here that changes the dev app's file while `factory` differs,
+     and warns otherwise (ADR-0061), with tests.

@@ -161,6 +161,7 @@ resolvable.
 | 0-270 | `/review factory#<n> <digits>` reviews a pull request of `profitbuild/factory` from files GitHub's API serves (`scripts/factory-admin/fetch-factory-pr.sh`: pinned to one head, every path checked, files as `<path>.pr`, the pull request's CI as its gate), and `factory.md` applies to every such review (ADR-0038 amended); details in [the section](#0-270-the-review-panel-cannot-review-a-change-to-factory) | PR #660 |
 | 0-271 | builder-app's token is minted by `factory` code that checks its scope before use (settings from the environment via `node --env-file`, the key's file checks, `checked-token.mjs`, the token cache, a push limited to https with an allowlisted environment, `check-app`; step 4.2a); details in [the section](#0-271-builder-apps-token-is-minted-by-code-that-checks-its-scope-step-42a) | factory PR #9; PR #662 |
 | 0-272 | builder-app `profitbuild-builder` exists, its key has one copy on the build VM for the user `dispatcher` (under the VM's egress chain, its home 700, `install-builder-app.sh`, `check-app` passed), and rulesets hold it to `factory/**` and `factory/**` to it (`branches`, `renovate`, `tags`, `tag-creation`, `factory`, the writers); every app of the organization is a file (`apps/`, Renovate narrowed); step 4.2b; details in [the section](#0-272-builder-app-exists-its-key-is-the-vms-and-it-can-write-only-its-own-branches-step-42b) | PR #663; PR #664 |
+| 0-273 | `dev-token.mjs` on the dispatcher's shared token checks, stricter (the key's file, the installation's app and id); details in [the section](#0-273-dev-tokenmjs-keeps-its-own-copy-of-the-token-checks) | factory PR #14; PR #665 |
 
 Items completed before `BACKLOG.md` existed are not listed.
 
@@ -4347,3 +4348,45 @@ AC10. README "Infrastructure Hardening" names the controls added and the gaps le
   - The VM was made from `provision.sh` before review round 3 of this pull request, which then made its clean-checkout
     check read each git answer before judging it (a failing `git status` would have read as clean). The VM differs
     from `main`'s `provision.sh` in that failure path only; it is recreated at the next move of the `factory` pin.
+
+### 0-273. `dev-token.mjs` keeps its own copy of the token checks
+
+**Type:** ci · **Priority:** Low · **Status:** Done, PR #665 (2026-11-20) (migration stage 4; `factory` PR #14; left by #0-271, `factory` PR #9,
+review arc-2d71).
+**Autopilot:** human-only · **Risk:** medium · **Complexity:** low · **Depends on:** #0-271
+**Touches:** the repository `profitbuild/factory` (`dispatcher/bin/dev-token.mjs` and its tests, a draft pull request
+from its container, `/review factory#<n>`)
+
+**Problem.** #0-271 wrote the checks a GitHub App token must pass before it is used as parametrised functions,
+`checked-token.mjs` and `url-policy.mjs`. AC4 of #0-271 kept `dev-token.mjs`, the tool that mints the dev app's token
+on the Mac, unchanged, so it still has its own copy: the key's mode, the installation's exact permissions, exactly one
+repository, the token's permissions, and the https-or-loopback rule. Two copies of a check drift. The dev app's
+values differ on purpose (its token is not narrowed to a repository; it will never hold Issues), and the parameters
+carry that.
+
+**Work.** `dev-token.mjs` calls `checked-token.mjs` and `url-policy.mjs` with the dev app's values. It also gains what
+4.2a added for builder-app's key: `lstat`, `O_NOFOLLOW|O_NONBLOCK`, `fstat`. Its behaviour, its file and its
+`--watch` stay as they are.
+
+**Acceptance criteria.**
+AC1. `dev-token.mjs` holds no check of its own that `checked-token.mjs` or `url-policy.mjs` has; its tests pass
+     unchanged, plus the key-file refusals 4.2a has (a symlink, a FIFO, another owner where testable).
+AC2. `checked-token.mjs` no longer cites this item.
+
+**Result.** `factory` PR #14 (merged 2026-11-20, merge `1cc32f10`; head `ea1b6a38`), reviewed `/review factory#14 127`
+twice, all APPROVE:
+- `dev-token.mjs` calls `requireHttpsOrLoopback` (with `--api` in its message, unchanged), `readAppKey` (the key read at
+  the path given, so a symlink is refused; its real path only for the check that `--out` does not hold it),
+  `checkInstallation`, `checkTokenRepositories` and `checkTokenPermissions`, and the shared `RefusedError`, so a
+  refusal in `--watch` still drops the token. It does not use `mintCheckedToken`, which narrows the token: the dev
+  app's is not narrowed, on purpose. AC1 met.
+- Stricter than before: the key must be a regular file of the user (no symlink, no FIFO); the installation's `app_id`
+  and id are checked (`INSTALLATION_ID` 183439507, `--installation-id`; a reinstalled app is refused until it is
+  changed, fail-closed); the key-mode message is the shared one (`has mode 644 … chmod 600`), the one test regex that
+  changed.
+- `checkInstallation` and `mintCheckedToken` take `installationIdFrom`, required, so a refusal names the caller's own
+  setting (review round 1, all three dimensions).
+- `checked-token.mjs` describes both callers and no longer cites this item; `own-file.mjs` and `url-policy.mjs` say
+  they run on the owner's host too, next to the dev key; factory's README lists dev-token's checks. AC2 met.
+- Left: the mint sequence is written in `dev-token.mjs` too (not checks; review round 1, accepted), and the dev app's
+  ids and permissions have no drift check (#0-279).
