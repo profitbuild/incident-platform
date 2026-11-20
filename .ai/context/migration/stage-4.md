@@ -150,7 +150,7 @@ What was built, in `dispatcher/` (Node built-ins only):
 - **ADRs changed:** ADR-0060's Consequences amended (2026-11-19, the owner's split of 4.2 into #0-271 and #0-272:
   when each amendment of ADR-0034 and ADR-0052 lands); the code carried out ADR-0060 D3 and ADR-0055's "environment
   only" without changing them.
-- **Not done:** dev-token on the shared checks; the trusted clone, the pinned refspec, the repository from the
+- **Not done:** dev-token on the shared checks; the trusted clone (now the push repository, 4.3b), the pinned refspec, the repository from the
   adapter and children from an allowlist as checks (the code holds them as preconditions); the checks only a real
   app can show.
 - **Why not:** dev-token kept by #0-271's AC4 to keep its review on builder-app, done by #0-273 (factory PR #14,
@@ -199,7 +199,7 @@ What was built, in `dispatcher/` (Node built-ins only):
     `factory`'s two (D2): a bypass applies to every rule of its ruleset;
   - **`factory`** (the second pull request, once builder-app's id exists): `factory/**`, the rules of `branches`;
     builder-app as an `Integration` and the admin role. Without it every actor with Contents write may write
-    builder-app's branches, which 4.3 fetches into its trusted clone.
+    builder-app's branches, which 4.3's push writes and a resumed task reads back.
 
   All are files in `.github/repository-settings/rulesets/`; `repository.json` also lists the writers (Write or
   Maintain), whom the role Write's bypass reaches. `repository-settings.rb` checks them, and every app installed on the
@@ -307,8 +307,9 @@ bypass covers the roles above it.
 Split on 2026-11-20 (the owner's choice A), one `factory` pull request each, in this order:
 - **4.3a, #0-275:** CLI and configuration, state and lock, the retries (#0-261), the adapter's and the gate's
   schemas; no Docker, no VM. Done 2026-11-20, `factory` PR #15 (merge `51ce6928`).
-- **4.3b, #0-276:** "Carried from #0-271's review" below: the trusted clone, the pinned refspec, the repository from
-  the adapter, children from an allowlisted environment.
+- **4.3b, #0-276:** "Carried from #0-271's review" below: the push repository the dispatcher owns, the pinned refspec, the repository from
+  the adapter, children from an allowlisted environment; how, decided with the owner on 2026-11-20 (the Record's
+  "Decided for 4.3b").
 - **4.3c, #0-277:** "Docker for the dispatcher" (an analysis and the owner's choice first, then `provision.sh`) and the
   task container.
 - **4.3d, #0-278:** "Product code from `main` only" and `next-item.sh`'s open pull requests as a file.
@@ -324,11 +325,11 @@ Split on 2026-11-20 (the owner's choice A), one `factory` pull request each, in 
   alternative is a sudoers rule letting `dispatcher` run `docker` as `factory`. Tested here, where `docker exec` is
   first used.
 - **Carried from #0-271's review** (`factory` PR #9; the code holds them as preconditions, 4.3 makes them checks):
-  - **A trusted clone for the push.** The token goes only to a git run in a clone the dispatcher owns, whose
-    `.git/config` no agent's uid can write. The task's commits are fetched into it. The rest of an agent-written
-    config can still send the token elsewhere: `http.proxy`, `http.<url>.sslVerify`, `http.sslCAInfo`,
-    `http.curloptResolve`, `include.path`, and a section named after the push URL itself (`remote."<url>".pushurl`,
-    `.proxy`).
+  - **A push repository the dispatcher owns.** The token goes only to a git run in a repository the dispatcher made,
+    whose config no agent's uid can write; the task's commits reach it as a bundle, never by a fetch from the task's
+    clone (the Record's "Decided for 4.3b"). What an agent-written config could do there (`http.proxy`,
+    `http.<url>.sslVerify`, `http.sslCAInfo`, `http.curloptResolve`, `include.path`, a section named after the push URL
+    itself, `remote."<url>".pushurl`, `.proxy`) is what its allowlist's tests plant (#0-276 AC1).
   - **Refspecs pinned** to the task's own branch under `factory/**`: today only a leading `-` is refused, so `+` (force)
     and `:ref` (delete) pass, bounded only by #0-272's rulesets.
   - **The product from the adapter:** `BUILDER_REPOSITORY` and `PUSH_URL` are incident-platform's in 4.2a; they come
@@ -364,7 +365,8 @@ Split on 2026-11-20 (the owner's choice A), one `factory` pull request each, in 
 - **Open:** `next-item.sh` calls `gh pr list` for its locks and there is no token in a container (proposal: the
   dispatcher passes the open PRs as a file, a change to `next-item.sh`'s arguments).
 
-**Record (4.3, in progress: split 2026-11-20, PR #665; 4.3a done 2026-11-20, `factory` PR #15).**
+**Record (4.3, in progress: split 2026-11-20, PR #665; 4.3a done 2026-11-20, `factory` PR #15; 4.3b decided with the
+owner 2026-11-20, before its code).**
 - **Done:** the split into #0-275..#0-278 (above), in an order where each part is reviewed on its own and the first two
   need neither Docker nor the VM; #0-273 first (dev-token on the shared checks), so 4.3b changes one API with two
   callers rather than leaving a third copy.
@@ -426,6 +428,65 @@ Split on 2026-11-20 (the owner's choice A), one `factory` pull request each, in 
     being a second layer behind "no secret in the environment".
 - **ADRs changed:** ADR-0060 D7 amended: v0's one lock for the whole dispatcher (this step's closing PR; its Status
   line and index row name #0-275).
+- **Decided for 4.3b with the owner (2026-11-20, `/research` of #0-276, before its code):**
+  - **No git with the dispatcher's rights in a repository an agent wrote**, for the push or for anything else: an
+    agent-written `.git/config`, `.gitattributes` or hook can make git run a program (`core.fsmonitor`, a filter's
+    driver, `diff.external`, `core.pager`, a hook) as `dispatcher`, the uid that reads builder-app's key; a local
+    `fetch` from the task's clone runs `upload-pack` there and reads its `objects/` (git's 2024 local-clone fixes are
+    this class). The model of this repository's review guard (`git -C` refused, `factory` pull requests reviewed as
+    files, #0-270). ADR-0060 D7 amended (#0-276).
+  - **The task's commits cross as a bundle** (`git bundle create`, run by the task's own git, in its container, which
+    holds no credential): a file, data, read by the dispatcher, which checks the bundle's own objects, and only those,
+    with an explicit strict check before any ref names them (`index-pack --strict` or the like on the bundle's pack: a
+    plain `fsck` is `--full` by default and walks `alternates`, so all of `main`'s history at each read, and could
+    refuse an old object there). The check never rests on git's `fsckObjects` settings when reading a bundle (probed
+    2026-11-20 on Ubuntu 24.04's git 2.43.0, the VM's: a commit with no author email passed `git fetch <bundle>` with
+    `transfer.fsckObjects` and with `fetch.fsckObjects`, and `fsck --strict` refused it). Its prerequisites are exactly
+    the commit the dispatcher names (the recorded head for a call's bundle, the base for the push's), one ref, the
+    task's branch. It leaves the container on `docker exec`'s stdout (`git bundle create -`) into the dispatcher's own
+    directory, never as a file in a directory an agent writes (a swap or a link between the check and the read). SHAs unchanged, so the trailers and the
+    trace hold. Not `format-patch`/`am` (new SHAs, the trace lost) and not a local `fetch` (above).
+  - **One way in from the container** (review round 2 of these decisions): the container's bundles go only into the
+    task's own repository under `$FACTORY_STATE_DIR`, one per call, each checked against the recorded head (below);
+    the push repository is filled from that repository, by a bundle the dispatcher makes there of `<base>..<recorded
+    head>`, never by a bundle from the container. The checks of the push repository then stand behind the ones on
+    the way in, a second layer, not the only one.
+  - **A fresh push repository per push:** `git init --bare` under `$FACTORY_STATE_DIR`, `objects/info/alternates` onto
+    `FACTORY_REPO_DIR` (the dispatcher's own clone of `main`, for the base's objects), the dispatcher's bundle read in
+    and checked the same way, the checks, the push, removed, after a refused push too. Nothing in it lives from one push to the next. Through `alternates`
+    `FACTORY_REPO_DIR`'s objects feed every push, so it is inside the trust boundary: a task's clone shares no inode
+    with it (a local `git clone` hardlinks `objects/`, and the task clone is given to the container's uid; #0-277).
+  - **Its config by an allowlist, not a denylist:** before the token is asked for, the push repository's config
+    (read as a file, with no system or global config) holds exactly what a reference `git init --bare`, made by the
+    same git at the same moment, holds: keys and values (macOS's git adds `core.ignorecase` and
+    `core.precomposeunicode`, so the list is the git's own, never a constant); every other key refuses the push,
+    `include.*` and the keys #0-271's review named among them. A denylist is never complete.
+  - **The refspec built by the code:** the call takes `{ sha, branch }`, `sha` 40 hex and the bundle's ref, `branch`
+    the task's own; the refspec is `<sha>:refs/heads/factory/<branch>`, no `+`, no `:<ref>`; a task's fix is a new
+    commit, so no force push in v0.
+  - **The product from the adapter:** `repository` gives `BUILDER_REPOSITORY` and `PUSH_URL`; the token checks take
+    them already.
+  - **One builder of every child's environment** (`childEnv`): each caller names its allowlist (the push: `PATH`,
+    `HOME`, the proxy variables; `flock`: none); a static test refuses any function of `node:child_process` in `src/`
+    (`spawn`, `exec`, `execFile`, `fork` and their `Sync` forms) whose `env` is not built by it, the shape of `builder-static.test`. `gitPushCommand`'s and `lock.mjs`'s two ways today become one.
+  - **For 4.4 and 4.5, the trace stays the dispatcher's** (review round 1 of these decisions, arc-4c7e: a commit made
+    by the container's git runs the agent's hooks and config, and a process an agent left running can rewrite commits
+    between calls):
+    - after a call, the commit is made in the task's container by its git with the dispatcher's own flags
+      (`-c core.hooksPath=/dev/null`, `--no-verify`, no fsmonitor), the trailers it gives, and the author and
+      committer it gives (`user.name`, `user.email`: a container's config could set any identity, the owner's
+      included, which GitHub shows on the pull request's commits);
+    - the container then hands over a bundle of `<recorded head>..HEAD` (stdout, as above), read and checked into the
+      task's own repository; the dispatcher accepts it only as exactly one new commit whose only parent is the head it
+      recorded (a merge with it as one of two parents is refused here, not first by 4.5's `rev-list --merges`), whose
+      message and trailers are exactly the ones it gave and whose author and committer are the ones it gave, and only
+      then records the new head. The trace is the chain of heads it recorded, never `git rev-parse` in the container;
+    - the checks before a push (`merge-base`, `rev-list --merges`, `changed-paths`, the trailers) run in the push
+      repository after the dispatcher's bundle is read in, never in the task's clone, with the base and the head passed as
+      SHAs (a fresh bare repository has no refs and an unborn `HEAD`); the branch's commits must be exactly the
+      recorded chain, each `Factory-Agent` the agent of the call recorded for it.
+    What a process in the container changes in the tree before a commit is still that call's work: attribution is the
+    dispatcher's, the content is the container's, as before.
 - **Not done:** 4.3b, 4.3c, 4.3d; and, from 4.3a's review, `taskImage` bounded, symlinks under the adapter's paths, a
   reason without GitHub's text, resuming by `runId` or one running task at most, a blocked task counted by the
   breaker, a retried mint's leftover token, a script whose last segment is `.`, the item-id format tied to the
@@ -447,8 +508,10 @@ Split on 2026-11-20 (the owner's choice A), one `factory` pull request each, in 
   frontmatter's> "<prompt>"`, stdout saved to `tasks/<runId>/calls/<n>-<agent>.jsonl`; the answer is `structured_output`,
   absent means no answer. The run stops if the init event lists a `plugin_errors` entry or not the expected agent and
   tools.
-- **Agents do not commit; the dispatcher does**, after each call that changed the tree: `git add -A` and a commit whose
-  message comes from the answer, with the `Factory-Run` and `Factory-Agent` trailers (#0-212). So the trace (head before
+- **Agents do not commit; the dispatcher does**, after each call that changed the tree, in the task's container
+  (its git with the dispatcher's flags, never a git with the dispatcher's rights in the task's clone; each commit read
+  back as a bundle and checked against the recorded head: 4.3's "Decided for 4.3b"): `git add -A` and a
+  commit whose message comes from the answer, with the `Factory-Run` and `Factory-Agent` trailers (#0-212). So the trace (head before
   and after) is the dispatcher's own, and agents lose git's writing commands (#0-236's forms).
 - **Tests:** `test-autopilot-workflow.mjs`'s whole runs against a fake agent, ported to `node:test` with an injected
   `runAgent`; each stop reaches `stopItem` with its stage.
@@ -457,6 +520,10 @@ Split on 2026-11-20 (the owner's choice A), one `factory` pull request each, in 
   whether hooks of the plugin run in that mode (they stay a second layer until 6c); what replaces ADR-0058's isolation
   probe (proposal: the init event's agent and tools).
 
+- **Carried from 4.3b's decisions (2026-11-20), to state in this step's item:** the task's own repository under
+  `$FACTORY_STATE_DIR` (4.3's "Decided for 4.3b": the one way in from the container) is new here: how it gets the
+  base's objects for the first call's bundle (`alternates` onto `FACTORY_REPO_DIR`, as the push repository's), that
+  its config is the dispatcher's and held as the push repository's is, and when it is removed.
 - **Carried from 4.3a's review (`factory` PR #15), to build here:** a BLOCKED task's `reason` never carries GitHub's
   text into a pull request; a new task refused while one is `running`, or resume by `runId` (a task killed before its
   branch is recorded can be resumed by neither today); `blockTask` counts the block in `state.json`, so an outage
@@ -469,7 +536,9 @@ Split on 2026-11-20 (the owner's choice A), one `factory` pull request each, in 
 
 ## 4.5 Push, PR, trailers and trace
 
-- **Checks before a push (D7), outside the container,** on the task's clone: `merge-base base HEAD` is the recorded
+- **Checks before a push (D7), outside the container,** in the push repository after the task's bundle is read into it
+  (4.3b), never in the task's clone, the base and the head passed as SHAs; the branch's commits exactly the chain of
+  heads 4.4 recorded, each `Factory-Agent` the agent of its call: `merge-base base HEAD` is the recorded
   base, `rev-list --merges base..HEAD` is empty; `changed-paths` from `main` over `base..HEAD`: an Owner-only path stops
   the task, `needsHuman` sets the owner's label; no path of the adapter's `trustedPaths` changed; every commit carries both trailers and
   the run's `Factory-Run`; the PR body has `Autopilot run <runId>`, `Rounds: <n>`, `Scope: <category>` and the
@@ -486,7 +555,8 @@ Split on 2026-11-20 (the owner's choice A), one `factory` pull request each, in 
     bot's;
   - `audit-data.sh` reads the PR author `app/profitbuild-builder` as well as the bot's login.
 - **Trace (#0-204):** one row per agent call in a `<details>` block: agent, phase, round, duration, tokens, commits added.
-- **Backlog edits** (moving the item to `BACKLOG-DONE.md`) stay an agent's file edits, committed by the dispatcher.
+- **Backlog edits** (moving the item to `BACKLOG-DONE.md`) stay an agent's file edits, committed by the dispatcher as
+  any call's are (in the container, read back as a bundle: 4.4).
 - **Tests:** each check refuses its planted case (a merge, a protected path, a missing trailer, a body without
   `Rounds:`); an existing PR is reused, not duplicated.
 - **Open:** how a reused draft is retitled (#0-254's case, now the dispatcher's own code).
