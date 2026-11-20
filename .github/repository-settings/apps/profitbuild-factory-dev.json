@@ -1,0 +1,7 @@
+{
+  "slug": "profitbuild-factory-dev",
+  "app_id": 5822112,
+  "permissions": { "contents": "write", "metadata": "read", "pull_requests": "write" },
+  "events": [],
+  "repository_selection": "selected"
+}

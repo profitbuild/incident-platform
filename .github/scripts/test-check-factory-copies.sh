@@ -55,6 +55,11 @@ copy() { script_body "$1" | awk -v notice="$(notice "$1")" '{ print } !done && /
 
 PRODUCT_DENIES='{"permissions":{"deny":["Bash(git push --force *)","Bash(gh pr review *)","Bash(*repository-settings.rb plan*)","Read(./docker/.env)"]}}'
 
+# builder-app's installation here and the permissions factory requests (backlog #0-272): equal, in another key order.
+APP_JSON='{"slug":"profitbuild-builder","app_id":1,"permissions":{"contents":"write","pull_requests":"write"},"events":[],"repository_selection":"selected"}'
+APP=.github/repository-settings/apps/profitbuild-builder.json
+PERMS=dispatcher/src/github/builder-permissions.json
+
 # fresh: a new case whose trees match; `base` is a copy of the product.
 fresh() {
     n=$((n+1)); dir="$WORK/case$n"
@@ -76,6 +81,8 @@ fresh() {
     put factory .node-version 24.22.1
     put product .claude/settings.json "$PRODUCT_DENIES"
     put factory .claude/settings.json '{"permissions":{"deny":["Bash(git push --force *)","Bash(gh pr review *)"]}}'
+    put product .github/repository-settings/apps/profitbuild-builder.json "$APP_JSON"
+    put factory dispatcher/src/github/builder-permissions.json '{ "pull_requests": "write", "contents": "write" }'
     cp -R "$dir/product" "$dir/base"
 }
 
@@ -173,6 +180,23 @@ echo "check-factory-copies.rb: factory's own checks are warnings"
 fresh; workflow factory; printf '%s\n' '      - run: curl -fsSL https://example.com/tool | sh' >> "$dir/factory/.github/workflows/ci.yml"
 expect "a check-downloads.rb finding in factory warns, even on a PR that changes ci.yml" 0 "::warning::factory: check-downloads.rb: .github/workflows/ci.yml" .github/workflows/ci.yml
 
+echo "check-factory-copies.rb: builder-app's permissions, one list on both sides (backlog #0-272)"
+fresh; replace product "$APP" '"pull_requests":"write"' '"pull_requests":"write","issues":"write"'
+expect "the installation widened here, factory behind, fails the PR" 1 \
+    "::error::factory's $PERMS is {\"contents\":\"write\",\"pull_requests\":\"write\"}, the permissions of $APP {\"contents\":\"write\",\"issues\":\"write\",\"pull_requests\":\"write\"}" "$APP"
+fresh; put factory "$PERMS" '{ "contents": "write", "pull_requests": "write", "issues": "write" }'
+expect "factory's list widened there only warns on a push" 0 "::warning::factory's $PERMS is {\"contents\":\"write\",\"issues\":\"write\""
+fresh; put factory "$PERMS" '{ "contents": "write", "pull_requests": "write", "issues": "write" }'
+expect "and on a PR that changes the installation's file, since main has it" 0 "all of them are on main already" "$APP"
+fresh; rm "$dir/factory/$PERMS"
+expect "factory without its permissions file" 0 "::warning::factory has no $PERMS"
+fresh; rm "$dir/product/$APP"; cp -R "$dir/product" "$dir/base2"; rm -rf "$dir/base"; mv "$dir/base2" "$dir/base"
+expect "this repository without the installation's file" 0 "::warning::this repository has no $APP"
+fresh; put factory "$PERMS" "{ \"contents\": $MARKER }"
+expect "a permissions file that does not parse fails" 1 "factory's $PERMS does not parse (JSON::ParserError)"
+case "$out" in *"$MARKER"*) echo "::error::the parse error carries the file's text: $out"; failures=$((failures+1)) ;; *) echo "  ok: the parse error of the permissions quotes nothing"; passed=$((passed+1)) ;; esac
+fresh; put factory "$PERMS" '["contents"]'
+expect "a permissions file that is no object fails" 1 "factory's $PERMS is not a JSON object"
 echo "check-factory-copies.rb: the checkout is outside input (SEC-31)"
 fresh; put factory .claude/settings.json "{\"permissions\": $MARKER }"
 expect "a settings file that does not parse fails, on a push too" 1 "factory's .claude/settings.json does not parse (JSON::ParserError)"

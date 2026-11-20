@@ -2,7 +2,8 @@
 
 - **Status:** Accepted (2026-10-18); amended by ADR-0035 (the files and the check also hold the environments and which secrets exist)
   and by #0-237 (the admins list is also the owner's identity, below), and by #0-272 (2026-11-19: the rulesets of every other
-  branch and of the tags, the writers list; "Amendment (#0-272)" below). Title changed by that amendment: it named one
+  branch and of the tags, the writers list; "Amendment (#0-272)" below; its second pull request, 2026-11-20: the ruleset
+  `factory` and the organization's app installations as files). Title changed by that amendment: it named one
   ruleset guarding `main`.
 - **Backlog:** #0-113 (follow-ups #0-153, #0-154; amended by #0-272)
 - **Date:** 2026-10-18
@@ -191,7 +192,7 @@ before its key exists.
   request. Here, the code owner's review that `* @lukaszplawiak` asks on every path is what keeps an app's approval
   from merging anything.
 
-**Decision.** Four more rulesets, files in `.github/repository-settings/rulesets/` like `main.json`, compared and
+**Decision.** Four more rulesets (and a fifth, `factory`, with #0-272's second pull request, below), files in `.github/repository-settings/rulesets/` like `main.json`, compared and
 applied by the same script:
 
 | Ruleset | Refs | Rules | Bypass (`always`) |
@@ -200,14 +201,16 @@ applied by the same script:
 | `renovate` | `renovate/**` | the same | the role Write, the Renovate app (`Integration` 2740) |
 | `tags` | every tag | update, deletion, non_fast_forward | none |
 | `tag-creation` | every tag | creation | the admin role |
+| `factory` | `factory/**` (from #0-272's second pull request) | creation, update, deletion, non_fast_forward | builder-app (`Integration` 5844656), the admin role |
 
 - `factory/**` is builder-app's: it creates, rebases and deletes its own branches. Their pull requests to `main`
   meet `main`'s ruleset like any other. Under these four rulesets the confinement holds one way only: builder-app
   writes no branch or tag but `factory/**` (Contents write also reaches releases and `repository_dispatch`, which no
   ruleset guards: README "Known gaps of the rulesets"), yet every actor with Contents write (the bot account, Renovate, a later app) may
   still write `factory/**` too. A fifth ruleset, `factory`, closes it to all but builder-app (an `Integration`) and
-  the admin role; it needs builder-app's id, so it comes with #0-272's second pull request, before 4.3 fetches those
-  branches (review of the first, round 1).
+  the admin role; it needed builder-app's id, so #0-272's second pull request added it, before 4.3 fetches those
+  branches (review of the first, round 1). The admin role is in its bypass so that the owner's merge of a builder
+  pull request still deletes its branch (P1: GitHub deletes it as the one who merged).
 - Renovate gets its own namespace, as builder-app does, instead of the role's reach over every branch; excluding
   `renovate/**` from `branches` alone would have opened it to builder-app.
 - The tags follow `factory`'s two rulesets: a ruleset's bypass applies to all its rules, so the admin's bypass for
@@ -217,6 +220,19 @@ applied by the same script:
   `lukaszplawiakbot`). The bypass "role Write" names a role, not a login, so whoever got Write would bypass
   `branches`; with an admin token `check` fails when GitHub's list differs, and `plan`/`apply` refuse to run, as for
   the admins.
+- **The organization's app installations are files** (#0-272's second pull request, 2026-11-20):
+  `.github/repository-settings/apps/<slug>.json`, one per app installed on the organization, with its app id, the
+  permissions and events of its installation and its `repository_selection`. An app's Contents write reaches every ref
+  no ruleset covers, so the confinement rests on knowing which apps hold it: with an admin token `check` fails on an
+  installation no file names, a file whose app is not installed, and any difference; `plan`/`apply` name them as steps
+  by hand, since an installation is changed in the organization's settings only. Writing them showed Renovate
+  installed on every repository of the organization, `factory` included (Contents and Workflows write; it had acted on
+  none but this one); the owner narrowed it to this repository the same day. Which repositories a selection holds is
+  not compared: GitHub lists them only to a token of the app or a user's token of an app, not to `gh`'s (tried, 403
+  with `read:user`; `user` was not tried, being a write scope). builder-app's permissions are two files of
+  one control (G2): `apps/profitbuild-builder.json` says what GitHub's installation must hold, `factory`'s
+  `builder-permissions.json` what its token asks for and checks; `check-factory-copies.rb` holds them equal both ways,
+  this repository leading (ADR-0061, as amended by #0-272).
 
 **Consequences.**
 - The bot account keeps the reach over the owner's branches its Write role gives it today; this amendment does not
@@ -228,5 +244,10 @@ applied by the same script:
   10).
 - An app in no bypass is refused on every branch `branches` covers: an app added later (Dependabot's security updates,
   if #0-74 turns them on) is listed as an `Integration` in `branches` in the same change.
-- What CI's token cannot see stays as before: the bypass actors of every ruleset, the admins and now the writers are
-  compared only when the owner runs `check`.
+- What CI's token cannot see stays as before: the bypass actors of every ruleset, the admins and now the writers and the
+  organization's app installations are compared only when the owner runs `check`.
+- A new app on the organization (Dependabot, a later product's builder app) fails the owner's `check` until its file is
+  written, in the same pull request as any ruleset bypass it needs; and a ruleset's `Integration` bypass actor whose
+  `app_id` no file under `apps/` holds fails `check` from the files alone, CI's run included (review round 1 of the
+  second pull request: a wrong id would hand the ruleset's refs to another app, and GitHub would hold what was
+  applied).

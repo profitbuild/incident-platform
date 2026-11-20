@@ -169,13 +169,23 @@ changes the copy in `factory-egress.sh` in `provision.sh` too: Factory guards an
 5. **Log in inside the devcontainer**, as in Setup 2: `claude` (it prints a URL; open it on the Mac and paste the
    code back) and the bot's token with `gh auth login --with-token`. Both are kept in the devcontainer's volumes,
    on the VM's disk: `delete.sh` removes them with it, and you enter them again after the next `create.sh`.
-6. **Run the autopilot** there as in "Running it". Your own sessions stay on the Mac, in your checkout. The local
+6. **builder-app's key** (#0-272; once per VM, and at each rotation): the VM holds a user `dispatcher` (an ordinary
+   uid, under the same egress filter, its home mode 700) and a clone of `factory` at `FACTORY_COMMIT`. Generate a
+   private key in the settings of the GitHub App `profitbuild-builder`, then, on the Mac,
+   `scripts/factory-admin/build-vm/install-builder-app.sh <app id> <installation id> <the downloaded .pem>`, run in your
+   own terminal, with the file's path given by dragging it from Finder into the terminal window (a file a browser
+   downloads carries `com.apple.macl`: macOS lets only the apps you pointed it to read it, whatever the folder's
+   permission; neither Claude Code's `!` nor a typed path could, 2026-11-20). It sends
+   the key on stdin into `/home/dispatcher/.config/factory/`, checks it and the modes, runs `factory`'s `check-app` as
+   `dispatcher` and deletes the download once that passed. On a rotation delete the old key in the app's settings
+   afterwards; after `delete.sh`, delete the old VM's key there.
+7. **Run the autopilot** there as in "Running it". Your own sessions stay on the Mac, in your checkout. The local
    model ("Local model" below) is not reached from the VM: `OLLAMA_URL`'s `host.docker.internal` is the VM there, so
    `localReview` reports `Ollama not reachable` and skips (ADR-0056); the VM's filter rejects the Mac (ADR-0057).
 
 **Changing the VM:** its contents only in `provision.sh`, its size or image only in `factory-build.yaml`, then
 `delete.sh` and `create.sh`: a VM is recreated, never patched by hand. Every pin is bumped by hand (Renovate does not
-read these files) and `verify-pins.sh` must print five `verified:` lines in the same PR:
+read these files) and `verify-pins.sh` must print six `verified:` lines in the same PR:
 - the image: the two `images:` lines (Ubuntu's dated directory under `cloud-images.ubuntu.com/releases/noble/` and
   the file's sha256 from its `SHA256SUMS`);
 - Node: `NODE_VERSION` and its two sha256 (`linux-arm64`, `linux-x64`, from nodejs.org's `SHASUMS256.txt`), with
@@ -183,7 +193,8 @@ read these files) and `verify-pins.sh` must print five `verified:` lines in the 
 - the devcontainer CLI: `DEVCONTAINER_CLI_VERSION` and its sha512 (npm's `dist.integrity`, in hex);
 - Docker's apt key: `DOCKER_KEY_FPR`, which changes only when Docker rotates its key, confirmed in three places first;
 - Docker CE: `DOCKER_VERSION` and `CONTAINERD_VERSION`, versions of Docker's noble repository
-  (`apt-cache madison docker-ce` in the VM lists them).
+  (`apt-cache madison docker-ce` in the VM lists them);
+- the dispatcher's code: `FACTORY_COMMIT`, a commit on `profitbuild/factory`'s `main` (#0-272), until 4.7's tag.
 **Stopping it** (12 GiB of RAM while it runs): `limactl stop factory-build`; `limactl start factory-build` brings it
 back with the clone and the logins.
 

@@ -53,6 +53,13 @@ NODE_SHA256_X64=6c172a9ab6718f7b801fb5a7bd486af2ee5e32758086a04b84fcce2aa77095e6
 DEVCONTAINER_CLI_VERSION=0.89.0
 DEVCONTAINER_CLI_SHA512=2f36a8386290fd9aa5e8fb226788552185596a0cd6903eb9686ff5a2ee7f2a5cb96353ed8cb835ca7eeabbe2d90b3568025e83659fe96f3f2a38ee112cd96a32
 FACTORY_USER=factory
+# The dispatcher (backlog #0-272, ADR-0060 D3): the one user that holds builder-app's key, never `factory`, whose
+# rootless Docker a container escape lands in. Its code is profitbuild/factory at the commit pinned here (until 4.7's
+# tag), which verify-pins.sh checks is on factory's main; a change of the pin takes effect on a new VM (delete.sh, then
+# create.sh), as every change here: Lima reads this file when it creates the VM.
+DISPATCHER_USER=dispatcher
+FACTORY_REPO_URL=https://github.com/profitbuild/factory.git
+FACTORY_COMMIT=3888a9004b418dff160c1f0aaa0bab504c3346cb  # gitleaks:allow: a public commit id of profitbuild/factory, no secret
 
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
@@ -87,6 +94,29 @@ if [ -n "$bad" ]; then
 fi
 # No group gives `factory` a root daemon: the docker group of a rootful install, if one was ever there, is left.
 gpasswd -d "$FACTORY_USER" docker >/dev/null 2>&1 || true
+
+# `dispatcher` (backlog #0-272): an ordinary uid, so the egress chain below, which takes every uid of FILTERED, takes its
+# traffic too (H2 of #0-272's analysis; a system uid, under 1000, would reach any host). No subordinate range (it runs no
+# rootless Docker: a range would only be more uids that send), no login shell (its commands are run with `sudo -u`), no
+# group but its own. Its home and .config/factory are its own, mode 700, so `factory` reads neither (#0-272 AC7); the
+# key and the env file in .config/factory are written by install-builder-app.sh, never here.
+if ! id -u "$DISPATCHER_USER" >/dev/null 2>&1; then
+  useradd --create-home --shell /usr/sbin/nologin -K SUB_UID_COUNT=0 -K SUB_GID_COUNT=0 "$DISPATCHER_USER"
+fi
+dispatcher_uid=$(id -u "$DISPATCHER_USER")
+if ! { [ "$dispatcher_uid" -ge 1000 ] && [ "$dispatcher_uid" -le "$uid_max" ]; }; then
+  echo "provision.sh: $DISPATCHER_USER has uid $dispatcher_uid, outside 1000..$uid_max: the egress chain would not take it" >&2
+  exit 1
+fi
+if grep -q "^$DISPATCHER_USER:" /etc/subuid /etc/subgid; then
+  echo "provision.sh: $DISPATCHER_USER has a subordinate uid/gid range, which it must not" >&2; exit 1
+fi
+if [ "$(id -Gn "$DISPATCHER_USER")" != "$DISPATCHER_USER" ]; then
+  echo "provision.sh: $DISPATCHER_USER is in a group other than its own: $(id -Gn "$DISPATCHER_USER")" >&2; exit 1
+fi
+dispatcher_home=/home/$DISPATCHER_USER
+install -d -m 0700 -o "$DISPATCHER_USER" -g "$DISPATCHER_USER" "$dispatcher_home" "$dispatcher_home/.config" \
+  "$dispatcher_home/.config/factory"
 
 # The VM forwards nothing: a forwarded packet carries no socket owner, so the egress chain below, matched on uids, would
 # not see it. Ubuntu's default, set here so the boundary does not rest on a default (review round 3 of #0-116).
@@ -452,6 +482,33 @@ if [ "$(devcontainer --version 2>/dev/null)" != "$DEVCONTAINER_CLI_VERSION" ]; t
   /usr/local/bin/npm install -g --no-fund --no-audit --ignore-scripts "$cli_tgz"
 fi
 
+# --- The dispatcher's code: profitbuild/factory at FACTORY_COMMIT, as `dispatcher` ---------------------------------
+# Cloned and fetched as `dispatcher`, so through the egress chain (GitHub is on its list), into its own home: no other
+# user writes the clone or its config, which git reads. Detached at the pin and refused unless HEAD is the pin and the
+# tree is clean, ignored files included (a node_modules would be code no review read): what runs with the key is the
+# reviewed commit, nothing a run left behind (backlog #0-272).
+as_dispatcher() { runuser -u "$DISPATCHER_USER" -- env HOME="$dispatcher_home" "$@"; }
+factory_clone=$dispatcher_home/factory
+if [ ! -d "$factory_clone/.git" ]; then
+  as_dispatcher git clone --quiet --no-checkout "$FACTORY_REPO_URL" "$factory_clone"
+fi
+# The pin fetched only when the clone lacks it; the checkout every time (idempotent): a clone made --no-checkout has
+# HEAD at main and no files, so HEAD alone cannot say the tree is there (a VM whose pin was main's tip failed so,
+# 2026-11-20).
+if ! as_dispatcher git -C "$factory_clone" cat-file -e "$FACTORY_COMMIT^{commit}" 2>/dev/null; then
+  as_dispatcher git -C "$factory_clone" fetch --quiet origin main
+fi
+as_dispatcher git -C "$factory_clone" checkout --quiet --detach "$FACTORY_COMMIT"
+# Each answer read first, then judged: inside a test, a git that fails would give empty output, read as "clean" (review
+# round 3 of #0-272's second pull request).
+head_now=$(as_dispatcher git -C "$factory_clone" rev-parse HEAD) \
+  || { echo "provision.sh: cannot read the HEAD of $factory_clone" >&2; exit 1; }
+tree_now=$(as_dispatcher git -C "$factory_clone" status --porcelain --ignored) \
+  || { echo "provision.sh: cannot read the status of $factory_clone" >&2; exit 1; }
+if [ "$head_now" != "$FACTORY_COMMIT" ] || [ -n "$tree_now" ]; then
+  echo "provision.sh: $factory_clone is not a clean checkout of $FACTORY_COMMIT" >&2; exit 1
+fi
+
 # The boot it finished in, so create.sh can tell this boot's run from an earlier one.
-echo "factory-build provisioned: $(docker --version), rootless for $FACTORY_USER; node $(/usr/local/bin/node --version); devcontainer $(devcontainer --version); boot $(cat /proc/sys/kernel/random/boot_id)" \
+echo "factory-build provisioned: $(docker --version), rootless for $FACTORY_USER; node $(/usr/local/bin/node --version); devcontainer $(devcontainer --version); $DISPATCHER_USER at factory $FACTORY_COMMIT; boot $(cat /proc/sys/kernel/random/boot_id)" \
   > /etc/factory-build-provisioned

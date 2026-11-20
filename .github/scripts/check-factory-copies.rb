@@ -20,6 +20,11 @@
 #   4. denies: `factory`'s .claude/settings.json denies every deny here but those of OPTIONAL_DENIES, and nothing
 #      that this repository does not deny (AC4). An optional deny names what `factory` has no use for; present there
 #      it is no finding, so `factory` may add one without a false alarm.
+#   5. builder-app's permissions (backlog #0-272, G2): two files of one control, held equal both ways: the
+#      `permissions` of APP_FILE here say what GitHub's installation must hold (repository-settings.rb compares them
+#      with it), `factory`'s PERMISSIONS_FILE what its token code asks for and checks every token against. As for
+#      every comparison here this repository leads (ADR-0061): a pull request that changes APP_FILE fails until
+#      `factory` matches; a change `factory` starts warns here, and fails there (its test holds the list to a literal).
 #
 # Which side leads (ADR-0061): this repository. On a pull request (--changed lists its files, --baseline is a checkout
 # of main as the merge commit has it, HEAD^1), a difference fails (::error, exit 1) only when the pull request changes
@@ -58,6 +63,7 @@ COMPARED = %w[
   .github/zizmor.yml
   .node-version
   .claude/settings.json
+  .github/repository-settings/apps/profitbuild-builder.json
 ].freeze
 COPIES = %w[
   .github/scripts/install-pinned-tool.sh
@@ -77,6 +83,8 @@ OPTIONAL_DENIES = [
   'Read(./docker/secrets/**)'
 ].freeze
 NOTICE_START = "# A copy of profitbuild/incident-platform's"
+APP_FILE = '.github/repository-settings/apps/profitbuild-builder.json'
+PERMISSIONS_FILE = 'dispatcher/src/github/builder-permissions.json'
 
 def usage!
   warn "usage: #{$PROGRAM_NAME} <factory checkout> [--changed <file> --baseline <dir>] [--shellcheck <binary>]"
@@ -182,6 +190,19 @@ rescue JSON::ParserError => e
   fatal!("#{root == FACTORY ? "factory's" : "this repository's"} .claude/settings.json does not parse (#{e.class})")
 end
 
+# A JSON object read from <root>/<rel>, or nil when the file is missing; one that does not parse ends the run with the
+# parser's error class alone (SEC-31), one that is no object too.
+def json_object(root, rel)
+  text = read(root, rel)
+  return nil unless text
+
+  value = JSON.parse(text)
+  fatal!("#{root == FACTORY ? "factory's" : "this repository's"} #{rel} is not a JSON object") unless value.is_a?(Hash)
+  value
+rescue JSON::ParserError => e
+  fatal!("#{root == FACTORY ? "factory's" : "this repository's"} #{rel} does not parse (#{e.class})")
+end
+
 # Every file of the checkout that carries the notice, so the list of copies is checked both ways.
 def noticed_files
   Dir.glob('**/*', File::FNM_DOTMATCH, base: FACTORY).reject { |rel| rel.start_with?('.git/') || rel == '.git' }
@@ -256,6 +277,19 @@ def compare(product)
   actual = denies(FACTORY)
   ((all - OPTIONAL_DENIES) - actual).each { |d| found << "factory's .claude/settings.json does not deny #{d}" }
   (actual - all).each { |d| found << "factory's .claude/settings.json denies #{d}, which this repository does not" }
+
+  app = json_object(product, APP_FILE)
+  permissions = json_object(FACTORY, PERMISSIONS_FILE)
+  if app.nil? then found << "this repository has no #{APP_FILE}"
+  elsif permissions.nil? then found << "factory has no #{PERMISSIONS_FILE}"
+  else
+    show = ->(h) { JSON.generate(h.to_a.sort.to_h) }
+    ours = app['permissions'].is_a?(Hash) ? app['permissions'] : {}
+    if ours.to_a.sort != permissions.to_a.sort
+      found << "factory's #{PERMISSIONS_FILE} is #{show[permissions]}, the permissions of #{APP_FILE} " \
+               "#{show[ours]}: builder-app's token would ask for what its installation does not hold, or the other way"
+    end
+  end
   found
 end
 

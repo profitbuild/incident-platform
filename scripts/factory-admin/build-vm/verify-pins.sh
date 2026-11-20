@@ -21,6 +21,9 @@
 #      rotating its key, to confirm in three places again before the pin changes.
 #   5. Docker CE's versions (provision.sh, DOCKER_VERSION and CONTAINERD_VERSION): each package is in the index of
 #      Docker's noble repository at its pinned version, for arm64 and amd64, the index read by apt with the key of 4.
+#   6. The dispatcher's code (provision.sh, FACTORY_COMMIT; backlog #0-272): the commit is on profitbuild/factory's
+#      main, its first parent line or merged into it, as GitHub's compare of the commit with main says (`identical`
+#      or `ahead`): a commit of a branch that never merged, or one GitHub does not know, is refused.
 # Everything that reads a downloaded file runs in the container (the Mac has no gpg): the Mac passes it the pins only.
 #
 #   verify-pins.sh       prints one "verified: ..." line per pin and exits 0, or names what failed and exits 1
@@ -60,12 +63,15 @@ cli_sha512=$(one 's/^DEVCONTAINER_CLI_SHA512=\([0-9a-f]\{128\}\)$/\1/p' "$prov")
 docker_fpr=$(one 's/^DOCKER_KEY_FPR=\([0-9A-F]\{40\}\).*$/\1/p' "$prov")
 docker_version=$(one 's/^DOCKER_VERSION=\([0-9A-Za-z.:~+-]*\)$/\1/p' "$prov")
 containerd_version=$(one 's/^CONTAINERD_VERSION=\([0-9A-Za-z.:~+-]*\)$/\1/p' "$prov")
+factory_repo=$(one 's|^FACTORY_REPO_URL=https://github.com/\([A-Za-z0-9._-]*/[A-Za-z0-9._-]*\)\.git$|\1|p' "$prov")
+factory_commit=$(one 's/^FACTORY_COMMIT=\([0-9a-f]\{40\}\)\( .*\)\{0,1\}$/\1/p' "$prov")
 
 docker run --rm \
   -e IMG_DIR="${location%/*}" -e IMG_FILE="${location##*/}" -e IMG_DIGEST="$digest" -e UBUNTU_KEY_FPR="$UBUNTU_KEY_FPR" \
   -e NODE_VERSION="$node_version" -e NODE_ARM64="$node_arm64" -e NODE_X64="$node_x64" -e NODE_KEYS_COMMIT="$NODE_KEYS_COMMIT" \
   -e CLI_VERSION="$cli_version" -e CLI_SHA512="$cli_sha512" -e DOCKER_FPR="$docker_fpr" \
   -e DOCKER_VERSION="$docker_version" -e CONTAINERD_VERSION="$containerd_version" \
+  -e FACTORY_REPO="$factory_repo" -e FACTORY_COMMIT="$factory_commit" \
   "$CONTAINER" bash -euo pipefail -c '
   bad() { echo "verify-pins.sh: $*" >&2; exit 1; }
   export DEBIAN_FRONTEND=noninteractive
@@ -128,4 +134,14 @@ docker run --rm \
     done
   done
   echo "verified: Docker CE $DOCKER_VERSION and containerd.io $CONTAINERD_VERSION are in Docker'"'"'s noble repository for arm64 and amd64"
+
+  # 6. The dispatcher'"'"'s code: the pinned commit is on main ("identical": main is it; "ahead": main came after it).
+  compare=$(curl -fsSL -H "Accept: application/vnd.github+json" \
+    "https://api.github.com/repos/$FACTORY_REPO/compare/$FACTORY_COMMIT...main") \
+    || bad "GitHub does not compare $FACTORY_COMMIT with $FACTORY_REPO main"
+  base=$(jq -r .merge_base_commit.sha <<<"$compare")
+  state=$(jq -r .status <<<"$compare")
+  [ "$base" = "$FACTORY_COMMIT" ] && { [ "$state" = identical ] || [ "$state" = ahead ]; } \
+    || bad "$FACTORY_REPO main does not contain $FACTORY_COMMIT (compare: $state, merge base $base)"
+  echo "verified: $FACTORY_REPO main contains $FACTORY_COMMIT ($state)"
 '

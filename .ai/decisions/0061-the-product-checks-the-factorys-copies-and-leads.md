@@ -1,6 +1,6 @@
 # ADR-0061: The product checks the factory's copies of its controls, and leads
 
-- **Status:** Accepted (2026-11-19, by the owner)
+- **Status:** Accepted (2026-11-19, by the owner); amended by #0-272 (2026-11-20: a fifth comparison, below)
 - **Backlog:** #0-268
 - **Date:** 2026-11-19
 - **Author:** human (the owner chose option B and the lead direction (b) in an interactive session); written by Claude Code
@@ -52,6 +52,15 @@ as `factory` starts a difference; a red `main` stops the autopilot (main-guard).
 - **Compare with a commit of `factory` recorded here** (variant (c), now): a pull request here per merge in
   `factory` that touches a copy, and drift there unseen until the next bump; kept for 4.7, when the tag exists anyway.
 - **Everything to stage T:** no secret scan before 4.2's code handles builder-app's key (#0-268 AC2).
+
+## Amendment (#0-272, 2026-11-20): builder-app's permissions
+
+`check-factory-copies.rb` also compares the `permissions` of `.github/repository-settings/apps/profitbuild-builder.json`
+(what GitHub's installation of builder-app must hold, which `repository-settings.rb` compares with GitHub) with
+`factory`'s `dispatcher/src/github/builder-permissions.json` (what builder-app's token asks for and is checked against),
+exactly, both ways. The rule of point 3 holds: this repository leads, so a pull request here that changes the file
+fails until `factory` matches, and a difference `factory` starts is a warning here; `factory`'s own test holds its file
+to a literal, so a widening there fails its CI.
 
 ## Consequences
 

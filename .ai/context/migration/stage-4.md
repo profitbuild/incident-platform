@@ -123,12 +123,23 @@ What was built, in `dispatcher/` (Node built-ins only):
   - repository permissions Contents read and write, Pull requests read and write, Metadata read. Nothing else: no
     Issues until 4.5, no Checks, no Statuses, no Workflows, no Administration;
   - installed on incident-platform only.
+
+  Created 2026-11-20: app id 5844656, installation 183942865 (`apps/profitbuild-builder.json`), read back through the
+  organization's installations. Its key is generated only when `install-builder-app.sh` runs, so the download lies on
+  the Mac for minutes.
+- **Done so far:** pull request 1, the four rulesets and the writers, merged 2026-11-20 (PR #663; applied by the owner
+  before the merge, `check` on `main` after it: AC1); `factory` PR #13, `BUILDER_PERMISSIONS` in
+  `dispatcher/src/github/builder-permissions.json`, merged 2026-11-20 (merge `3888a900`, the dispatcher's pin).
 - **The order (the owner's choice A2, 2026-11-19):** two pull requests, the confinement first (the rulesets below, no
   app needed), then the app, the key and the VM, so the key never exists without the rulesets.
 - **VM (`scripts/factory-admin/build-vm/provision.sh`, moving to `factory`):**
-  - a system user `dispatcher`, its home and `.config/factory` mode 700; `factory` cannot read them;
-  - a clone of `profitbuild/factory` as `dispatcher`, at a commit pinned in `provision.sh` until 4.7's tag, so
-    `check-app` has code to run;
+  - a user `dispatcher` with an ordinary uid (H2 of the analysis of pull request 2, 2026-11-20): the egress chain takes
+    every uid from 1000 up, so its traffic passes the chain `factory`'s does; a system uid would reach any host. No
+    subordinate range, no login shell, no group but its own; its home and `.config/factory` mode 700, so `factory`
+    cannot read them;
+  - a clone of `profitbuild/factory` as `dispatcher`, at a commit pinned in `provision.sh` until 4.7's tag (I1), so
+    `check-app` has code to run; `verify-pins.sh` checks the commit is on `factory`'s `main`, and `provision.sh` refuses
+    a boot whose clone is not a clean checkout of it;
   - the key at `/home/dispatcher/.config/factory/builder-app.pem` and the ids in `/home/dispatcher/.config/factory/env`,
     both mode 600, written by `build-vm/install-builder-app.sh` (the owner's, on the Mac), which then runs `check-app`
     as `dispatcher`;
@@ -150,9 +161,11 @@ What was built, in `dispatcher/` (Node built-ins only):
     builder-app's branches, which 4.3 fetches into its trusted clone.
 
   All are files in `.github/repository-settings/rulesets/`; `repository.json` also lists the writers (Write or
-  Maintain), whom the role Write's bypass reaches. `repository-settings.rb` checks them, and builder-app's
-  installation against `apps/profitbuild-builder.json`, which `check-factory-copies.rb` compares with `factory`'s
-  JSON of `BUILDER_PERMISSIONS` (G2).
+  Maintain), whom the role Write's bypass reaches. `repository-settings.rb` checks them, and every app installed on the
+  organization against its file in `apps/` (J1, after a probe showed the owner's token lists them: permissions,
+  events, `repository_selection`; the repositories of a selection it cannot list). `check-factory-copies.rb` compares
+  `apps/profitbuild-builder.json`'s permissions with `factory`'s `builder-permissions.json` (G2). Writing the files
+  found Renovate on every repository of the organization, `factory` included; narrowed by the owner on 2026-11-20.
 - **ADR-0034 amended (in #0-272's PR).** It says today that `main` is guarded by one ruleset and that only the settings
   guarding `main` are files. The amendment adds:
   - the rulesets and their bypass actors (four in the first pull request, `factory` in the second);
@@ -162,6 +175,12 @@ What was built, in `dispatcher/` (Node built-ins only):
 
   ADR-0060's Consequences, as amended on 2026-11-19, put this part of ADR-0034 at 4.2b and the rest at 4.5.
 - **Rotation:** a second key added, the dispatcher switched, the old key deleted; quarterly, and at once on any doubt.
+  Its cost, written down (the owner's question, 2026-11-20): each new key takes the owner, since only GitHub's UI
+  generates an app's key, and the download must be dragged into a terminal (`com.apple.macl`); and the key has one copy,
+  on the VM's disk, so every recreated VM needs one, and until 4.7's tag every move of the `factory` pin is a change of
+  `provision.sh`, so a recreated VM. A few minutes each time; stage C's secret store keeps the key across VMs, leaving
+  the quarterly rotation. Updating the pin without a new VM would patch a VM by hand, which docs/ai-factory.md rules
+  out: a decision of its own if the cost grows.
 
 ### What a probe settled before 4.2b (2026-11-19), and what follows from it
 
@@ -350,9 +369,11 @@ bypass covers the roles above it.
 1. ADR-0060 Accepted; `profitbuild/factory` created with its baseline (4.1). Done 2026-11-18.
 2. The confinement and the app (4.2b, #0-272), in this order:
    1. the four rulesets and the writers applied (`repository-settings.rb plan`, then `apply`, from the branch just
-      before the merge; pull request 1);
-   2. builder-app created and installed on incident-platform, its key on the VM, the `factory` ruleset applied
-      (pull request 2), after 4.2a's code is merged in `factory` (#0-271).
+      before the merge; pull request 1). Done 2026-11-20;
+   2. builder-app created and installed on incident-platform (done 2026-11-20); then, from pull request 2's branch:
+      the VM recreated (`delete.sh`, `create.sh`: Lima reads `provision.sh` only when it creates the VM, and the new
+      one adds `dispatcher` and its clone; the bot's token and Claude Code's login are entered again), the key
+      generated and `install-builder-app.sh` run, the `factory` ruleset applied, AC6's tries; then the merge.
 3. A Console workspace with a spend limit and its key on the VM (4.6).
 4. Merging each item's PRs; the three exit runs started by hand (4.7).
 
