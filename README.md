@@ -759,10 +759,36 @@ security boundary, so every rule that matters is also enforced outside the model
   (key and env file 600, the env file being trusted as code) and owners, runs `factory`'s `check-app` as `dispatcher`
   (the installation and a narrowed token hold exactly those permissions and reach this repository alone, the app has
   no installation on `factory`) and only then deletes the downloaded key. `dispatcher` runs `factory` at the commit
-  `provision.sh` pins (`verify-pins.sh`: on `factory`'s `main`), refused at boot unless it is a clean checkout of it.
+  `provision.sh` pins (`verify-pins.sh`: on `factory`'s `main`), refused at boot unless it is a clean checkout of it:
+  on a VM made from a `provision.sh` of #0-277 and on, from `/opt/factory-checkout` (root's, 0755, the next bullet);
+  on one made before, from a clone in `dispatcher`'s home, where `install-builder-app.sh` refuses to run (recreate it).
   Tried with its real token on 2026-11-20 (#0-272 AC6): refused every branch outside `factory/**` and every tag,
   allowed to create, force-move and delete its own; and, holding no Workflows permission, it moves no ref, its own
   included, across a change of `.github/workflows/` (GitHub answers 403).
+- **dispatcher and `factory`'s Docker** (backlog #0-277, ADR-0062; on a VM made from a `provision.sh` of #0-277 and
+  on; the dispatcher's own side, its refusals and its sweep, from the `FACTORY_COMMIT` that carries #0-277's code):
+  `dispatcher` runs `docker` and the devcontainer CLI as `factory` through one sudo rule
+  (`/etc/sudoers.d/factory-dispatcher`, root's, 0440, checked by `visudo`): those two programs by full path, sudo's
+  reset environment with root's `secure_path`, `runcwd=/` and `DOCKER_HOST` (from `/etc/factory-dispatcher.env`, so
+  the CLIs never follow a Docker context in `factory`'s agent-writable `~/.docker`), no variable, working directory or
+  other program of the caller's, and `factory` has no rule; what a product's or an agent's configuration names runs
+  as `factory`, inside ADR-0057's boundary, never as the uid of builder-app's key. The factory's one checkout,
+  `/opt/factory-checkout`, is root's and at `FACTORY_COMMIT`, written by no user (the dispatcher runs from it, task
+  containers mount it read-only); root clones and fetches it, outside the egress chain, which takes uids from 1000 up
+  (GitHub alone is reached; what runs is the pinned commit). `dispatcher`'s directories in its home are made as
+  `dispatcher`, a planted link refused, so root never follows one. Tasks' work directories live under
+  `/home/factory/tasks` (700), made and removed by one-shot containers of the pinned helper image (`verify-pins.sh`
+  step 7). The rollback devcontainer shares the VM by time (`rollback-start.sh`, `rollback-exec.sh`, the label
+  `factory.rollback`), so no credential is on `factory`'s daemon while a task runs: `rollback-start.sh` starts only on
+  a daemon with no container at all and no run's network or volume, and once `up` has returned accepts only the one
+  container it made. `create.sh` checks the rule (as root's `sudo -l` lists it: exactly the two programs, nothing for
+  `factory`; both programs run through it, `docker` reaching `unix:///run/docker.sock`; another program,
+  `--preserve-env` and `-D` refused; `factory` reading nothing of `dispatcher`'s), the checkout's owner, pin, cleanliness and modes, the
+  directories and the helper image. Limits: `factory`'s image store and home are the agent's side and live across
+  tasks (ADR-0062's Consequences, #0-285); `rollback-start.sh` sees only the daemon's containers and a run's `factory.task` objects, so what a task left in
+  `factory`'s reach outside them survives, and a rollback with the owner's logins after a dispatcher run starts on a VM
+  made anew (accepted for the migration, while the rollback is kept, until stage 5's exit; not enforced); the task container is checked only after `up` has started it
+  (#0-284); the image's firewall sudo rule and its unpinned Claude Code are #0-283.
 - **builder-app's push** (backlog #0-276, stage 4.3b, ADR-0060 D7 as amended; `factory` PR #16): no git with the
   dispatcher's rights runs in a repository an agent wrote.
   - Every git is `/usr/bin/git`, started by one function alone (a static test): its `cwd` the dispatcher's, `GIT_DIR`

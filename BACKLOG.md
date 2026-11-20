@@ -176,6 +176,8 @@ Code, Javadoc, config comments and commits reference items as `backlog #N`.
 | [0-281](#0-281-the-dispatchers-credential-checks-are-held-at-the-call-that-sends-them-and-its-static-scans-close-their-bounds) | The dispatcher's credential checks are held at the call that sends them, and its static scans close their bounds | ci | Medium | Open |
 | [0-282](#0-282-incident-platform-ships-a-task-configuration-for-the-dispatchers-container) | incident-platform ships a task configuration for the dispatcher's container | ci | High | Open |
 | [0-283](#0-283-the-devcontainer-image-lets-dev-widen-its-firewall-and-installs-claude-code-unpinned) | The devcontainer image lets `dev` widen its firewall and installs Claude Code unpinned | ci | Medium | Open |
+| [0-284](#0-284-the-task-container-is-checked-before-anything-runs-in-it) | The task container is checked before anything runs in it | ci | Medium | Open |
+| [0-285](#0-285-what-a-task-leaves-in-factorys-reach-outside-the-daemon-is-decided-before-a-task-holds-a-credential) | What a task leaves in `factory`'s reach outside the daemon is decided before a task holds a credential | ci | High | Open |
 | [0-133](#0-133-incidentresolvedevent-carries-no-openedat) | `IncidentResolvedEvent` carries no `openedAt` | tech-debt | Low | Open |
 | [0-134](#0-134-diff-cover-is-installed-by-version-without-hashes) | `diff-cover` is installed by version, without hashes | ci | Low | Open |
 | [0-135](#0-135-kubectl-in-ci-is-downloaded-unverified) | kubectl in CI is downloaded unverified | ci | Low | Open |
@@ -3812,8 +3814,9 @@ AC3. README "Infrastructure Hardening" drops the gap #0-272 named ("`dispatcher`
 access moved here from 4.2b, the owner's choice F2).
 **Autopilot:** human-only · **Risk:** high · **Complexity:** high · **Depends on:** #0-275, #0-276; built with #0-282
 (its trial on the VM runs #0-282's configuration)
-**Touches:** factory (scripts/factory-admin/build-vm/provision.sh and create.sh, install-builder-app.sh and
-.github/scripts/test-install-builder-app.sh (AC8): owner-only), decisions (ADR-0062, written before the code), the repository `profitbuild/factory` (the task container's code and tests), root (README
+**Touches:** factory (scripts/factory-admin/build-vm/provision.sh, create.sh, verify-pins.sh, rollback-start.sh,
+rollback-exec.sh, install-builder-app.sh, .github/scripts/test-install-builder-app.sh (AC8) and
+test-rollback-scripts.sh, .github/workflows/factory-guards.yml: owner-only), decisions (ADR-0062, written before the code), the repository `profitbuild/factory` (the task container's code and tests), root (README
 "Infrastructure Hardening", `stage-4.md` "4.3", docs/ai-factory.md "Build VM")
 
 **Problem.** The dispatcher runs each agent in a container of `factory`'s rootless Docker, whose socket
@@ -3825,14 +3828,16 @@ way `dispatcher` controls `factory`'s containers, never the reverse. Decided 202
 
 **Work** (the way decided with the owner on 2026-11-20, ADR-0062; `stage-4.md` "4.3", "Decided for 4.3c"):
 - `provision.sh`: the sudoers rule (`/etc/sudoers.d/factory-dispatcher`, 0440, `visudo -c`: `dispatcher` may run
-  `/usr/bin/docker` and the pinned `devcontainer` as `factory`, nothing else, `env_reset`, no `setenv`); the factory
+  `/usr/bin/docker` and the pinned `devcontainer` as `factory`, nothing else, `env_reset`, no `setenv`, its own
+  `secure_path`, `runcwd=/` and `DOCKER_HOST` from a root-owned `env_file`; ADR-0062 point 1 as amended); the factory
   checkout `/opt/factory-checkout` at `FACTORY_COMMIT` (root's, 0755), the dispatcher running from it and its clone in
   its home retired (`install-builder-app.sh`'s `check-app` path with it); `/home/factory/tasks` (700, `factory`'s); the
   helper image `buildpack-deps:noble-scm` by digest (`verify-pins.sh`, arm64 and amd64); `FACTORY_STATE_DIR` itself
-  (700 and `dispatcher`'s, which #0-275 refuses otherwise) and `/usr/bin/flock` checked (#0-275's lock runs it);
+  (700 and `dispatcher`'s, which #0-275 refuses otherwise; made as `dispatcher`, a link refused, as `.config`) and
+  `/usr/bin/flock` checked (#0-275's lock runs it);
   `create.sh` checks all of it; `scripts/factory-admin/build-vm/rollback-start.sh` (starts the rollback's devcontainer
-  labelled `factory.rollback=1` with `--id-label`, refuses while a `factory.task` object exists, checks again before
-  the logins) and `rollback-exec.sh` (enters it by the label). docs/ai-factory.md "Build VM": the
+  labelled `factory.rollback=1` with `--id-label`, only on a daemon with no container at all and no `factory.task`
+  object, and accepts after `up` only the one container it made, before the logins) and `rollback-exec.sh` (enters it by the label). docs/ai-factory.md "Build VM": the
   rollback by time on the VM, through `rollback-start.sh` (its steps 3-5 and 7),
   the checkout, what `factory` holds (lines 173, 361); README "Infrastructure Hardening": the access and its limits,
   the dispatcher's checkout (lines 761-762).
@@ -3863,7 +3868,8 @@ AC2. On a new VM, `create.sh` checks that `dispatcher` runs a container through 
      sudo, that `factory` reads nothing of `dispatcher`'s (as #0-272's AC7), that `/opt/factory-checkout` is root's and
      at `FACTORY_COMMIT`, that the helper image is at its pinned digest, that the dispatcher refuses to start while a
      running container carries `factory.rollback`, that its sweep then removes a credential volume left by a stopped
-     rollback, and that `rollback-start.sh` refuses while a `factory.task` container exists.
+     rollback, and that `rollback-start.sh` refuses while any container is on the daemon (one of a run's, one
+     unlabelled, one labelled `factory.rollback` that `up` did not make).
 AC13. After a dispatcher process killed during the gate (its task container and Testcontainers' still running,
      unlabelled ones among them), the next run sweeps them and starts; a rollback started between a run's checks and
      its task container, or still building its image, stops that run or that rollback (tests where the code allows; on
@@ -4102,3 +4108,59 @@ Code installed at a pinned version with its checksum, bumped as the other pins a
 AC1. In a task container, `sudo /usr/local/bin/init-firewall.sh <host>` opens no host (a test or a VM trial, recorded).
 AC2. The owner's container still opens its ntfy host.
 AC3. Claude Code's install is pinned by version and checksum, and the pin is checked as the other tools' are.
+
+### 0-284. The task container is checked before anything runs in it
+
+**Type:** ci · **Priority:** Medium · **Status:** Open (found by the review of `factory` PR #18, #0-277, 2026-11-20;
+for migration stage 4, step 4.4).
+**Autopilot:** human-only · **Risk:** medium · **Complexity:** medium · **Depends on:** #0-277
+**Touches:** the repository `profitbuild/factory` (the dispatcher's task container and its tests), decisions (ADR-0062
+point 4, if the order changes what it says), root (README "Infrastructure Hardening")
+
+**Problem.** The dispatcher checks the image's `devcontainer.metadata` label and the container's mounts, privilege and
+capabilities only after `devcontainer up` has built the image, created and started the container and run the
+configuration's `postCreateCommand` and `postStartCommand` with the merged metadata. An entry the closed list would
+refuse (`privileged`, `mounts`, `securityOpt`, from a Dockerfile `LABEL` or a poisoned build cache of `factory`'s
+daemon) has taken effect by then, inside ADR-0057's boundary. The check after `up` reads `Privileged`, `CapAdd` and
+`Mounts` only, not `HostConfig.SecurityOpt`, `PidMode`, `NetworkMode`, `IpcMode`, `Devices` or `UsernsMode`.
+
+**Work.** `devcontainer build`, the label checked, then `up` from the recorded image ID, so a new task and a resumed one
+take one path and nothing of the product's runs before the check; the container's `HostConfig` checked whole against
+what the dispatcher set.
+
+**Acceptance criteria.**
+AC1. No lifecycle command of a task configuration runs before the image's label passed the closed list (a test).
+AC2. A new task and a resumed one start their container the same way, from the image ID (a test).
+AC3. The container's `HostConfig` fields beyond the dispatcher's are refused (each a test).
+
+### 0-285. What a task leaves in `factory`'s reach outside the daemon is decided before a task holds a credential
+
+**Type:** ci · **Priority:** High · **Status:** Open (found by the reviews of #0-277's VM part and of `factory` PR #18,
+2026-11-20; for migration stage 4, before step 4.6).
+**Autopilot:** human-only · **Risk:** high · **Complexity:** medium · **Depends on:** #0-277
+**Touches:** factory (scripts/factory-admin/build-vm/provision.sh, create.sh: owner-only), decisions (ADR-0062's
+Consequences, or a new ADR), the repository `profitbuild/factory` (the dispatcher's sweep), root (README
+"Infrastructure Hardening")
+
+**Problem.** A task's code holds the Docker socket (docker-outside-of-docker, ADR-0057), so it can write, as
+`factory`, everything `factory` can reach: its home (`~/.docker` with CLI plugins and credential helpers the docker
+and devcontainer CLIs run on the VM itself, outside any container, `~/.config/docker/daemon.json`, systemd user
+units, the rootless daemon's own unit), the image store and build cache, and named volumes. The dispatcher's sweep
+removes the daemon's containers, networks and volumes only, and keeps one volume on purpose, the shared Maven cache
+`factory-dispatcher-m2` (ADR-0062 point 7: a task can poison it for the next, a plugin planted there runs in the next
+gate), so what a task leaves anywhere else survives into the next task. The rollback on the same VM is exposed the
+same way, accepted for the migration (ADR-0062's Consequences).
+ADR-0062 accepts this in v0 while no task holds a credential; from 4.6 a task holds one, and what an earlier task left
+running as `factory` could take it.
+
+**Work.** Decide, before 4.6, what keeps one task's leftovers from the next task's credential: a root-owned
+`DOCKER_CONFIG` set by the dispatcher's sudo rule (its `env_file`), `factory`'s home checked or made anew between
+tasks, a VM per run, or another way; record it (ADR) and build it.
+
+**Acceptance criteria.**
+AC1. An ADR (or an amendment of ADR-0062) records what persists across tasks as `factory`, what of it can reach a
+     task's credential, and the way chosen, the owner's choice.
+AC2. What a task planted in `factory`'s Docker configuration, the daemon's unit, the image store or build cache, or the
+     shared `factory-dispatcher-m2` volume does not reach the next task's credential, each by the way AC1 chose (a
+     test or a VM trial, recorded).
+AC3. README "Infrastructure Hardening" names what still persists across tasks.

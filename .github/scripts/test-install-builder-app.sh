@@ -50,6 +50,7 @@ args=()
 for a in "$@"; do
   a=${a//\/home\/dispatcher/$VM/home/dispatcher}
   a=${a//\/etc\/factory-build-provisioned/$VM/etc/factory-build-provisioned}
+  a=${a//\/opt\/factory-checkout/$VM/opt/factory-checkout}
   a=${a//\/usr\/local\/bin\/node/$VM/node}
   args+=("$a")
 done
@@ -83,9 +84,10 @@ new_case() {
   n=$((n+1))
   VM=$WORK/vm$n
   export VM
-  mkdir -p "$VM/etc" "$VM/home/dispatcher/.config/factory" "$VM/home/dispatcher/factory/dispatcher/bin"
+  mkdir -p "$VM/etc" "$VM/home/dispatcher/.config/factory" "$VM/opt/factory-checkout/dispatcher/bin"
   chmod 700 "$VM/home/dispatcher" "$VM/home/dispatcher/.config" "$VM/home/dispatcher/.config/factory"
-  echo "factory-build provisioned: docker; node v24; dispatcher at factory 3888a900; boot 1" > "$VM/etc/factory-build-provisioned"
+  echo "factory-build provisioned: docker; node v24; dispatcher at factory 3888a900 in /opt/factory-checkout; helper h; boot 1" \
+    > "$VM/etc/factory-build-provisioned"
   # The fake check-app: logs the env file it was given and what it holds, exits $STUB_CHECK_RC.
   cat > "$VM/node" <<'NODE'
 #!/usr/bin/env bash
@@ -121,7 +123,7 @@ else
   if [ "$(mode "$(conf)/builder-app.pem")" = 600 ] && [ "$(mode "$(conf)/env")" = 600 ]; then ok "key and env file are mode 600"
   else fail "modes: key $(mode "$(conf)/builder-app.pem"), env $(mode "$(conf)/env")"; fi
   if ls "$(conf)"/*.new >/dev/null 2>&1; then fail "a .new file is left"; else ok "no .new file is left"; fi
-  if grep -qF "node --env-file=$(conf)/env $VM/home/dispatcher/factory/dispatcher/bin/check-app.mjs" "$VM/node.log" \
+  if grep -qF "node --env-file=$(conf)/env $VM/opt/factory-checkout/dispatcher/bin/check-app.mjs" "$VM/node.log" \
     && grep -qx 'BUILDER_APP_ID=5844656' "$VM/node.log"; then ok "check-app ran with that env file"
   else fail "check-app call: $(cat "$VM/node.log" 2>/dev/null)"; fi
   if [ ! -e "$KEY" ]; then ok "the downloaded key is deleted"; else fail "the downloaded key is still there"; fi
@@ -145,6 +147,10 @@ new_case; STUB_INSTANCES="" run 5844656 183942865 "$KEY"; expect_fail "no VM" "n
 new_case; STUB_STATUS=Stopped run 5844656 183942865 "$KEY"; expect_fail "a stopped VM" "is Stopped, not Running"
 new_case; echo "factory-build provisioned: docker; boot 1" > "$VM/etc/factory-build-provisioned"
 run 5844656 183942865 "$KEY"; expect_fail "a VM provisioned without dispatcher" "was not provisioned with dispatcher"
+new_case; echo "factory-build provisioned: docker; node v24; dispatcher at factory 3888a900; boot 1" > "$VM/etc/factory-build-provisioned"
+run 5844656 183942865 "$KEY"; expect_fail "a VM from before /opt/factory-checkout" "provisioned before /opt/factory-checkout"
+if [ -e "$(conf)/builder-app.pem" ] || [ -e "$(conf)/env" ]; then fail "a VM from before /opt/factory-checkout: something was written"
+else ok "a VM from before /opt/factory-checkout: nothing written"; fi
 if [ -e "$(conf)/builder-app.pem" ]; then fail "a key was written to a VM without dispatcher"; else ok "nothing written to it"; fi
 new_case; chmod 755 "$(conf)"; run 5844656 183942865 "$KEY"; expect_fail ".config/factory mode 755" "is not mode 700 and dispatcher's: nothing written"
 if [ -e "$(conf)/builder-app.pem" ] || [ -e "$(conf)/builder-app.pem.new" ]; then fail "a key was written into a directory of mode 755"

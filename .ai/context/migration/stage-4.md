@@ -19,7 +19,7 @@ dispatcher runs (ADR-0062 point 5). Rule of the migration: one factory change at
 ```
 Mac (owner) ── limactl ──▶ build VM (Lima factory-build)
                              ├─ user dispatcher: node dispatcher, its state dir, builder-app key, Anthropic key,
-                             │   the credential proxy, a clone of `factory` at the pinned tag, a clone of the product
+                             │   the credential proxy, the product's clone; /opt/factory-checkout: `factory` at the pinned tag, root's
                              └─ user factory: rootless Docker ──▶ task container (one per task, removed after)
                                    /workspace = the task's clone; /opt/factory = `factory` read-only (--plugin-dir)
                                    no GitHub token, no Anthropic key; ANTHROPIC_BASE_URL = the proxy
@@ -564,7 +564,8 @@ owner 2026-11-20, before its code, and done the same day, `factory` PR #16).**
     the bot's token and Claude's login and carries the bot's environment, and a list over it would put a product's
     needs into the factory's code.
   - **No credential on `factory`'s daemon while the dispatcher runs; the rollback shares the VM by time** (review
-    rounds 2 to 5): `rollback-start.sh` refuses while a `factory.task` object exists, labels the rollback's container
+    rounds 2 to 5): `rollback-start.sh` refuses while a `factory.task` object exists (widened on #0-277's VM part's
+    review, round 1, below: any container at all), labels the rollback's container
     `factory.rollback=1`, and checks again after `up` and before the logins (removing its container if a run began);
     every rollback command goes through the label (`rollback-start.sh`, `rollback-exec.sh`); the dispatcher refuses to
     start while a running container carries that label, makes itself visible (the task's labelled network) and checks
@@ -598,6 +599,58 @@ owner 2026-11-20, before its code, and done the same day, `factory` PR #16).**
   `entrypoint`, the socket mount, `customizations`); ADR-0062 point 4 amended so #0-277's check accepts exactly the
   entry the factory's list holds for that id and lockfile digest, and nothing else (#0-282 "Tried on the VM"). The
   image's sudo rule for the firewall and its unpinned Claude Code reach every task too: #0-283.
+- **Done for 4.3c on the VM's side (2026-11-20, #0-277's part B1; on a VM made from this `provision.sh`, so applied at
+  the one recreation that moves `FACTORY_COMMIT` past #0-277's code):** `provision.sh` writes the sudo rule
+  (`/etc/sudoers.d/factory-dispatcher`, `visudo`-checked), clones `factory` as root into `/opt/factory-checkout` (the
+  dispatcher's clone in its home retired), makes `/home/dispatcher/state` and `/home/factory/tasks`, checks
+  `/usr/bin/flock`, and pulls the helper image by its pinned digest; `verify-pins.sh` step 7 checks that digest;
+  `create.sh` checks the VM's side of #0-277 AC2 (the rule as root's `sudo -l` lists it, both programs run through it,
+  `docker` reaching `unix:///run/docker.sock`, another program, `--preserve-env` and `-D` refused, `factory` with no sudo and
+  reading nothing of `dispatcher`'s, the checkout root's, pinned, clean, read-only when mounted, the directories, the
+  helper image); `rollback-start.sh` and `rollback-exec.sh` (`test-rollback-scripts.sh`, 35 cases offline, seven
+  mutations of `rollback-start.sh` each caught by 1 to 20 of them); `install-builder-app.sh` runs `check-app` from
+  the checkout and refuses a VM made before it, before the key is written. Why one recreation: provision.sh is read
+  when the VM is made, and a recreation costs builder-app's key installed again. Not done here: `FACTORY_COMMIT`,
+  `check-app --repository` (#0-277 AC8) and the dispatcher's settings file (`FACTORY_STATE_DIR`,
+  `FACTORY_HELPER_IMAGE` and the rest), which wait for #0-277's code in `factory`, whose settings they name;
+  `FACTORY_HELPER_IMAGE` will be written from `provision.sh`'s `HELPER_IMAGE`, never a second literal (FAC-A01).
+  AC2's dispatcher side waits for that code too: its refusal while a running container carries `factory.rollback`,
+  its sweep removing a stopped rollback's credential volume, and the trial on the VM of `rollback-start.sh` refusing
+  while a container is there; the product's clone `FACTORY_REPO_DIR` is #0-278.
+- **Changed on #0-277's VM part's review, round 1 (2026-11-20, the owner's choice of the recommendations):**
+  - `rollback-start.sh` refused only while an object labelled `factory.task` existed. A task's code holding the Docker
+    socket can leave an unlabelled container a killed run never sweeps, or one it labels `factory.rollback` itself,
+    which `up --id-label` would take as the rollback's own; either could mount the logins' volumes (sec-3a91). Now
+    the daemon must hold no container at all before `up`, and only the one `up` made after it (ADR-0062 point 5
+    amended).
+  - `provision.sh` made `dispatcher`'s `.config`, `.config/factory` (since #0-272) and `state` as root with `install
+    -d -o dispatcher`, which on a link `dispatcher` planted gives the link's target to `dispatcher` (probed: coreutils
+    9.4), at the next boot: root's directories for `dispatcher`. Now made as `dispatcher`, a link refused.
+  - The sudo rule holds its environment itself: `secure_path`, `runcwd=/`, and `DOCKER_HOST` from a root-owned
+    `env_file`, since under `env_reset` the docker CLI would follow the current context of `factory`'s agent-writable
+    `~/.docker`, and the devcontainer CLI takes no `--host` (probed with sudo 1.9.15p5: the caller's `DOCKER_HOST`
+    does not pass, `-D` is refused; ADR-0062 point 1 amended).
+  - Every check in `create.sh` reads first and judges after; the checkout's link modes no longer fail it.
+  - Why not left to `factory`'s code (the reviewers' first suggestion for `DOCKER_HOST`): the dispatcher cannot set a
+    variable under `!setenv`, and a `--host` argument reaches `docker` only, not the devcontainer CLI's own calls.
+  - For `factory`'s code (#0-277, its pull request): the dispatcher runs git in a root-owned checkout as
+    `dispatcher`, which git 2.43 refuses as "dubious ownership" unless `-c safe.directory=/opt/factory-checkout` is
+    given (probed). `factory` PR #18 runs no git there (review of PR #18, round 1): it holds for any later check of the
+    checkout from the dispatcher.
+- **Decided on round 2 of that review (2026-11-20, the owner):** the migration's intermediate state is not invested in:
+  the rollback is the way back while the factory is moved, so its exposure to what a dispatcher task leaves outside
+  the daemon (`factory`'s home, `~/.docker`'s CLI plugins, systemd units, the VM's clone, named volumes; security
+  round 2) is recorded and accepted, not closed: a rollback with the owner's logins after a dispatcher run starts on a
+  VM made anew, unenforced (ADR-0062's Consequences, docs/ai-factory.md "Build VM" step 3). Why not a VM of its own
+  for the rollback, or `rollback-start.sh` cleaning `factory`'s state: both cost work for a state the factory leaves,
+  and the second can never be complete, since all of `factory`'s home is the agent's side. Not done either, as not
+  worth it for that state: the rollback's remaining test cases, removing a container a failed `up` left, `docker
+  plugin ls`, comparing the "Matching Defaults" section of `sudo -l` in `create.sh` (its behaviour checks, another
+  program, `--preserve-env`, `-D` and the daemon `docker` reaches, catch the known ways a drop-in weakens the rule).
+  ADR-0062 point 4's mounts as `runArgs` (from `factory` PR #18's review) are recorded here before that PR merges, as
+  this ADR is written before its code; they take effect with its merge, and the ADR follows if the PR changes them.
+  Kept for the end state: the task container checked before anything runs (#0-284), and what persists
+  across tasks once a task holds a credential (#0-285).
 - **Not done:** 4.3c, 4.3d; and, from 4.3a's review, `taskImage` bounded, symlinks under the adapter's paths, a
   reason without GitHub's text, resuming by `runId` or one running task at most, a blocked task counted by the
   breaker, a retried mint's leftover token, a script whose last segment is `.`, the item-id format tied to the

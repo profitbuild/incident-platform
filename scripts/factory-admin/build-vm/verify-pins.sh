@@ -24,6 +24,9 @@
 #   6. The dispatcher's code (provision.sh, FACTORY_COMMIT; backlog #0-272): the commit is on profitbuild/factory's
 #      main, its first parent line or merged into it, as GitHub's compare of the commit with main says (`identical`
 #      or `ahead`): a commit of a branch that never merged, or one GitHub does not know, is refused.
+#   7. The helper image (provision.sh, HELPER_IMAGE; backlog #0-277, ADR-0062 point 8): its digest is an image index
+#      Docker Hub serves for that repository, with a linux/amd64 and a linux/arm64 image. The tag is a label: the
+#      digest is what the VM pulls, and a moved tag is no failure here (bump the pin on purpose, as the others).
 # Everything that reads a downloaded file runs in the container (the Mac has no gpg): the Mac passes it the pins only.
 #
 #   verify-pins.sh       prints one "verified: ..." line per pin and exits 0, or names what failed and exits 1
@@ -65,6 +68,8 @@ docker_version=$(one 's/^DOCKER_VERSION=\([0-9A-Za-z.:~+-]*\)$/\1/p' "$prov")
 containerd_version=$(one 's/^CONTAINERD_VERSION=\([0-9A-Za-z.:~+-]*\)$/\1/p' "$prov")
 factory_repo=$(one 's|^FACTORY_REPO_URL=https://github.com/\([A-Za-z0-9._-]*/[A-Za-z0-9._-]*\)\.git$|\1|p' "$prov")
 factory_commit=$(one 's/^FACTORY_COMMIT=\([0-9a-f]\{40\}\)\( .*\)\{0,1\}$/\1/p' "$prov")
+helper_repo=$(one 's/^HELPER_IMAGE=\([a-z0-9._-]*\):[a-z0-9._-]*@sha256:[0-9a-f]\{64\}$/\1/p' "$prov")
+helper_digest=$(one 's/^HELPER_IMAGE=[a-z0-9._-]*:[a-z0-9._-]*@\(sha256:[0-9a-f]\{64\}\)$/\1/p' "$prov")
 
 docker run --rm \
   -e IMG_DIR="${location%/*}" -e IMG_FILE="${location##*/}" -e IMG_DIGEST="$digest" -e UBUNTU_KEY_FPR="$UBUNTU_KEY_FPR" \
@@ -72,6 +77,7 @@ docker run --rm \
   -e CLI_VERSION="$cli_version" -e CLI_SHA512="$cli_sha512" -e DOCKER_FPR="$docker_fpr" \
   -e DOCKER_VERSION="$docker_version" -e CONTAINERD_VERSION="$containerd_version" \
   -e FACTORY_REPO="$factory_repo" -e FACTORY_COMMIT="$factory_commit" \
+  -e HELPER_REPO="$helper_repo" -e HELPER_DIGEST="$helper_digest" \
   "$CONTAINER" bash -euo pipefail -c '
   bad() { echo "verify-pins.sh: $*" >&2; exit 1; }
   export DEBIAN_FRONTEND=noninteractive
@@ -144,4 +150,17 @@ docker run --rm \
   [ "$base" = "$FACTORY_COMMIT" ] && { [ "$state" = identical ] || [ "$state" = ahead ]; } \
     || bad "$FACTORY_REPO main does not contain $FACTORY_COMMIT (compare: $state, merge base $base)"
   echo "verified: $FACTORY_REPO main contains $FACTORY_COMMIT ($state)"
+
+  # 7. The helper image: an index Docker Hub serves at that digest, for amd64 and arm64.
+  token=$(curl -fsSL "https://auth.docker.io/token?service=registry.docker.io&scope=repository:library/$HELPER_REPO:pull" | jq -r .token) \
+    || bad "Docker Hub gives no pull token for library/$HELPER_REPO"
+  index=$(curl -fsSL -H "Authorization: Bearer $token" \
+    -H "Accept: application/vnd.oci.image.index.v1+json, application/vnd.docker.distribution.manifest.list.v2+json" \
+    "https://registry-1.docker.io/v2/library/$HELPER_REPO/manifests/$HELPER_DIGEST") \
+    || bad "Docker Hub serves no manifest library/$HELPER_REPO@$HELPER_DIGEST"
+  for plat in linux/amd64 linux/arm64; do
+    jq -e --arg p "$plat" "[.manifests[]? | select((.platform.os + \"/\" + .platform.architecture) == \$p)] | length > 0" <<<"$index" >/dev/null \
+      || bad "library/$HELPER_REPO@$HELPER_DIGEST has no $plat image"
+  done
+  echo "verified: library/$HELPER_REPO@$HELPER_DIGEST is an index with linux/amd64 and linux/arm64"
 '

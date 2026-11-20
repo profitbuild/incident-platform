@@ -179,6 +179,9 @@ jobs:
       - name: Builder app install tests
         run: .github/scripts/test-install-builder-app.sh
 
+      - name: Rollback scripts tests
+        run: .github/scripts/test-rollback-scripts.sh
+
       # The step runner of .github/scripts/ci-local.sh, the owner's local run of this job and of lint-workflows
       # (backlog #0-166): it must run these steps as the runner does, or a local green means nothing.
       - name: Local CI runner tests
