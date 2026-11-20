@@ -174,6 +174,7 @@ Code, Javadoc, config comments and commits reference items as `backlog #N`.
 | [0-278](#0-278-the-products-code-runs-only-from-main-step-43d) | The product's code runs only from `main` (step 4.3d) | ci | High | Open |
 | [0-279](#0-279-the-dev-apps-ids-and-permissions-are-kept-in-two-places-with-no-check) | The dev app's ids and permissions are kept in two places with no check | ci | Low | Open |
 | [0-280](#0-280-the-gates-schema-in-factory-and-run-testssh-here-are-checked-against-each-other-by-nothing) | The gate's schema in `factory` and `run-tests.sh` here are checked against each other by nothing | ci | Medium | Open |
+| [0-281](#0-281-the-dispatchers-credential-checks-are-held-at-the-call-that-sends-them-and-its-static-scans-close-their-bounds) | The dispatcher's credential checks are held at the call that sends them, and its static scans close their bounds | ci | Medium | Open |
 | [0-133](#0-133-incidentresolvedevent-carries-no-openedat) | `IncidentResolvedEvent` carries no `openedAt` | tech-debt | Low | Open |
 | [0-134](#0-134-diff-cover-is-installed-by-version-without-hashes) | `diff-cover` is installed by version, without hashes | ci | Low | Open |
 | [0-135](#0-135-kubectl-in-ci-is-downloaded-unverified) | kubectl in CI is downloaded unverified | ci | Low | Open |
@@ -3806,7 +3807,7 @@ AC3. README "Infrastructure Hardening" drops the gap #0-272 named ("`dispatcher`
 
 ### 0-276. builder-app's push only from a push repository the dispatcher owns, to the task's own branch (step 4.3b)
 
-**Type:** ci · **Priority:** High · **Status:** Open (migration stage 4, step 4.3b; ADR-0060 D7; carried from #0-271's
+**Type:** ci · **Priority:** High · **Status:** In progress (migration stage 4, step 4.3b; ADR-0060 D7; carried from #0-271's
 review, `factory` PR #9).
 **Autopilot:** human-only · **Risk:** high · **Complexity:** medium · **Depends on:** #0-275, #0-273
 **Touches:** the repository `profitbuild/factory` (`dispatcher/src/github/builder-token.mjs`, `git-push`, a module for
@@ -3858,12 +3859,31 @@ AC7. Every function of `node:child_process` called in `dispatcher/src/` (`spawn`
 AC8. Each push has a repository of its own: a key planted in one push's repository is not there at the next, and
      the repository is gone after a pushed and after a refused push (tests).
 
+**Result.** `factory` PR #16 (merged 2026-11-20, merge `3c588db3`, head `fd6d933f`), five review rounds
+(`/review factory#16 127`), the last all APPROVE; 219 tests, also on git 2.43.0 as an ordinary user (the owner's job
+`Test (git 2.43)`, a required check since); 65 mutations, 64 caught, 1 equivalent.
+- AC1: the config against a reference `git init --bare` of the same git, after init and before the token; each named
+  key, an unknown one, a changed value and a duplicate refuse with no token asked and no request made.
+- AC2: `{ sha, branch }`, the refspec `<sha>:refs/heads/factory/<branch>` built by the code, never forced.
+- AC3: the repository and the push URL from the adapter, two products; `check-app --repository` (decided on the plan).
+- AC4: `childEnv`, a marker reaching neither git nor `flock`; git by its full path.
+- AC5: README "Infrastructure Hardening", "builder-app's push", from the PR's list.
+- AC6: the header, `index-pack --strict` on the bundle's own pack, ancestry; proven on git 2.43 by the job.
+- AC7: every `node:child_process` call of `src/` through `childEnv`, git only from `run-git.mjs`, test-only options
+  given by no module of `src/` or `bin/`.
+- AC8: a fresh repository per push, removed after any end.
+- Beyond the ACs: one host rule for the API and the push (`pinnedOrLoopback`), after the verifier refuted that
+  `checkApiUrl` pinned GitHub (round 4).
+- Left, with where each went: `stage-4.md` "4.3" Record, 4.4's "Carried from 4.3b's decisions", #0-277 AC8,
+  #0-278 AC7, #0-281.
+
 ### 0-277. The dispatcher drives `factory`'s Docker and a task container (step 4.3c)
 
 **Type:** ci · **Priority:** High · **Status:** Open (migration stage 4, step 4.3c; ADR-0057, ADR-0060 D1; the Docker
 access moved here from 4.2b, the owner's choice F2).
 **Autopilot:** human-only · **Risk:** high · **Complexity:** high · **Depends on:** #0-275, #0-276
-**Touches:** factory (scripts/factory-admin/build-vm/provision.sh and create.sh: owner-only), decisions (an ADR for
+**Touches:** factory (scripts/factory-admin/build-vm/provision.sh and create.sh, install-builder-app.sh and
+.github/scripts/test-install-builder-app.sh (AC8): owner-only), decisions (an ADR for
 the Docker access), the repository `profitbuild/factory` (the task container's code and tests), root (README
 "Infrastructure Hardening", `stage-4.md` "4.3", docs/ai-factory.md "Build VM")
 
@@ -3897,14 +3917,19 @@ AC6. The task's commits leave the container only as `git bundle create -` on `do
 AC7. The task's clone shares no inode with `FACTORY_REPO_DIR` (`--no-hardlinks`, or a clone made inside the
      container): a test that a file of the clone's `objects/` is not one of `FACTORY_REPO_DIR`'s; `FACTORY_REPO_DIR`
      feeds every push through `alternates` (#0-276).
+AC8. `install-builder-app.sh` passes `--repository profitbuild/incident-platform` to `check-app` once `FACTORY_COMMIT`
+     moves past `factory` PR #16 (which made it required); `test-install-builder-app.sh` matches the whole call, the
+     option included, not a prefix (review of #0-276, arc-7c42).
 
 ### 0-278. The product's code runs only from `main` (step 4.3d)
 
 **Type:** ci · **Priority:** High · **Status:** Open (migration stage 4, step 4.3d; ADR-0060 D6).
 **Autopilot:** human-only · **Risk:** high · **Complexity:** medium · **Depends on:** #0-277
 **Touches:** the repository `profitbuild/factory` (reading the adapter's commands and `trustedPaths` at the base
-commit, the queue's short-lived container, tests), factory (scripts/factory/next-item.sh and its tests:
-owner-only), root (`stage-4.md` "4.3", README "Infrastructure Hardening")
+commit, the queue's short-lived container, `dispatcher/src/github/push.mjs`'s checks of `FACTORY_REPO_DIR` and
+`bin/check-app.mjs` (AC7, AC8), tests), factory (scripts/factory/next-item.sh and its tests,
+scripts/factory-admin/build-vm/provision.sh if provisioning makes the clone the dispatcher's alone: owner-only), root
+(`stage-4.md` "4.3", README "Infrastructure Hardening")
 
 **Problem.** The dispatcher runs the product's own scripts (for incident-platform `next-item.sh`, `changed-paths.sh`,
 `run-tests.sh`). Run from a task's branch, a task could rewrite the scripts that judge it. And `next-item.sh` calls
@@ -3925,6 +3950,12 @@ AC5. A path the adapter names that is a symlink, or reaches one, resolving outsi
 AC6. `changed-paths` runs against the push repository (#0-276) with the base and the head given as SHAs (a fresh bare
      repository has no refs and an unborn `HEAD`), and where it runs (as `dispatcher` or in a short-lived container,
      which cannot read `$FACTORY_STATE_DIR`) is decided and stated (a test of each SHA given).
+AC7. Who may write `FACTORY_REPO_DIR` is decided and held: through `alternates` its objects feed every push (#0-276),
+     which checks `objects`, `objects/info` and `objects/pack` but not the loose-object directories or the pack files;
+     those are checked the same way, or the clone is shown to be the dispatcher's alone (a test).
+AC8. Once the adapter is a file `dispatcher` reads, `check-app` takes the repository from it (`--adapter`), or the
+     item states why `--repository`'s literal (`install-builder-app.sh`, #0-277 AC8) stays beside it: one source of
+     the repository a token is narrowed to (review of #0-276).
 
 ### 0-279. The dev app's ids and permissions are kept in two places with no check
 
@@ -3975,3 +4006,40 @@ changes the answer's shape fails until `factory` matches; a difference `factory`
 **Acceptance criteria.**
 AC1. A field added to or removed from `run-tests.sh`'s answer, without the schema in `factory`, fails a pull request
      here; the shapes of today pass (tests).
+
+### 0-281. The dispatcher's credential checks are held at the call that sends them, and its static scans close their bounds
+
+**Type:** ci · **Priority:** Medium · **Status:** Open (found by the review of `factory` PR #16, #0-276, 2026-11-20).
+**Autopilot:** human-only · **Risk:** medium · **Complexity:** low · **Depends on:** #0-276
+**Touches:** the repository `profitbuild/factory` (`dispatcher/src/github/app-token.mjs`, `dispatcher/bin/dev-token.mjs`,
+`dispatcher/src/github/checked-token.mjs`, `dispatcher/testing/test-only-options-scan.mjs`, `.github/workflows/ci.yml`:
+owner-only, their tests), factory (scripts/factory-admin/build-vm/verify-pins.sh, .github/scripts/check-factory-copies.rb
+and .github/scripts/test-check-factory-copies.sh: owner-only), decisions (ADR-0061 amended: a new compared value)
+
+**Problem.** #0-276 holds every credential's destination to GitHub's origin (`pinnedOrLoopback`) at the CLI's options,
+the mint and `gitPushCommand`. Behind them, what the reviews left as defence in depth:
+- `app-token.mjs`'s request functions, `revokeQuietly` and `dev-token.mjs`'s exported `mint` send a JWT or a token to
+  any `baseUrl`, and `fetch` follows redirects: the host is checked by every caller today, not where it is sent;
+- the scan of test-only options does not list `readOwnFile` or `ensureOwnDirectory` (both take `uid`), and its bounds
+  (an options object built elsewhere, a spread, a parameter reassigned) are named, not closed;
+- the job `Test (git 2.43)` asserts the git version but no number of tests or `skipped 0`;
+- its comment says the dispatcher's uid is 1001, which `provision.sh` does not fix;
+- `ubuntu:24.04` is pinned by two digests, `factory`'s CI and `verify-pins.sh`, with no path to update either.
+
+**Work.** The host checked once in `app-token.mjs`'s request helper, with `redirect: 'error'`; `mint` and
+`revokeQuietly` through it; the scan's functions and bounds; the job's floor; its comment. The digest kept in two
+places by ADR-0061's mechanism, not a second one: this repository leads, `verify-pins.sh`'s `CONTAINER` the original,
+`check-factory-copies.rb` comparing `factory`'s copy in `ci.yml` (a new compared value, so an ADR-0061 amendment);
+or a stated reason why the two images differ.
+
+**Acceptance criteria.**
+AC1. A JWT or a token given to a host other than GitHub's (or a test's loopback) is refused by the request helper
+     itself, and a redirect is not followed (tests).
+AC2. A `uid:` given to `readOwnFile` or `ensureOwnDirectory` by a module of `src/` fails the scan (a planted case).
+AC3. `Test (git 2.43)` fails on a run with skipped tests or fewer than a stated floor.
+AC4. The job's comment states what the VM fixes (an ordinary uid), and the image's digest has one update path:
+     `check-factory-copies.rb` fails a pull request here that changes it alone (a test).
+AC5. `dev-token`'s exported `mint` and `checked-token.mjs`'s `revokeQuietly` reach GitHub only through the request
+     helper of AC1 (a test with another host for each).
+AC6. The scans' named bounds (an options object built elsewhere, a spread, a parameter reassigned) are closed, or each
+     stays named with the caller that holds it (4.4's first `pushTask` call), stated in the scan's header.

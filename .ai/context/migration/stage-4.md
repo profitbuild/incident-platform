@@ -307,7 +307,7 @@ bypass covers the roles above it.
 Split on 2026-11-20 (the owner's choice A), one `factory` pull request each, in this order:
 - **4.3a, #0-275:** CLI and configuration, state and lock, the retries (#0-261), the adapter's and the gate's
   schemas; no Docker, no VM. Done 2026-11-20, `factory` PR #15 (merge `51ce6928`).
-- **4.3b, #0-276:** "Carried from #0-271's review" below: the push repository the dispatcher owns, the pinned refspec, the repository from
+- **4.3b, #0-276:** done 2026-11-20, `factory` PR #16 (merge `3c588db3`). "Carried from #0-271's review" below: the push repository the dispatcher owns, the pinned refspec, the repository from
   the adapter, children from an allowlisted environment; how, decided with the owner on 2026-11-20 (the Record's
   "Decided for 4.3b").
 - **4.3c, #0-277:** "Docker for the dispatcher" (an analysis and the owner's choice first, then `provision.sh`) and the
@@ -366,7 +366,7 @@ Split on 2026-11-20 (the owner's choice A), one `factory` pull request each, in 
   dispatcher passes the open PRs as a file, a change to `next-item.sh`'s arguments).
 
 **Record (4.3, in progress: split 2026-11-20, PR #665; 4.3a done 2026-11-20, `factory` PR #15; 4.3b decided with the
-owner 2026-11-20, before its code).**
+owner 2026-11-20, before its code, and done the same day, `factory` PR #16).**
 - **Done:** the split into #0-275..#0-278 (above), in an order where each part is reviewed on its own and the first two
   need neither Docker nor the VM; #0-273 first (dev-token on the shared checks), so 4.3b changes one API with two
   callers rather than leaving a third copy.
@@ -487,11 +487,60 @@ owner 2026-11-20, before its code).**
       recorded chain, each `Factory-Agent` the agent of the call recorded for it.
     What a process in the container changes in the tree before a commit is still that call's work: attribution is the
     dispatcher's, the content is the container's, as before.
-- **Not done:** 4.3b, 4.3c, 4.3d; and, from 4.3a's review, `taskImage` bounded, symlinks under the adapter's paths, a
+- **Done in 4.3b (`factory` PR #16, merge `3c588db3`, head `fd6d933f`; five review rounds, the last all APPROVE;
+  219 tests, on CI's git 2.56.1 and, as an ordinary user, on Ubuntu 24.04's git 2.43.0, the VM's; 65 mutations, 64
+  caught, 1 equivalent):** the push-side decisions of "Decided for 4.3b" above, as decided (those for 4.4 and 4.5,
+  the task's own repository and the trace, are carried in 4.4's "Carried from 4.3b's decisions"):
+  - `src/git/run-git.mjs`: the one starter of git, `/usr/bin/git` by its full path, `GIT_DIR` given (but for
+    `git init --bare <path>`, which makes it), no hooks, fsmonitor, credential helper or commit-graph,
+    `protocol.allow=never`, no system or global config, output and time bounded; a static test holds that no other
+    module starts git, and none starts `flock` but `lock.mjs`;
+  - `src/process/child-env.mjs` (`childEnv`): every child's environment from an allowlist; a static test holds every
+    `node:child_process` call of `src/` to it;
+  - `src/git/bundle.mjs`: one reader of bundles, its header parsed by the dispatcher (exactly one prerequisite, the
+    commit given, and one ref at the sha given), the bundle's own objects through `git index-pack --strict`, the ref
+    descending from the prerequisite (`merge-base --is-ancestor`); 4.4 reuses it with the recorded head;
+  - `src/git/config-allowlist.mjs`: the push repository's config equal to a reference `git init --bare`'s by the same
+    git, keys and values as a multiset, checked after init and again before the token is asked for;
+  - `src/github/push.mjs` (`pushTask`): a fresh push repository per push under `tasks/<runId>/push/`, removed after
+    any end; its alternates onto `FACTORY_REPO_DIR`, whose `objects`, `objects/info` and `objects/pack` must be the
+    dispatcher's, writable by no one else, with no alternates of their own; the refspec the code's;
+  - one rule for the host a credential goes to (`pinnedOrLoopback`, `url-policy.mjs`): GitHub's exact origin, or a
+    test's loopback http; the API (`checkApiUrl`, `check-app --api`, `dev-token --api`, the mint, the token source) and
+    the push (`gitHost`, held in `gitPushCommand` where the token is handed over) both through it;
+  - the repository and the push URL from the adapter; the token source names its repository and `pushTask` refuses
+    another; one rule of a task's branch for the push and the CLI;
+  - its CI: a job `Test (git 2.43)`, the owner's commits (`ubuntu:24.04` pinned by digest, bash, the whole suite as a
+    user that is not root, any git but 2.43 failing it), a required check of `factory`'s `main` since 2026-11-20.
+- **Decided while building 4.3b (2026-11-20, the owner, on the plan and the reviews):**
+  - `check-app --repository <owner/name>`, required, not `--adapter`: on the VM no adapter is a file until 4.3d. Its
+    caller here, `install-builder-app.sh`, passes it when `FACTORY_COMMIT` moves past `factory` PR #16 (#0-277 AC8);
+    until then the VM runs the pinned `check-app`;
+  - `loadBundle` checks that the ref descends from the prerequisite: a header's prerequisite does not stop a pack
+    carrying a history of its own (plan review);
+  - the bundle check is `index-pack --strict` on the bundle's own pack, never `fsckObjects` (git 2.43 lets a bad
+    commit through a fetch of a bundle; shown again by the job) nor `fsck --full` (it walks `alternates`);
+  - the API's host was pinned too (review round 4: the verifier refuted the claim that `checkApiUrl` took only
+    GitHub's; it took any https host, so `--api` could send the app's JWT anywhere, a fault older than this step);
+  - the tests on git 2.43 run as an ordinary user (root ignores a directory's mode); no test is skipped there;
+  - Docker Hub (the job's image) and Ubuntu's archive (its git, through apt's signed index) are sources of
+    `factory`'s CI, accepted by the owner (review round 4's `NEEDS_HUMAN`), held in ADR-0060's Consequences.
+- **ADRs changed (4.3b):** ADR-0060 D7 amended before the code (#0-276, PR #668); ADR-0060's Consequences amended by
+  this step's closing PR (the new sources of `factory`'s CI).
+- **Not done:** 4.3c, 4.3d; and, from 4.3a's review, `taskImage` bounded, symlinks under the adapter's paths, a
   reason without GitHub's text, resuming by `runId` or one running task at most, a blocked task counted by the
   breaker, a retried mint's leftover token, a script whose last segment is `.`, the item-id format tied to the
   queue's kind, and a check that `gate.schema.json` matches what `run-tests.sh` prints.
-- **Why not:** one item at a time (#0-276 next); `taskImage` is read first by 4.3c (#0-277), the adapter's paths by
+- **Not done, from 4.3b's reviews:** a refused bundle's objects left in the repository it was read into; `repoDir`
+  bound to the adapter's `repository`; `FACTORY_REPO_DIR`'s loose-object directories and pack files checked, and who
+  may write it; `check-app` taking the repository from the adapter once the adapter is a file; the host checked in
+  `app-token.mjs`'s request helper, with redirects refused, and `dev-token`'s `mint` and `revokeQuietly` through it;
+  the static scans' named bounds and their missing functions; the git 2.43 job's floor of tests; its uid comment;
+  one update path for the `ubuntu:24.04` digest kept in two places.
+- **Why not, from 4.3b's reviews:** the first two matter only for 4.4's long-lived task repository and its caller
+  (4.4, "Carried from 4.3b's decisions"); who may write `FACTORY_REPO_DIR` and the adapter's file are 4.3d's (#0-278
+  AC7, AC8); the rest is defence in depth behind controls that hold today, an item of its own (#0-281).
+- **Why not:** one item at a time (#0-277 next); `taskImage` is read first by 4.3c (#0-277), the adapter's paths by
   4.3d (#0-278), the reason, the resume, the breaker's count, the mint's retries and the running of a command by 4.4's
   flow (its section, "Carried from 4.3a's review"); the item id belongs to the `backlog-md` queue, so it moves with
   the queue's kind before a second product or stage 7 (`migration.md`, stage 7's gap); the gate's schema and its
@@ -523,7 +572,11 @@ owner 2026-11-20, before its code).**
 - **Carried from 4.3b's decisions (2026-11-20), to state in this step's item:** the task's own repository under
   `$FACTORY_STATE_DIR` (4.3's "Decided for 4.3b": the one way in from the container) is new here: how it gets the
   base's objects for the first call's bundle (`alternates` onto `FACTORY_REPO_DIR`, as the push repository's), that
-  its config is the dispatcher's and held as the push repository's is, and when it is removed.
+  its config is the dispatcher's and held as the push repository's is, and when it is removed; whether a refused
+  bundle's objects may stay in it (`loadBundle` indexes the pack before the ref and ancestry checks: harmless for the
+  push repository, which is removed) or a scratch repository reads it first; `pushTask`'s first production caller
+  binds `repoDir` to the adapter's `repository` (a commit's parent may be anywhere in the alternates) and passes no
+  test-only option (the scan's bounds: an options object built elsewhere, a spread, a parameter reassigned).
 - **Carried from 4.3a's review (`factory` PR #15), to build here:** a BLOCKED task's `reason` never carries GitHub's
   text into a pull request; a new task refused while one is `running`, or resume by `runId` (a task killed before its
   branch is recorded can be resumed by neither today); `blockTask` counts the block in `state.json`, so an outage
