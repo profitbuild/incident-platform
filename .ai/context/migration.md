@@ -31,7 +31,7 @@ no item yet.
 ## Where we are
 
 Stages 0 to 3 are done. **Current: stage 4**: 4.1 done (2026-11-18, with #0-268, #0-269 and #0-270 on 2026-11-19);
-4.2 done (4.2a 2026-11-19, 4.2b 2026-11-20); 4.3 in progress, split into #0-275..#0-278: 4.3a (#0-275) done 2026-11-20 by `factory` PR #15; 4.3b (#0-276) done 2026-11-20 by `factory` PR #16; 4.3c (#0-277) next. Each
+4.2 done (4.2a 2026-11-19, 4.2b 2026-11-20); 4.3 in progress, split into #0-275..#0-278: 4.3a (#0-275) done 2026-11-20 by `factory` PR #15; 4.3b (#0-276) done 2026-11-20 by `factory` PR #16; 4.3c (#0-277) next, its way decided 2026-11-20 (ADR-0062: `docker` and `devcontainer` as `factory` through one sudo rule, the clone as a bundle into a work directory of `factory`'s). Each
 step's record: `migration/stage-4.md`.
 
 ## Stages
@@ -45,7 +45,7 @@ ADR-0055 merged (PR #620), Accepted 2026-11-13.
 ### 2. Build VM, provisioned as code, running today's devcontainer — DONE
 #0-238 (PR #627 … #650, ADR-0056, ADR-0057; exit: 3 autopilot runs, #0-58, #0-25, #0-23). Carried and narrowed, not
 closed: #0-116 (the rest is stage C), #0-202 (settled for the VM), #0-225 (the VM's clone holds no owner secret; the
-task container is stage 4). The Mac devcontainer stays the rollback.
+task container is stage 4). The Mac devcontainer stays the owner's own (stage 2's rollback); stage 4's rollback, today's autopilot in the VM's devcontainer, shares the VM by time with the dispatcher from 4.3c (ADR-0062 point 5).
 - Follow-ups, open: #0-239 (the VM scripts' repeatable test; stage 4 moves the scripts), #0-242, #0-243 (one parser of
   the allow-list, before stage 4 moves `scripts/factory-admin/`), #0-244, #0-249 (pin Claude Code in the image).
 
@@ -75,7 +75,7 @@ app as a PR's author, `audit-data.sh` reading it, and the app's Issues permissio
 (split on 2026-11-20: #0-275 the foundation, with #0-261; #0-276 the push from a push repository the dispatcher owns; #0-277 Docker and the
 task container; #0-278 the product's code from `main`; #0-273, done 2026-11-20 by `factory` PR #14, moved dev-token onto
 the shared checks first; #0-280, from 4.3a's review, the gate's schema checked against `run-tests.sh` before 4.4 reads
-a gate's answer; #0-281, from 4.3b's review, the credential checks held at the call that sends them and the scans' bounds), 4.4 the control flow ported with its tests, 4.5 push, PR, trailers and trace (#0-212, #0-204), 4.6 the
+a gate's answer; #0-281, from 4.3b's review, the credential checks held at the call that sends them and the scans' bounds; #0-282, incident-platform's task configuration for the container, with 4.3c (ADR-0062 point 4)), 4.4 the control flow ported with its tests, 4.5 push, PR, trailers and trace (#0-212, #0-204), 4.6 the
 credential proxy and `stream-json` transcripts, 4.7 the adapter, the switch and the three runs of the exit.
 ADR-0055: the container has no token; push, PR and commit trailers by the dispatcher; builder-app (never on `factory`);
 the gate contract, incident-platform's adapter first. Exit: 3 PRs opened by it.

@@ -140,7 +140,7 @@ and `--plugin-dir` (code.claude.com/docs/en/headless.md, cli-reference.md).
   by stage 4's exit, not hardened.
 - **Amends ADR-0055** (its "Local first, portable" decision and stage 4's row): until stage 7 the dispatcher keeps the
   state of its tasks in `$FACTORY_STATE_DIR` on the VM (the queue and the PRs stay in GitHub); until stage C the task
-  image is the devcontainer image built on the VM, not one built in CI and pulled from GHCR; the per-call summary is
+  image is the devcontainer image built on the VM (from the product's task configuration: ADR-0062 point 6), not one built in CI and pulled from GHCR; the per-call summary is
   made from the `stream-json` records, the successor of #0-205's `run-summary.sh`, which reads files Claude Code calls
   internal.
 - ADR-0052 (`FACTORY_BOT_LOGIN`) and ADR-0034 (the ruleset's actors and bypass) are amended when builder-app lands
