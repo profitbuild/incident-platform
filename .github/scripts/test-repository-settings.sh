@@ -344,6 +344,9 @@ tag_ruleset() {
 }
 tag_app_dropped() { tag_ruleset; live 13 'r["bypass_actors"].reject! { |a| a["actor_type"] == "Integration" }'; }
 tag_target_branch() { tag_ruleset; live 13 'r["target"] = "branch"'; }
+# GitHub stores a rule's parameter at its default as no parameter at all: `apply` of #0-272 created `update` with
+# update_allows_fetch_and_merge false and read it back without it, so a file names only what GitHub keeps.
+update_default_dropped() { tag_ruleset; live 13 'r["rules"].find { |x| x["type"] == "update" }.delete("parameters")'; }
 bad_repository() { put .github/repository-settings/repository.json '{ "delete_branch_on_merge": true }'; }
 # --main: main is the first commit (the layout), the pull request a second one. commit <message> commits the case.
 commit() { git -C "$dir" add -A .; git -C "$dir" -c user.name=t -c user.email=t@example.org commit -qm "$1"; }
@@ -428,6 +431,8 @@ MSG="repository\.json must be \{\"settings\"" case_ fail "repository.json withou
 MSG="3 ruleset\(s\).*match \.github/repository-settings/ on o/r\.$" case_ pass "a tag ruleset with an app and a role as bypass, in another order" tag_ruleset
 MSG="tags\.json::ruleset 'tags' differs from GitHub's: bypass_actors: the file says" case_ fail "the app's bypass removed in the UI" tag_app_dropped
 MSG="tags\.json::ruleset 'tags' differs from GitHub's: target: the file says \"tag\", GitHub \"branch\"" case_ fail "a tag ruleset turned into a branch ruleset" tag_target_branch
+MSG="tags\.json::ruleset 'tags' differs from GitHub's: rules\.update\.update_allows_fetch_and_merge: in the file, not on GitHub" \
+    case_ fail "a rule parameter at its default, which GitHub does not keep (backlog #0-272)" update_default_dropped
 MSG="ruleset 'checks' differs from GitHub's: rules\.required_status_checks\.strict_required_status_checks_policy" case_ fail "without --main, the working tree's files" pr_other
 MSG="ruleset 'checks' differs from GitHub's: rules\.required_status_checks\.strict_required_status_checks_policy" ARGS="--main HEAD^1" \
     case_ fail "--main, a pull request that changes the files: its own" pr_settings
