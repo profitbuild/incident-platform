@@ -160,6 +160,7 @@ resolvable.
 | 0-268 | `profitbuild/factory` scans every commit for secrets before a merge (a required check) and keeps its devcontainer's Node equal to `.node-version`; `check-factory-copies.rb` in Lint Workflows here compares every copy of this repository's controls there (pins, actions' SHAs, scripts, setup-node, zizmor.yml, .node-version, the denies both ways), this repository leading: a PR fails only on a difference it brings (ADR-0061); details in [the section](#0-268-factorys-ci-is-a-copy-of-incident-platforms-with-no-drift-check-and-without-part-of-its-controls) | PR #659; `factory` PR #5 |
 | 0-270 | `/review factory#<n> <digits>` reviews a pull request of `profitbuild/factory` from files GitHub's API serves (`scripts/factory-admin/fetch-factory-pr.sh`: pinned to one head, every path checked, files as `<path>.pr`, the pull request's CI as its gate), and `factory.md` applies to every such review (ADR-0038 amended); details in [the section](#0-270-the-review-panel-cannot-review-a-change-to-factory) | PR #660 |
 | 0-271 | builder-app's token is minted by `factory` code that checks its scope before use (settings from the environment via `node --env-file`, the key's file checks, `checked-token.mjs`, the token cache, a push limited to https with an allowlisted environment, `check-app`; step 4.2a); details in [the section](#0-271-builder-apps-token-is-minted-by-code-that-checks-its-scope-step-42a) | factory PR #9; PR #662 |
+| 0-272 | builder-app `profitbuild-builder` exists, its key has one copy on the build VM for the user `dispatcher` (under the VM's egress chain, its home 700, `install-builder-app.sh`, `check-app` passed), and rulesets hold it to `factory/**` and `factory/**` to it (`branches`, `renovate`, `tags`, `tag-creation`, `factory`, the writers); every app of the organization is a file (`apps/`, Renovate narrowed); step 4.2b; details in [the section](#0-272-builder-app-exists-its-key-is-the-vms-and-it-can-write-only-its-own-branches-step-42b) | PR #663; PR #664 |
 
 Items completed before `BACKLOG.md` existed are not listed.
 
@@ -4160,3 +4161,189 @@ AC5. `stage-4.md` "4.2" describes what was built.
     repository, and `metadata: read`.
 - **Kept:** commit `b5569e9` of `factory` is red on its own: a staged rename went in without its imports, and the next
   commit fixes it. The owner kept it rather than force-push, and it is recorded in the PR.
+
+### 0-272. builder-app exists, its key is the VM's, and it can write only its own branches (step 4.2b)
+
+**Type:** ci · **Priority:** High · **Status:** Done, PR #664 (2026-11-20) (migration stage 4, step 4.2b; ADR-0055,
+ADR-0060 D3; pull request 1 merged 2026-11-20, PR #663; the app created that day). Split from 4.2 by the owner on 2026-11-19; the
+rulesets were added by the same analysis.
+**Autopilot:** human-only · **Risk:** high · **Complexity:** medium · **Depends on:** #0-271
+**Touches:** factory (scripts/factory-admin/build-vm/provision.sh, install-builder-app.sh and verify-pins.sh,
+.github/repository-settings/ (rulesets/, repository.json, apps/), .github/scripts/repository-settings.rb,
+check-factory-copies.rb and their tests, a comment in .github/workflows/ci.yml, a step in
+.github/workflows/factory-guards.yml and .github/scripts/test-install-builder-app.sh: owner-only), decisions (ADR-0034
+amended: the rulesets beyond `main`, their bypass actors, the probes' findings, the writers, the organization's app
+installations, the wider `check`; .ai/decisions/README.md), root (README.md
+"Infrastructure Hardening", .ai/context/migration/stage-4.md "4.2" and "4.3", .ai/context/migration.md,
+docs/ai-factory.md "Build VM"), the repository `profitbuild/factory` (`BUILDER_PERMISSIONS` as a JSON file, a draft pull request from its container), the owner's
+settings on GitHub (the app, its installation, the rulesets, by `repository-settings.rb plan`/`apply`)
+
+**Problem.** With Contents write, builder-app can push to every branch that `main`'s ruleset does not cover, which
+today is every other branch (`.github/repository-settings/rulesets/` holds only `main`). It could create, force-push
+or delete the owner's working branches, the bot's and Renovate's. incident-platform has no ruleset on tags, so the app
+could also create, move or delete any tag. `main` itself waits for the owner's review of its last push. Stage 10's
+auto-merge takes that review away from part of the PRs, so whatever else the app can write must be closed before its
+key exists: a branch that another, approved PR takes its code from is a way to `main`.
+
+**Known before the work (a probe, 2026-11-19).** GitHub's documentation does not say whether a ruleset's bypass for a
+repository role covers a GitHub App, so it was tried on `factory`. The setup: a temporary ruleset 27640580 on
+`refs/heads/probe/**` with the rules creation, update and deletion, and the dev app `profitbuild-factory-dev` (its
+installation token holds Contents write).
+
+| Bypass of the ruleset | Who pushed | Result |
+|---|---|---|
+| role Write only | the dev app | refused: `GH013 … Cannot create ref due to creations being restricted` |
+| role Write only | the owner (admin) | passed by bypass |
+| role Write and the dev app as `Integration` | the dev app | passed by bypass (the positive control) |
+
+What the three rows show:
+- a role's bypass does not cover an app: an app passes only as an `Integration` of its own;
+- a role's bypass covers the roles above it;
+- the rules hold against an app's token.
+
+The ruleset was deleted afterwards and no `probe/` branch is left. So a ruleset with a bypass for the role Write lets
+the owner and the bot account through, and builder-app, not listed, is refused. Renovate is an app, so it must be
+listed as an `Integration`.
+
+**Known since the analysis (2026-11-19; owner's choices A2, C2, D2, E2, F2, G2).** Two more probes on `factory`, both
+cleaned up:
+- **P1, `delete_branch_on_merge` under a `deletion` rule:** with no bypass, the head branch of the owner's merge stayed
+  (60 s); with the bypass "role Write" it was deleted. GitHub deletes it as the one who merged.
+- **P2, an app's approval:** on a pull request to a branch whose ruleset asked one approval and no code owner's, the
+  dev app's approval made it APPROVED and mergeable. Only a code owner's review (or a required reviewer) stops that.
+
+**Work, in two pull requests** (the confinement first, so the key never exists without it):
+
+*Pull request 1, the confinement (no app needed):*
+- **Four rulesets**, files in `.github/repository-settings/rulesets/`, bypass mode `always`:
+  - **`branches`:** every branch but `main`, `factory/**` and `renovate/**`; creation, update, deletion,
+    non_fast_forward. Bypass: the role Write (the owner and the bot account).
+  - **`renovate`:** `renovate/**`, the same rules. Bypass: the role Write and the Renovate app (`Integration` 2740).
+    Renovate gets its own namespace instead of the role's reach over every branch (C2).
+  - **`tags`:** update, deletion, non_fast_forward, no bypass; **`tag-creation`:** creation, the admin role. As
+    `factory`'s: a ruleset's bypass applies to all its rules (D2).
+- **`repository.json` lists the writers** (Write or Maintain, today `lukaszplawiakbot`), compared by `check` with an
+  admin token as the admins are: the role Write's bypass names a role, so a new writer would bypass `branches`.
+- ADR-0034 amended and retitled; README "Infrastructure Hardening".
+- The owner runs `repository-settings.rb plan`, then `apply` from the branch just before the merge (ADR-0034).
+
+*Pull request 2, the app, the key and the VM:*
+- **The owner creates the GitHub App `profitbuild-builder`:**
+  - no webhook;
+  - Contents read and write, Pull requests read and write, Metadata read; nothing else (no Issues until 4.5, no
+    Checks, Statuses, Workflows or Administration);
+  - installed on incident-platform alone.
+- **`provision.sh`** adds a user `dispatcher` with an ordinary uid, no subordinate range, no login shell (H2 of the
+  analysis of pull request 2, 2026-11-20: the VM's egress chain takes every uid from 1000 up, so its traffic passes
+  it; a system uid would reach any host): its home mode 700, `/home/dispatcher/.config/factory` mode 700, both its
+  own; `factory` cannot read them. It clones `profitbuild/factory` as `dispatcher` at a commit pinned in
+  `provision.sh` (I1; `verify-pins.sh` checks it is on `factory`'s `main`), until 4.7's tag, so `check-app` has code
+  to run; a boot whose clone is not a clean checkout of the pin is refused.
+- **The key has one copy, on the VM (E2).** The owner generates it in the app's settings and sends it on stdin
+  straight into the file (`limactl shell factory-build sudo -u dispatcher sh -c 'umask 077; cat > …'`), never through
+  `/tmp` (`limactl copy` lands there with the default umask, readable by `factory` for a moment), and deletes the
+  download. A new VM (`delete.sh`, `create.sh`) gets a new key and the old one is deleted on GitHub, so recreating the
+  VM is the rotation; otherwise a second key is added, the dispatcher switched and the old key deleted once a
+  quarter, and at once on any doubt.
+- **`build-vm/install-builder-app.sh`** (on the Mac, the owner's): writes the key as above and the ids into `.../env`,
+  both mode 600, checks the key's digest, the modes and owners, and runs `check-app` as `dispatcher`; it deletes the
+  download only once all of it passed.
+- **Every app installed on the organization is a file** (J1, after probe P3 showed the owner's token lists the
+  installations, 2026-11-20): `.github/repository-settings/apps/<slug>.json`, checked by `repository-settings.rb`
+  (an installation no file names fails, as does any difference). Writing them found Renovate on every repository,
+  `factory` included; the owner narrowed it to incident-platform that day.
+- **One source for the permissions (G2):** `factory` moves `BUILDER_PERMISSIONS` into a JSON file that
+  `builder-token.mjs` imports; incident-platform's `.github/repository-settings/apps/profitbuild-builder.json` is what
+  `repository-settings.rb` checks the installation against, and `check-factory-copies.rb` fails when the two differ.
+- **A fifth ruleset, `factory`,** on `factory/**`: creation, update, deletion, non_fast_forward; bypass builder-app as
+  `Integration` (its id, known once the app exists) and the admin role, `always`. Without it the confinement holds one
+  way only: builder-app writes only `factory/**`, but every actor with Contents write (the bot account, Renovate, a
+  later app) may create, force-push or delete builder-app's branches, which 4.3 fetches into its trusted clone (review
+  of pull request 1, round 1, security).
+- **Moved to 4.3 (F2):** `dispatcher`'s access to `factory`'s rootless Docker. Nothing in 4.2b uses or tests it, and
+  `/run/user/<uid>` is a tmpfs recreated at every boot, so an ACL there must be set at every start of the daemon,
+  whose unit `factory` itself can change (ADR-0057).
+
+**Acceptance criteria.**
+*Pull request 1:*
+AC1. The four rulesets are files and on GitHub; the owner's `repository-settings.rb check` passes on `main` after the
+     merge.
+AC2. As the owner and as the bot account: a push to a branch of their own still works, and a merged pull request's
+     head branch is still deleted automatically (`delete_branch_on_merge`).
+AC3. `repository-settings.rb check` fails when a ruleset or the writers differ from the files (tests).
+AC4. ADR-0034 is amended for the rulesets, their bypass actors, the probes' findings and the writers (ADR-0060's
+     Consequences, as amended on 2026-11-19, put that part of ADR-0034 here), and its title changed to match: it named
+     one ruleset guarding `main` (review of the plan, round 2).
+
+*Pull request 2:*
+AC5. The app exists with exactly the permissions above and is installed on incident-platform alone; `check-app` (#0-271)
+     run as `dispatcher` on the VM passes, its 404 for `factory` included.
+AC6. As builder-app, with real tokens, recorded in the Result:
+     - a push to a branch outside `factory/**` is refused by GitHub (creation, update, deletion and force push);
+     - a push to `factory/<x>` is accepted;
+     - the creation of a tag is refused;
+     - as the bot account, a push to `factory/<x>` is refused (the `factory` ruleset), and the owner's passes.
+AC7. As `factory`, the user of the task containers, on the VM: reading `/home/dispatcher` is refused.
+AC8. On the VM, set by `provision.sh` and `install-builder-app.sh` and checked after them, the result in the Result:
+     - the env file and the key are mode 600;
+     - `/home/dispatcher/.config/factory` is mode 700;
+     - all are owned by `dispatcher`.
+
+     The env file is trusted as code (it can set `NODE_OPTIONS`, #0-271), and 4.2a's code cannot check it in time,
+     since Node loads it first (review of `factory` PR #9, round 3).
+AC9. One source for builder-app's permissions (G2 above): `repository-settings.rb check` fails when the installation
+     differs from `apps/profitbuild-builder.json`, or when an app is installed on the organization with no file, and
+     `check-factory-copies.rb` when that file's permissions differ from `factory`'s `builder-permissions.json` (tests);
+     not a second hand-kept copy (review of `factory` PR #9, arc-a01b). Which repositories an installation's selection
+     holds is not compared: GitHub lists them only to an app's or a user's app token, not to `gh`'s (probe P4,
+     2026-11-20: 403, also with `read:user`), so README names it as a gap and `check-app` proves builder-app's.
+AC10. README "Infrastructure Hardening" names the controls added and the gaps left:
+     - the key at rest is protected by the Mac's FileVault, since the VM's disk is a file under `~/.lima`;
+     - root on the VM reads the key;
+     - `dispatcher`'s traffic passes the egress chain of `factory`, whose list is wider than it needs (#0-274);
+     - builder-app's Pull requests write lets it edit, close and dismiss reviews on any pull request;
+     - a secret store waits for stage C.
+
+**Result so far.**
+- *Pull request 1* (PR #663, merged 2026-11-20, merge `36a6a375`): the four rulesets and the writers. `apply`, run by
+  the owner from the branch, created the four, then read them back: GitHub keeps the `update` rule without
+  `update_allows_fetch_and_merge` at its default `false`, so the files name the rule alone (commit `de2fd97b`, a test
+  case). AC1: the owner's `check` on `main` after the merge: 5 rulesets, the admins, the writers and the secrets match.
+  AC3: `test-repository-settings.sh`. AC4: ADR-0034 amended and retitled. AC2 so far: the owner's push to the
+  pull request's branch passed by the bypass (`Bypassed rule violations … Cannot update this protected ref`), and the
+  owner's merge deleted the head branch; the bot account created and deleted a branch of its own on 2026-11-20
+  (`probe/0-272-bot`, the repository's activity log names `lukaszplawiakbot`). AC2 met.
+- *`factory` PR #13* (merged 2026-11-20, merge `3888a900`): `BUILDER_PERMISSIONS` read from
+  `dispatcher/src/github/builder-permissions.json` (G2); reviewed `/review factory#13 127`, then `7`.
+- *The app* (2026-11-20): `profitbuild-builder`, app id 5844656, installation 183942865; selected, Contents and Pull
+  requests write, Metadata read, no event, read back through `orgs/profitbuild/installations` (probe P3, which also
+  showed Renovate's app id, 2740, and its installation on every repository).
+- *Pull request 2, live* (2026-11-20, from its branch, before the merge):
+  - `verify-pins.sh`: six `verified:` lines, the sixth `profitbuild/factory main contains 3888a900… (identical)`.
+  - The VM recreated (`delete.sh`, `create.sh`). The first `create.sh` failed: the clone was made `--no-checkout`,
+    and with the pin at `main`'s tip the checkout was skipped, so the tree was empty and the clean-checkout check
+    refused the boot. Fixed (the checkout runs every time), tried on a scratch VM, then `create.sh` passed: the
+    boundary holds after creation and a reboot, `dispatcher at factory 3888a900…`; `dispatcher` uid 1001, its own
+    group alone, no subordinate range, home and `.config/factory` 700, the clone at the pin and clean.
+  - AC5, AC8: the owner generated the key and ran `install-builder-app.sh` in a terminal of their own (a download
+    carries `com.apple.macl`: neither Claude Code's `!` nor a typed path could read it, only a path dragged from
+    Finder; `head -c 0`, which macOS's head refuses, was fixed on the way). Digests equal; home and `.config/factory`
+    700, env and key 600, all `dispatcher`'s; `check-app` as `dispatcher`: the key readable by uid 1001 alone, the
+    installation of app 5844656 holds exactly the three permissions, the token narrowed to incident-platform reaches
+    only it and holds them, no installation on `factory` (404), the token revoked; the download deleted.
+  - The ruleset `factory` applied (`plan`: that one ruleset and nothing else; `check` after `apply`: 6 rulesets, the
+    admins, the writers, 3 apps and the secrets match).
+  - AC6, as builder-app through GitHub's git refs API (a one-off script run as `dispatcher` with factory's
+    `mintBuilderToken`; the activity log names `profitbuild-builder[bot]`): creating a branch outside `factory/**`
+    422, fast-forwarding the owner's branch 422, deleting it 422, creating a tag 422; creating `factory/probe-0-272`
+    201, force-moving it (not a fast-forward) 200, deleting it 204. A first run that force-moved branches to `main`'s
+    parent got 403 instead, `Resource not accessible by integration`: that move changed `.github/workflows/ci.yml`,
+    and an app without Workflows permission moves no ref across a change of a workflow, its own `factory/**`
+    included. As the bot account: creating `factory/probe-bot` was refused (exit 1, no creation in the activity log).
+    AC6 met.
+  - AC7: as `factory`, `ls /home/dispatcher` is `Permission denied`. And `dispatcher`'s egress: `api.github.com` 200,
+    `example.com` refused (the VM's chain takes it, H2).
+  - Every probe branch deleted afterwards; none and no tag is left.
+  - The VM was made from `provision.sh` before review round 3 of this pull request, which then made its clean-checkout
+    check read each git answer before judging it (a failing `git status` would have read as clean). The VM differs
+    from `main`'s `provision.sh` in that failure path only; it is recreated at the next move of the `factory` pin.
