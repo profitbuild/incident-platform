@@ -3844,7 +3844,7 @@ way `dispatcher` controls `factory`'s containers, never the reverse. Decided 202
 - `factory`: one starter of container commands (`sudo -n -u factory`, `childEnv`, no secret in an argument); the work
   directory by one-shot helpers (made, filled from the base's bundle with `git clone -b base`, `chown -R -h`, removed
   whole); the product's task configuration read from the base as JSONC, checked against the closed list, the override
-  written through the helper's stdin and `devcontainer up --override-config` with the dispatcher's mounts; the image's
+  written through the helper's stdin and `devcontainer up --config` with the dispatcher's mounts; the image's
   ID recorded in `task.json`; every call under `timeout` in the container, `docker kill` by the label past it, the task
   BLOCKED; refusal to start while a running container carries `factory.rollback`, checked again after the task's
   labelled network exists and before the task container is made; `cli.mjs sweep`, the sweep alone, named in every
@@ -4079,7 +4079,7 @@ per-task `~/.claude` volume in the override, one test class rather than `run-tes
 `factory`'s home with `.devcontainer/task.json` written into it, the clone given to `dev`'s mapped uid as `create.sh`
 does, an override holding the dispatcher's fields (`updateRemoteUserUID: false`, `containerUser: root`,
 `workspaceMount`, `workspaceFolder`, an `~/.m2` volume), `devcontainer up --override-config --id-label factory.task=...`
-as `factory`:
+as `factory` (the dispatcher's own call is `--config` since #0-277's first trial, ADR-0062 point 4):
 - built and started; `postStartCommand`'s firewall up ("139 allowed networks; IPv6 closed");
 - the container: `CapAdd` `NET_ADMIN` and `NET_RAW`, `ExtraHosts` `host.docker.internal:host-gateway`, mounts the
   workspace, the `~/.m2` volume and the feature's Docker socket only; no credential volume of the owner's

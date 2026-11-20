@@ -63,7 +63,7 @@ FACTORY_USER=factory
 # create.sh), as every change here: Lima reads this file when it creates the VM.
 DISPATCHER_USER=dispatcher
 FACTORY_REPO_URL=https://github.com/profitbuild/factory.git
-FACTORY_COMMIT=c5fe32646b99d49fe4bfb7dab4d4e2b1f73372d1  # gitleaks:allow: a public commit id of profitbuild/factory, no secret
+FACTORY_COMMIT=648723d3f0816b79b2777c06bfe45fd9291f493d  # gitleaks:allow: a public commit id of profitbuild/factory, no secret
 # The one checkout of factory on the VM (ADR-0062 point 3): root's, outside every user's home, so `factory`'s daemon can
 # mount it read-only into a task container and neither `factory` nor `dispatcher` can write it; the dispatcher runs
 # from it too (backlog #0-277).
