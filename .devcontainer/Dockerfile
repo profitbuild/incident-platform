@@ -6,6 +6,8 @@
 # so Testcontainers can start Postgres/Kafka on it — whoever controls it can start a container that mounts any directory Docker Desktop
 # shares. Restrict Docker Desktop's file sharing to the projects directory (docs/ai-factory.md, Setup).
 # Arch: builds natively on arm64 (Apple silicon) and amd64.
+# It also builds the dispatcher's task container (task.json beside it, backlog #0-282, ADR-0062): a change here, or in
+# init-firewall.sh, changes every task too.
 # ============================================================
 FROM eclipse-temurin:21-jdk-noble
 

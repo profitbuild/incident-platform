@@ -455,7 +455,10 @@ The agents' instructions are not a boundary; these are, each with its limit:
 Agent models are full ids in `.claude/agents/*.md`; Claude Code is pinned to the version the
 devcontainer image was built with (`DISABLE_AUTOUPDATER=1`). The preflight refuses one older than 2.1.295, the
 first that honours the hooks' `onFailure: "block"` (an older one ignores the field silently, ADR-0039). The devcontainer's docker-outside-of-docker
-feature is pinned by digest in `.devcontainer/devcontainer-lock.json` (`devcontainer upgrade` moves it).
+feature is pinned by digest in `.devcontainer/devcontainer-lock.json` (`devcontainer upgrade` moves it; the
+dispatcher's task container, `.devcontainer/task.json`, is held to the same lockfile, and once #0-277's check exists a
+new feature version will be refused there until the factory's list holds it: move the factory's list and
+`FACTORY_COMMIT` first, this lockfile after, ADR-0062 point 4).
 Treat an upgrade of any of them like a dependency
 upgrade: change it on purpose, then run a few seeded defects and compare `results.md` before trusting it.
 

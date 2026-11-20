@@ -590,6 +590,14 @@ owner 2026-11-20, before its code, and done the same day, `factory` PR #16).**
   - **The dispatcher runs from the root-owned checkout:** its clone in its home retired, `install-builder-app.sh`'s
     `check-app` path moved, the checkout's fetch root's (stated in `provision.sh`).
   - **`~/.m2` shared in v0**, as proposed above.
+- **Tried for 4.3c before its code (2026-11-20, #0-282):** incident-platform's task configuration
+  (`.devcontainer/task.json`) brought up on the VM as `factory` with an override of the dispatcher's fields (no
+  `/opt/factory`, no per-task `~/.claude`): built, firewall up, only the workspace, `~/.m2` and the feature's socket
+  mounted, the configuration directory's lockfile used under `--frozen-lockfile`, one Testcontainers test class green.
+  Found: the image's `devcontainer.metadata` label carries the listed feature's whole entry (`id`, `securityOpt`,
+  `entrypoint`, the socket mount, `customizations`); ADR-0062 point 4 amended so #0-277's check accepts exactly the
+  entry the factory's list holds for that id and lockfile digest, and nothing else (#0-282 "Tried on the VM"). The
+  image's sudo rule for the firewall and its unpinned Claude Code reach every task too: #0-283.
 - **Not done:** 4.3c, 4.3d; and, from 4.3a's review, `taskImage` bounded, symlinks under the adapter's paths, a
   reason without GitHub's text, resuming by `runId` or one running task at most, a blocked task counted by the
   breaker, a retried mint's leftover token, a script whose last segment is `.`, the item-id format tied to the

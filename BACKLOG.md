@@ -175,6 +175,7 @@ Code, Javadoc, config comments and commits reference items as `backlog #N`.
 | [0-280](#0-280-the-gates-schema-in-factory-and-run-testssh-here-are-checked-against-each-other-by-nothing) | The gate's schema in `factory` and `run-tests.sh` here are checked against each other by nothing | ci | Medium | Open |
 | [0-281](#0-281-the-dispatchers-credential-checks-are-held-at-the-call-that-sends-them-and-its-static-scans-close-their-bounds) | The dispatcher's credential checks are held at the call that sends them, and its static scans close their bounds | ci | Medium | Open |
 | [0-282](#0-282-incident-platform-ships-a-task-configuration-for-the-dispatchers-container) | incident-platform ships a task configuration for the dispatcher's container | ci | High | Open |
+| [0-283](#0-283-the-devcontainer-image-lets-dev-widen-its-firewall-and-installs-claude-code-unpinned) | The devcontainer image lets `dev` widen its firewall and installs Claude Code unpinned | ci | Medium | Open |
 | [0-133](#0-133-incidentresolvedevent-carries-no-openedat) | `IncidentResolvedEvent` carries no `openedAt` | tech-debt | Low | Open |
 | [0-134](#0-134-diff-cover-is-installed-by-version-without-hashes) | `diff-cover` is installed by version, without hashes | ci | Low | Open |
 | [0-135](#0-135-kubectl-in-ci-is-downloaded-unverified) | kubectl in CI is downloaded unverified | ci | Low | Open |
@@ -3845,7 +3846,12 @@ way `dispatcher` controls `factory`'s containers, never the reverse. Decided 202
   refusal; at the end and at the next run's start, every container, then network, then volume of the daemon
   but `factory-dispatcher-m2` (a killed run's leftovers, credential and anonymous volumes included) and the work
   directory removed, the result checked; after the build, the image's `devcontainer.metadata` label held to the
-  same list; the container and
+  same list, a listed feature's entry equal, whole and value by value, to the entry the factory's list holds for its
+  id and the lockfile's digest (`integrity`; ADR-0062 point 4: at `docker-outside-of-docker` 1.10.1 `id`,
+  `securityOpt`, `entrypoint`, the socket mount and `customizations`), the values taken from the feature's artifact
+  at that digest, never from a label built on the daemon; a feature version the list does not hold refused, naming
+  the id, the digest and the differing keys (the owner's path: the factory's list and `FACTORY_COMMIT` first, the
+  product's lockfile after); the container and
   every process started in it get their environment from #0-276's allowlisted builder, never `process.env`.
 - The task configuration itself is the product's: incident-platform's is #0-282.
 
@@ -3884,7 +3890,9 @@ AC9. No `docker`, `devcontainer` or container command runs as `dispatcher`: ever
      task configuration with a field or value off ADR-0062 point 4's list (`initializeCommand`, `mounts`, a `capAdd`
      outside the set, a `containerEnv` key off the list, `build.options`/`args`/`target`, a `${localEnv:...}` or
      `${localWorkspaceFolder}` in any carried string, a feature or option not listed or
-     not at its lockfile digest, a built image whose `devcontainer.metadata` label holds what the list refuses) is
+     not at its lockfile digest, a built image whose `devcontainer.metadata` label holds what the list refuses, a
+     feature's entry there that differs in any value from the list's entry for its id and digest, `customizations`
+     included) is
      refused, and the listed ones are carried (tests, JSONC with comments among them).
 AC10. The dispatcher writes nothing in a directory of `factory`'s and mounts nothing of its own state: the clone
      arrives on a one-shot container's stdin, the commits leave on stdout (tests; on the VM, a planted link in the work
@@ -4026,8 +4034,8 @@ AC6. The scans' named bounds (an options object built elsewhere, a spread, a par
 **Autopilot:** human-only · **Risk:** high · **Complexity:** medium · **Depends on:** built with #0-277 (its AC1 runs
 #0-277's check, #0-277's trial runs this configuration)
 **Touches:** factory (.devcontainer/ (a new task configuration beside the owner's), .factory/adapter.json's
-`taskImage` once it exists, .github/workflows and .github/scripts for AC3's Factory guards test: owner-only), root
-(`stage-4.md` "4.3", `.ai/context/migration.md`)
+`taskImage` once it exists, the headers of `.devcontainer/Dockerfile` and `init-firewall.sh`: owner-only), root
+(`stage-4.md` "4.3", docs/ai-factory.md)
 
 **Problem.** The dispatcher builds and runs each task container from a configuration the product ships for it
 (ADR-0062 point 4). incident-platform's only one, `.devcontainer/devcontainer.json`, is the owner's interactive
@@ -4045,4 +4053,52 @@ no mount, no credential, no `initializeCommand`. The owner's configuration stays
 AC1. The task configuration passes the dispatcher's check of ADR-0062 point 4 (#0-277 AC9's test, run on it).
 AC2. A task container made from it runs the gate (`run-tests.sh`) green on the VM, Testcontainers included, with the
      firewall up (recorded).
-AC3. It holds no mount, no credential and none of the bot's variables (a test in Factory guards).
+AC3 (dropped 2026-11-20, the owner, on the `/research` of this item): a test here that it holds no mount, no
+     credential and none of the bot's variables would be a second, partial copy of the dispatcher's closed list
+     (#0-277 AC9, FAC-A01), which AC1 runs on it; and running `factory`'s check from its clone here is what ADR-0061
+     point 5 forbids.
+
+**Tried on the VM, 2026-11-20** (before the dispatcher's code; narrower than its run: no `/opt/factory` mount and no
+per-task `~/.claude` volume in the override, one test class rather than `run-tests.sh`): a clone of `main` under
+`factory`'s home with `.devcontainer/task.json` written into it, the clone given to `dev`'s mapped uid as `create.sh`
+does, an override holding the dispatcher's fields (`updateRemoteUserUID: false`, `containerUser: root`,
+`workspaceMount`, `workspaceFolder`, an `~/.m2` volume), `devcontainer up --override-config --id-label factory.task=...`
+as `factory`:
+- built and started; `postStartCommand`'s firewall up ("139 allowed networks; IPv6 closed");
+- the container: `CapAdd` `NET_ADMIN` and `NET_RAW`, `ExtraHosts` `host.docker.internal:host-gateway`, mounts the
+  workspace, the `~/.m2` volume and the feature's Docker socket only; no credential volume of the owner's
+  `devcontainer.json` (the override replaces it);
+- `--frozen-lockfile` passed, the only lockfile present `.devcontainer/devcontainer-lock.json` (the feature at
+  1.10.1): the CLI reads the configuration directory's lockfile with an override too;
+- `AuthRepositoryIntegrationTest` (Testcontainers' Postgres, through the socket) passed, exit 0 (the test count was
+  not captured: the report was read after the run's directory was gone). AC2 stays open: `run-tests.sh` on the
+  dispatcher's own override;
+- the built image's `devcontainer.metadata` label carries, besides the task configuration's fields, the feature's
+  own entry: `id`, `securityOpt: ["label=disable"]`, `entrypoint`, the Docker socket mount (`type: bind`) and
+  `customizations` (a VS Code extension and a setting; read again from the image on review round 2): what #0-277's
+  check of the label must accept, whole and value by value, and nothing else under the feature's id (ADR-0062
+  point 4 as amended).
+Removed after the trial: the container, the volume and the directory; nothing left on the daemon.
+
+### 0-283. The devcontainer image lets `dev` widen its firewall and installs Claude Code unpinned
+
+**Type:** ci · **Priority:** Medium · **Status:** Open (found by the review of #0-282, 2026-11-20).
+**Autopilot:** human-only · **Risk:** medium · **Complexity:** low · **Depends on:** —
+**Touches:** factory (.devcontainer/Dockerfile, .devcontainer/init-firewall.sh, their checks: owner-only), README
+"Infrastructure Hardening"
+
+**Problem.** The image `.devcontainer/Dockerfile` builds is the owner's container and, since #0-282, every task
+container. Two things in it predate that and now reach every task:
+- the sudoers line lets `dev` run `/usr/local/bin/init-firewall.sh` with any arguments, and the script adds each host
+  argument to its allow-list, so code in a container opens a host by `sudo /usr/local/bin/init-firewall.sh <host>`
+  (FAC-S02; on the VM the egress chain still bounds it to the VM's list);
+- Claude Code is installed by `curl -fsSL https://claude.ai/install.sh | bash`, no version or checksum pinned.
+
+**Work.** The sudo rule held to the arguments the owner's container passes (the ntfy host) and none in a task
+container (for example a fixed argument list, or the script ignoring arguments when the task's label is set); Claude
+Code installed at a pinned version with its checksum, bumped as the other pins are.
+
+**Acceptance criteria.**
+AC1. In a task container, `sudo /usr/local/bin/init-firewall.sh <host>` opens no host (a test or a VM trial, recorded).
+AC2. The owner's container still opens its ntfy host.
+AC3. Claude Code's install is pinned by version and checksum, and the pin is checked as the other tools' are.

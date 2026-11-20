@@ -1,4 +1,5 @@
 {
+  // The owner's interactive container. The dispatcher's task container is task.json beside it (backlog #0-282).
   "name": "incident-platform AI factory",
   "build": {
     "dockerfile": "Dockerfile"
