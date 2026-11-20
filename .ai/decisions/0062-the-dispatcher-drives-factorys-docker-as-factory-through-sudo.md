@@ -2,9 +2,13 @@
 
 - **Status:** Accepted (2026-11-20, by the owner; points 2 to 5 and 7 completed on review round 1, points 2, 4, 5, 6 and
   8 on review round 2, points 4 and 5 on review round 3, points 4, 5 and 7 on review round 4, points 5 and 7 on review round 5, the same day, before any code; point 4 amended on #0-282's review, the same day,
-  with what the feature contributes to the image's label); amends ADR-0060's
+  with what the feature contributes to the image's label; points 1, 2, 5 and 8 and two Consequences amended on the
+  review of #0-277's VM part, the same day: the rule's own environment, where the helper's pin lives, the rollback's
+  start on an empty daemon and what it cannot see, the directories made as `dispatcher`; point 4 amended on the review
+  of `factory` PR #18: the dispatcher's mounts given as `runArgs`); amends ADR-0060's
   Consequences on the task image (point 6)
-- **Backlog:** #0-277; point 4 amended on #0-282's review
+- **Backlog:** #0-277; point 4 amended on #0-282's review and on the review of `factory` PR #18; points 1, 2, 5, 8 and
+  the Consequences on the review of #0-277's VM part; their end-state follow-ups #0-284, #0-285
 - **Date:** 2026-11-20
 - **Author:** human (the owner chose the options of a `/research` of #0-277 in an interactive session); written by
   Claude Code
@@ -38,14 +42,20 @@ Two facts the item had not weighed (the `/research` of 2026-11-20):
    with no prompt (`sudo -n`), exactly `/usr/bin/docker` and the pinned `devcontainer` CLI (full paths), with `env_reset` and no
    `setenv`; nothing else, and `factory` has no sudo rule at all. Every such call is `sudo -n -u factory ...`, started
    by one function of the dispatcher with an environment from `childEnv` (#0-276); under `env_reset` the programs get
-   sudo's reset environment and reach the daemon through ADR-0057's `/run/docker.sock` link. What the configuration of
+   sudo's reset environment and reach the daemon through ADR-0057's `/run/docker.sock` link. The rule holds that
+   environment itself (amended on the review of #0-277's VM part): `secure_path` (root's directories; the
+   devcontainer CLI is `#!/usr/bin/env node`), `runcwd=/` (no working directory of the caller's, `-D` refused), and
+   `DOCKER_HOST=unix:///run/docker.sock` from a root-owned `env_file`, `/etc/factory-dispatcher.env`: without it the
+   docker CLI follows the current context of `factory`'s `~/.docker`, which the agent side writes and could point at a
+   daemon that answers the dispatcher's sweep and checks falsely, and the devcontainer CLI takes no `--host` (probed
+   with sudo 1.9.15p5: the caller's `DOCKER_HOST` does not pass). What the configuration of
    an agent or a product names (a CLI plugin, a credential helper) runs as `factory`, inside ADR-0057's boundary. A
    secret is never an argument of such a call (sudo logs a command's arguments): 4.6's task token goes on stdin or the
    like, decided there.
 2. **The task's work directory lives and dies by one-shot containers of `factory`'s daemon**, so the rule stays at
    two programs and no git runs as `factory` on its agent-writable `~/.gitconfig`. The helper image is
-   `buildpack-deps:noble-scm`, a Docker official image (git 2.43, coreutils), pinned by digest in `verify-pins.sh`
-   (point 8). Under `/home/factory/tasks` (made by `provision.sh` as `factory`, mode 700), a helper that mounts that
+   `buildpack-deps:noble-scm`, a Docker official image (git 2.43, coreutils), pinned by digest as `provision.sh`'s
+   `HELPER_IMAGE` and checked by `verify-pins.sh` (point 8). Under `/home/factory/tasks` (made by `provision.sh` as `factory`, mode 700), a helper that mounts that
    parent makes `<runId>/`, writes what arrives on its stdin to a file (git reads no bundle from a pipe), clones it
    with `git clone -b base` into `<runId>/w` (the bundle is `git bundle create - refs/heads/base`, made in the
    dispatcher's own `FACTORY_REPO_DIR`: a bare sha makes an empty bundle, and a bundle with no `HEAD` checks out
@@ -76,9 +86,12 @@ Two facts the item had not weighed (the `/research` of 2026-11-20):
    - features by id and the digest of the product's `devcontainer-lock.json`, from a list, with their options from a
      list too (`docker-outside-of-docker`'s `moby: false` among them); its Docker socket mount is accepted as the
      feature's declared mount (below), since it is ADR-0057's boundary (Testcontainers needs it);
-   - set by the dispatcher: `mounts` (`<runId>/w`, `/opt/factory` read-only, a per-task `~/.claude` volume, the shared
+   - set by the dispatcher: its mounts (`<runId>/w`, `/opt/factory` read-only, a per-task `~/.claude` volume, the shared
      `~/.m2` cache), `workspaceMount`, `workspaceFolder`, `updateRemoteUserUID: false` (ADR-0057), `containerUser:
-     root` (the feature's start script needs it; the agents run as `remoteUser`), the label;
+     root` (the feature's start script needs it; the agents run as `remoteUser`), the label. Its mounts go as
+     `runArgs` `--mount=`, not as `mounts`, which the CLI writes into the image's `devcontainer.metadata` label, so a
+     resumed task's image would carry the paths of the run that built it; the container's mounts are compared exactly
+     after `up` (amended on the review of `factory` PR #18, in effect with its merge);
    - refused: any other field or value, `initializeCommand` included. No product code on the host, no mount the
      product chose but the listed feature's;
    - after the build, the image's own `devcontainer.metadata` label (which `devcontainer up` merges into the
@@ -99,10 +112,15 @@ Two facts the item had not weighed (the `/research` of 2026-11-20):
    test with the Docker socket (`docker-outside-of-docker`, for Testcontainers) can mount any volume of that daemon
    itself, whatever the dispatcher mounts. So the rollback (today's `/backlog-autopilot` in the VM's devcontainer)
    runs only while no dispatcher run is active, with the owner's logins entered again before it:
-   - the owner starts a rollback with `scripts/factory-admin/build-vm/rollback-start.sh`, which refuses while an object
-     labelled `factory.task` exists (a dispatcher run is on), gives the rollback's container a positive label,
-     `factory.rollback=1` (`devcontainer up --id-label`), and checks again once `up` has returned and before it tells
-     the owner to log in: if a `factory.task` object exists by then, it removes its own container and refuses. Every
+   - the owner starts a rollback with `scripts/factory-admin/build-vm/rollback-start.sh`, which refuses unless the
+     daemon holds no container at all, in any state, and no network or volume labelled `factory.task` (amended on the
+     review of #0-277's VM part: a task's code holding the socket can leave an unlabelled container a killed run never
+     sweeps, or one it labels `factory.rollback` itself, which `up --id-label` would take as the rollback's own; either
+     could mount the logins' volumes), gives the rollback's container a positive label, `factory.rollback=1`
+     (`devcontainer up --id-label`), and checks again once `up` has returned and before it tells the owner to log in:
+     unless the daemon then holds exactly the one running container `up` made and no `factory.task` object, it removes
+     its own container and refuses. An earlier rollback's stopped container is removed by the owner (`docker rm`; the
+     logins stay in their named volumes). Every
      command of the rollback goes through the label (`rollback-start.sh`, and `rollback-exec.sh` for `devcontainer
      exec`): a bare `devcontainer up` or `exec --workspace-folder` would not find the labelled container and would make
      a second, unlabelled one on the same credential volumes;
@@ -139,8 +157,8 @@ Two facts the item had not weighed (the `/research` of 2026-11-20):
    (no container left, no volume but `factory-dispatcher-m2`), or the run is refused. A long-lived container of the
    dispatcher's own (4.6's proxy, if one) carries a label of the run (`factory.task=<runId>`), so a sweep at a later
    run's start removes it as any other.
-8. **New source of software for the VM:** `buildpack-deps:noble-scm` from Docker Hub, pinned by digest in
-   `verify-pins.sh` (which checks it is published for arm64 and amd64), its update path #0-281's with the other
+8. **New source of software for the VM:** `buildpack-deps:noble-scm` from Docker Hub, pinned by digest as
+   `provision.sh`'s `HELPER_IMAGE` and checked by `verify-pins.sh` (an index Docker Hub serves for arm64 and amd64), its update path #0-281's with the other
    `ubuntu`-based digest.
 
 ## Alternatives considered
@@ -190,7 +208,22 @@ Two facts the item had not weighed (the `/research` of 2026-11-20):
   says so once #0-277's pull request changes it.
 - A task's code can start a container labelled `factory.rollback`: that run's end-of-task sweep removes it, and it
   stops the next runs only if the dispatcher is killed before its sweep; a refusal the owner clears with `cli.mjs
-  sweep`, never a leak; accepted in v0.
+  sweep`, never a leak; accepted in v0. `rollback-start.sh` refuses it too, as any container on the daemon before
+  `up`, so no rollback starts beside it.
+- What a task's code leaves outside the daemon is not swept: anything `factory` can write survives a run (its home, its
+  `~/.docker` with CLI plugins the devcontainer CLI runs on the VM itself, its systemd user units, the rootless
+  daemon's own unit, the VM's clone `/home/factory/incident-platform`, the unlabelled named volumes, and on the daemon
+  the image store and build cache the rollback's own `devcontainer up` builds from), so point 5's time-sharing holds
+  against the daemon's containers and its `factory.task` objects only: a rollback on a VM that has run a dispatcher task can start on
+  what that task left and take the logins entered into it. Accepted for the migration (the owner's choice on the
+  review of #0-277's VM part, 2026-11-20: the rollback is the way back while the factory is being moved, not a state to
+  invest in): a rollback with the owner's logins after a dispatcher run starts on a VM made anew (`delete.sh`,
+  `create.sh`), as docs/ai-factory.md "Build VM" says; nothing enforces it. Separating the rollback (a VM of its own)
+  and cleaning `factory`'s state before it were weighed and not taken. What persists across tasks with a credential in
+  the task (4.6) is #0-285.
+- `provision.sh` makes what lies in `dispatcher`'s home as `dispatcher`, a link refused, as it makes `factory`'s
+  paths as `factory`: GNU `install -d`, run as root on a link, gives the link's target to the owner it names (probed,
+  coreutils 9.4), so root never writes through a path a user can replace.
 - ADR-0060's Consequences, "the task image is the devcontainer image built on the VM", now read: built on the VM from
   the product's task configuration (point 6); ADR-0060 carries a pointer here.
 - The dispatcher runs from `/opt/factory-checkout` (point 3): the dispatcher's own clone of `factory` in its home

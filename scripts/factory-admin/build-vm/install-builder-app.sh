@@ -35,7 +35,8 @@ CONF=$DISPATCHER_HOME/.config/factory
 # loaded by `node --env-file`, the key is read where BUILDER_APP_KEY would point when it is not set.
 ENV_FILE=$CONF/env
 KEY_FILE=$CONF/builder-app.pem
-CHECK_APP=$DISPATCHER_HOME/factory/dispatcher/bin/check-app.mjs
+# The one factory checkout on the VM, root's (ADR-0062 point 3, backlog #0-277), which the dispatcher runs from.
+CHECK_APP=/opt/factory-checkout/dispatcher/bin/check-app.mjs
 NODE=/usr/local/bin/node
 
 fail() { echo "install-builder-app.sh: $*" >&2; exit 1; }
@@ -65,6 +66,11 @@ status=$(limactl list "$NAME" --format '{{.Status}}') || fail "cannot read the s
 provisioned=$(vm cat /etc/factory-build-provisioned) || fail "cannot read /etc/factory-build-provisioned on $NAME"
 [[ "$provisioned" == *"$DISPATCHER at factory "* ]] \
   || fail "$NAME was not provisioned with $DISPATCHER: recreate it (delete.sh, create.sh) with a provision.sh that adds it"
+# A VM from a provision.sh before #0-277 has factory in dispatcher's home, not in /opt/factory-checkout: refused here,
+# before the key is written, so a rotation on it never leaves a new key that check-app could not check (review round 1
+# of #0-277's VM part). provision.sh's marker names the checkout from #0-277 on.
+[[ "$provisioned" == *" in /opt/factory-checkout;"* ]] \
+  || fail "$NAME was provisioned before /opt/factory-checkout (backlog #0-277): recreate it (delete.sh, create.sh) first"
 
 # modes <path...>: each path as stat names it (mode, owner, group, type), asked as root, so a path dispatcher cannot
 # see is no gap.

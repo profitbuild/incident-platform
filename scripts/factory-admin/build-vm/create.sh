@@ -231,7 +231,73 @@ check_boundary() {
   # in its own mount namespace, which it builds when it starts (a link made later is missing to it).
   vm "${as_factory[@]}" docker run --rm -v /var/run/docker.sock:/s alpine test -S /s \
     || boundary_fail "factory's Docker cannot mount /var/run/docker.sock"
-  echo "factory-build: boundary holds $1 (rootless Docker for factory, egress filtered, gateway $gw rejected)"
+  # The dispatcher's side of ADR-0062 (backlog #0-277 AC2), checked as the boundary is: from the started VM, each
+  # read answered first and judged after (a command that fails gives empty output, which must never read as a pass:
+  # review round 1 of #0-277's VM part, as round 3 of #0-272's second pull request).
+  as_dispatcher=(sudo -u dispatcher -H)
+  # What sudo grants, as root reads it: dispatcher exactly the two programs as factory, factory nothing. sudo -l lists
+  # the rules of every file it reads, so a drop-in giving either user anything more (as root included) shows here.
+  granted=$(vm sudo sudo -l -U dispatcher) || boundary_fail "cannot list dispatcher's sudo rules"
+  grants=$(sed -n '/may run the following commands/,$p' <<<"$granted" | sed '1d; s/^[[:space:]]*//; /^$/d')
+  [ "$grants" = "(factory) NOPASSWD: /usr/bin/docker, /usr/local/bin/devcontainer" ] \
+    || boundary_fail "dispatcher's sudo rules are not exactly docker and devcontainer as factory: $grants"
+  denied=$(vm sudo sudo -l -U factory) || boundary_fail "cannot list factory's sudo rules"
+  grep -q 'is not allowed to run sudo' <<<"$denied" || boundary_fail "factory may run something through sudo: $denied"
+  rule=$(vm sudo stat -c '%U:%G %a' /etc/sudoers.d/factory-dispatcher) || boundary_fail "no /etc/sudoers.d/factory-dispatcher"
+  [ "$rule" = "root:root 440" ] || boundary_fail "/etc/sudoers.d/factory-dispatcher is $rule, not root:root 440"
+  envf=$(vm sudo stat -c '%U:%G %a' /etc/factory-dispatcher.env) || boundary_fail "no /etc/factory-dispatcher.env"
+  [ "$envf" = "root:root 644" ] || boundary_fail "/etc/factory-dispatcher.env is $envf, not root:root 644"
+  # The rule at work: both programs run through it, with root's DOCKER_HOST and from /, and it refuses another program,
+  # a caller's variable and another working directory.
+  vm "${as_dispatcher[@]}" sudo -n -u factory /usr/bin/docker run --rm alpine true \
+    || boundary_fail "dispatcher cannot run a container through factory's daemon by its sudo rule"
+  dc=$(vm "${as_dispatcher[@]}" sudo -n -u factory /usr/local/bin/devcontainer --version) \
+    || boundary_fail "dispatcher cannot run the devcontainer CLI by its sudo rule"
+  [ -n "$dc" ] || boundary_fail "the devcontainer CLI run by dispatcher's sudo rule printed no version"
+  host=$(vm "${as_dispatcher[@]}" sudo -n -u factory /usr/bin/docker context inspect --format '{{.Endpoints.docker.Host}}') \
+    || boundary_fail "cannot read the daemon dispatcher's docker reaches"
+  [ "$host" = "unix:///run/docker.sock" ] || boundary_fail "dispatcher's docker reaches $host, not unix:///run/docker.sock"
+  if vm "${as_dispatcher[@]}" sudo -n -u factory /usr/bin/id >/dev/null 2>&1; then
+    boundary_fail "dispatcher's sudo rule allows a program other than docker and devcontainer"
+  fi
+  if vm "${as_dispatcher[@]}" sudo -n --preserve-env=PATH -u factory /usr/bin/docker version >/dev/null 2>&1; then
+    boundary_fail "dispatcher's sudo rule keeps a variable of its caller (--preserve-env was not refused)"
+  fi
+  if vm "${as_dispatcher[@]}" sudo -n -D /tmp -u factory /usr/bin/docker version >/dev/null 2>&1; then
+    boundary_fail "dispatcher's sudo rule lets the caller choose the working directory (-D was not refused)"
+  fi
+  if vm sudo -u factory -H sh -c 'ls /home/dispatcher' >/dev/null 2>&1; then boundary_fail "factory reads dispatcher's home"; fi
+  # The factory checkout: root's, at the pin, clean, and written by no one else (links aside: a link's own mode is
+  # always 0777, and what it points to is judged as its own path).
+  pin=$(sed -n 's/^FACTORY_COMMIT=\([0-9a-f]\{40\}\).*$/\1/p' "$here/provision.sh")
+  [ "${#pin}" -eq 40 ] || boundary_fail "cannot read FACTORY_COMMIT from provision.sh"
+  co=$(vm sudo stat -c '%U:%G %a' /opt/factory-checkout) || boundary_fail "no /opt/factory-checkout"
+  [ "$co" = "root:root 755" ] || boundary_fail "/opt/factory-checkout is $co, not root:root 755"
+  # Owners and modes first: root's git below reads the checkout's config, so it runs only on a tree nobody else wrote.
+  writable=$(vm sudo find /opt/factory-checkout ! -type l \( -perm -g+w -o -perm -o+w -o ! -user root \) -print -quit) \
+    || boundary_fail "cannot read /opt/factory-checkout's modes"
+  [ -z "$writable" ] || boundary_fail "a file of /opt/factory-checkout is not root's or is writable by others: $writable"
+  linked=$(vm sudo find /opt/factory-checkout -type l ! -user root -print -quit) || boundary_fail "cannot read /opt/factory-checkout's links"
+  [ -z "$linked" ] || boundary_fail "a link of /opt/factory-checkout is not root's: $linked"
+  head_now=$(vm sudo git -C /opt/factory-checkout rev-parse HEAD) || boundary_fail "cannot read the HEAD of /opt/factory-checkout"
+  [ "$head_now" = "$pin" ] || boundary_fail "/opt/factory-checkout is at $head_now, not at FACTORY_COMMIT $pin"
+  tree_now=$(vm sudo git -C /opt/factory-checkout status --porcelain --ignored) \
+    || boundary_fail "cannot read the status of /opt/factory-checkout"
+  [ -z "$tree_now" ] || boundary_fail "/opt/factory-checkout is not clean: $tree_now"
+  vm "${as_factory[@]}" docker run --rm -v /opt/factory-checkout:/opt/factory:ro alpine \
+    sh -c 'test -f /opt/factory/dispatcher/bin/check-app.mjs && ! touch /opt/factory/.w 2>/dev/null' \
+    || boundary_fail "factory's daemon cannot mount /opt/factory-checkout, or mounts it writable"
+  # The directories of ADR-0062 points 2 and 3, the helper image at its pin, the lock's flock.
+  for want in "factory 700 /home/factory/tasks" "dispatcher 700 /home/dispatcher/state" \
+              "dispatcher 700 /home/dispatcher/.config" "dispatcher 700 /home/dispatcher/.config/factory"; do
+    got=$(vm sudo stat -c '%U %a %F' "${want##* }") || boundary_fail "no ${want##* }"
+    [ "$got" = "${want% *} directory" ] || boundary_fail "${want##* } is $got, not ${want% *} directory"
+  done
+  helper=$(sed -n 's/^HELPER_IMAGE=\(.*\)$/\1/p' "$here/provision.sh")
+  [ -n "$helper" ] || boundary_fail "cannot read HELPER_IMAGE from provision.sh"
+  vm "${as_factory[@]}" docker image inspect "$helper" >/dev/null 2>&1 || boundary_fail "the helper image $helper is not on factory's daemon"
+  vm test -x /usr/bin/flock || boundary_fail "/usr/bin/flock is missing"
+  echo "factory-build: boundary holds $1 (rootless Docker for factory, egress filtered, gateway $gw rejected; dispatcher's sudo rule, checkout and directories as ADR-0062 says)"
 }
 check_boundary "after creation"
 # Once more after a reboot: provision.sh runs again, late in the boot, after factory's session and its daemon have

@@ -30,6 +30,10 @@
 #     the one CI runs (ADR-0043); create.sh refuses a mismatch.
 #   - The devcontainer CLI: npm's tarball, checked against the sha512 pinned below (npm's `dist.integrity` of that
 #     version, in hex) and installed from the file, so npm fetches nothing: the package has no dependencies.
+#   - The helper image of the dispatcher's task work directories (ADR-0062 points 2 and 8): Docker Hub's
+#     buildpack-deps:noble-scm (a Docker official image: git, coreutils), pulled by its pinned index digest as
+#     `factory`, so its daemon checks the content against the digest.
+#   - The dispatcher's code: profitbuild/factory at FACTORY_COMMIT, cloned by root into /opt/factory-checkout.
 # The pins are checked against their publishers by verify-pins.sh, run with every change of a pin. A change here takes
 # effect on a new VM: delete.sh, then create.sh.
 # ============================================================
@@ -60,6 +64,18 @@ FACTORY_USER=factory
 DISPATCHER_USER=dispatcher
 FACTORY_REPO_URL=https://github.com/profitbuild/factory.git
 FACTORY_COMMIT=3888a9004b418dff160c1f0aaa0bab504c3346cb  # gitleaks:allow: a public commit id of profitbuild/factory, no secret
+# The one checkout of factory on the VM (ADR-0062 point 3): root's, outside every user's home, so `factory`'s daemon can
+# mount it read-only into a task container and neither `factory` nor `dispatcher` can write it; the dispatcher runs
+# from it too (backlog #0-277).
+FACTORY_CHECKOUT=/opt/factory-checkout
+# The dispatcher's state (#0-275's FACTORY_STATE_DIR): its own, mode 700, which the dispatcher refuses otherwise.
+DISPATCHER_STATE=/home/dispatcher/state
+# The parent of every task's work directory (ADR-0062 point 2): `factory`'s, mode 700, made and filled only by one-shot
+# containers of its daemon.
+FACTORY_TASKS=/home/factory/tasks
+# The helper image of those one-shot containers (ADR-0062 point 8): buildpack-deps:noble-scm, the index digest for
+# linux/amd64 and linux/arm64 (git 2.43.0 and coreutils' timeout, probed 2026-11-20), checked by verify-pins.sh.
+HELPER_IMAGE=buildpack-deps:noble-scm@sha256:c4e7382cc1abefe0bbaaf99324fad5122f9def4d3840fbfad17d3c2fd77b9dc9
 
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
@@ -115,8 +131,21 @@ if [ "$(id -Gn "$DISPATCHER_USER")" != "$DISPATCHER_USER" ]; then
   echo "provision.sh: $DISPATCHER_USER is in a group other than its own: $(id -Gn "$DISPATCHER_USER")" >&2; exit 1
 fi
 dispatcher_home=/home/$DISPATCHER_USER
-install -d -m 0700 -o "$DISPATCHER_USER" -g "$DISPATCHER_USER" "$dispatcher_home" "$dispatcher_home/.config" \
-  "$dispatcher_home/.config/factory"
+# The home by root (its parent, /home, is root's, so dispatcher cannot put a link in its place); what lies inside it
+# made as dispatcher, each refused when it is a link or not a directory, so root never follows a link dispatcher
+# planted: GNU install -d, run as root on a link to a directory, gives the link's target to the owner it names (probed
+# on Ubuntu 24.04's coreutils 9.4, review round 1 of #0-277's VM part); as daemon.json and the tasks directory are
+# made as factory below. Kept in this order, so a parent is checked before what is made in it.
+install -d -m 0700 -o "$DISPATCHER_USER" -g "$DISPATCHER_USER" "$dispatcher_home"
+# shellcheck disable=SC2016 # expanded by the shell runuser starts, with the arguments after `_`
+runuser -u "$DISPATCHER_USER" -- sh -c '
+  for d; do
+    if [ -L "$d" ] || { [ -e "$d" ] && [ ! -d "$d" ]; }; then echo "$d is a link or not a directory" >&2; exit 3; fi
+    mkdir -p -m 700 -- "$d" && chmod 700 -- "$d" || exit 1
+  done' _ "$dispatcher_home/.config" "$dispatcher_home/.config/factory" "$DISPATCHER_STATE" \
+  || { echo "provision.sh: cannot make $DISPATCHER_USER's directories as $DISPATCHER_USER" >&2; exit 1; }
+# #0-275's lock runs util-linux's flock by its full path; the base image ships it, checked rather than assumed.
+[ -x /usr/bin/flock ] || { echo "provision.sh: /usr/bin/flock is missing (util-linux)" >&2; exit 1; }
 
 # The VM forwards nothing: a forwarded packet carries no socket owner, so the egress chain below, matched on uids, would
 # not see it. Ubuntu's default, set here so the boundary does not rest on a default (review round 3 of #0-116).
@@ -414,8 +443,10 @@ include <tunables/global>
 PROFILE
 apparmor_parser -r /etc/apparmor.d/usr.bin.rootlesskit
 
-# The default socket path is the rootless daemon's, so `docker` and the devcontainer CLI need no DOCKER_HOST, and the
-# devcontainer's docker-outside-of-docker feature mounts it unchanged. Made by systemd-tmpfiles early at every boot,
+# The default socket path is the rootless daemon's, so the devcontainer's docker-outside-of-docker feature mounts it
+# unchanged, and `docker` reaches it with no DOCKER_HOST as long as factory's ~/.docker names no other context: that
+# file is the agent side's, so whoever must not be misled sets DOCKER_HOST (the dispatcher's sudo rule, create.sh's
+# checks, the rollback scripts; backlog #0-277). Made by systemd-tmpfiles early at every boot,
 # before factory's session: the rootless daemon sees /run as it was when it started, and a link made later (by this
 # script, which Lima runs late in the boot) was missing to it after a reboot, so the feature's mount failed.
 # Root's own `docker`, if anything ran one, would reach factory's daemon through it: an untrusted one, as code a test
@@ -461,6 +492,20 @@ elif [ "$changed" = yes ]; then
 fi
 as_factory systemctl --user is-active --quiet docker
 
+# The tasks' parent directory, made as factory (as daemon.json above: a link factory planted only redirects its own
+# write), mode 700; then the helper image, pulled by digest when it is not there yet.
+# shellcheck disable=SC2016 # expanded by the shell runuser starts, with the argument after `_`
+as_factory sh -c '
+  if [ -L "$1" ] || { [ -e "$1" ] && [ ! -d "$1" ]; }; then echo "$1 is a link or not a directory" >&2; exit 3; fi
+  mkdir -p -m 700 -- "$1" && chmod 700 -- "$1"' _ "$FACTORY_TASKS" \
+  || { echo "provision.sh: cannot make $FACTORY_TASKS as $FACTORY_USER" >&2; exit 1; }
+# Both by DOCKER_HOST, as every docker call that must not be misled: factory's ~/.docker is the agent side's, and a
+# context planted there would send the pull to another daemon (review round 4 of #0-277's VM part).
+as_factory_docker() { as_factory env DOCKER_HOST=unix:///run/docker.sock docker "$@"; }
+if ! as_factory_docker image inspect "$HELPER_IMAGE" >/dev/null 2>&1; then
+  as_factory_docker pull --quiet "$HELPER_IMAGE" >/dev/null
+fi
+
 if [ "$(/usr/local/bin/node --version 2>/dev/null)" != "v$NODE_VERSION" ]; then
   case "$(dpkg --print-architecture)" in
     arm64) node_arch=arm64 node_sha=$NODE_SHA256_ARM64 ;;
@@ -482,33 +527,68 @@ if [ "$(devcontainer --version 2>/dev/null)" != "$DEVCONTAINER_CLI_VERSION" ]; t
   /usr/local/bin/npm install -g --no-fund --no-audit --ignore-scripts "$cli_tgz"
 fi
 
-# --- The dispatcher's code: profitbuild/factory at FACTORY_COMMIT, as `dispatcher` ---------------------------------
-# Cloned and fetched as `dispatcher`, so through the egress chain (GitHub is on its list), into its own home: no other
-# user writes the clone or its config, which git reads. Detached at the pin and refused unless HEAD is the pin and the
-# tree is clean, ignored files included (a node_modules would be code no review read): what runs with the key is the
-# reviewed commit, nothing a run left behind (backlog #0-272).
-as_dispatcher() { runuser -u "$DISPATCHER_USER" -- env HOME="$dispatcher_home" "$@"; }
-factory_clone=$dispatcher_home/factory
-if [ ! -d "$factory_clone/.git" ]; then
-  as_dispatcher git clone --quiet --no-checkout "$FACTORY_REPO_URL" "$factory_clone"
+# --- The dispatcher's code: profitbuild/factory at FACTORY_COMMIT, root's, in /opt/factory-checkout -----------------
+# Cloned and fetched by root (ADR-0062 point 3), so the checkout is root's and no user writes it or the config git reads
+# in it: `factory`'s daemon mounts it read-only into each task container, and `dispatcher` runs it. Root's traffic is not
+# the egress chain's (it takes uids from 1000 up); the fetch reaches GitHub alone, and what is checked out is the pinned
+# commit, verify-pins.sh's. Detached at the pin and refused unless HEAD is the pin and the tree is clean, ignored files
+# included (a node_modules would be code no review read): what runs with the key is the reviewed commit (backlog #0-272).
+# It replaces the clone in dispatcher's home of #0-272 (ADR-0062: one copy of the factory on the VM).
+if [ ! -d "$FACTORY_CHECKOUT/.git" ]; then
+  git clone --quiet --no-checkout "$FACTORY_REPO_URL" "$FACTORY_CHECKOUT"
 fi
 # The pin fetched only when the clone lacks it; the checkout every time (idempotent): a clone made --no-checkout has
 # HEAD at main and no files, so HEAD alone cannot say the tree is there (a VM whose pin was main's tip failed so,
 # 2026-11-20).
-if ! as_dispatcher git -C "$factory_clone" cat-file -e "$FACTORY_COMMIT^{commit}" 2>/dev/null; then
-  as_dispatcher git -C "$factory_clone" fetch --quiet origin main
+if ! git -C "$FACTORY_CHECKOUT" cat-file -e "$FACTORY_COMMIT^{commit}" 2>/dev/null; then
+  git -C "$FACTORY_CHECKOUT" fetch --quiet origin main
 fi
-as_dispatcher git -C "$factory_clone" checkout --quiet --detach "$FACTORY_COMMIT"
+git -C "$FACTORY_CHECKOUT" checkout --quiet --detach "$FACTORY_COMMIT"
+chown -R -h root:root "$FACTORY_CHECKOUT"
+chmod -R go-w "$FACTORY_CHECKOUT"
+chmod 0755 "$FACTORY_CHECKOUT"
 # Each answer read first, then judged: inside a test, a git that fails would give empty output, read as "clean" (review
 # round 3 of #0-272's second pull request).
-head_now=$(as_dispatcher git -C "$factory_clone" rev-parse HEAD) \
-  || { echo "provision.sh: cannot read the HEAD of $factory_clone" >&2; exit 1; }
-tree_now=$(as_dispatcher git -C "$factory_clone" status --porcelain --ignored) \
-  || { echo "provision.sh: cannot read the status of $factory_clone" >&2; exit 1; }
+head_now=$(git -C "$FACTORY_CHECKOUT" rev-parse HEAD) \
+  || { echo "provision.sh: cannot read the HEAD of $FACTORY_CHECKOUT" >&2; exit 1; }
+tree_now=$(git -C "$FACTORY_CHECKOUT" status --porcelain --ignored) \
+  || { echo "provision.sh: cannot read the status of $FACTORY_CHECKOUT" >&2; exit 1; }
 if [ "$head_now" != "$FACTORY_COMMIT" ] || [ -n "$tree_now" ]; then
-  echo "provision.sh: $factory_clone is not a clean checkout of $FACTORY_COMMIT" >&2; exit 1
+  echo "provision.sh: $FACTORY_CHECKOUT is not a clean checkout of $FACTORY_COMMIT" >&2; exit 1
 fi
 
+# --- dispatcher drives factory's Docker as factory: one sudo rule, two programs (ADR-0062 point 1) ---------------------
+# `dispatcher` may run, as `factory` and with no prompt, exactly docker and the pinned devcontainer CLI, with sudo's reset
+# environment; nothing else, and `factory` has no rule at all. The rule holds its whole environment itself, so nothing of
+# the caller's or of the distribution's defaults decides it (review round 1 of #0-277's VM part, probed with Ubuntu
+# 24.04's sudo 1.9.15p5):
+#   - secure_path: the PATH the programs get, root's directories only; the devcontainer CLI is `#!/usr/bin/env node`;
+#   - runcwd=/: the program starts in /, not in dispatcher's working directory (which /proc/<pid>/cwd would show to
+#     other processes of `factory`), and `sudo -D` is refused;
+#   - env_file: DOCKER_HOST set by root to the rootless daemon's socket (ADR-0057's /run/docker.sock link). Under
+#     env_reset the docker CLI would otherwise follow the current context of /home/factory/.docker, which the agent side
+#     writes, and could be pointed at a daemon that answers the dispatcher's sweep and checks falsely; the devcontainer
+#     CLI takes no --host. A DOCKER_HOST of the caller's does not pass (probed: the file's value wins), and !setenv
+#     refuses `VAR=value`, -E and --preserve-env.
+# The file's name holds no `.` (sudo's #includedir skips such a file silently); written to a temporary file, checked by
+# visudo, then moved into place, so a bad rule never lands.
+dispatcher_env=/etc/factory-dispatcher.env
+printf 'DOCKER_HOST=unix:///run/docker.sock\n' > "$dispatcher_env.tmp"
+chown root:root "$dispatcher_env.tmp"; chmod 0644 "$dispatcher_env.tmp"; mv -f "$dispatcher_env.tmp" "$dispatcher_env"
+sudoers=/etc/sudoers.d/factory-dispatcher
+rule="Defaults:$DISPATCHER_USER env_reset, !setenv, secure_path=\"/usr/local/bin:/usr/bin:/bin\", runcwd=\"/\", env_file=$dispatcher_env
+$DISPATCHER_USER ALL=($FACTORY_USER) NOPASSWD: /usr/bin/docker, /usr/local/bin/devcontainer"
+if [ ! -f "$sudoers" ] || [ "$(cat "$sudoers")" != "$rule" ]; then
+  tmp=$(mktemp /etc/sudoers.d/.factory-dispatcher.XXXXXX)
+  printf '%s\n' "$rule" > "$tmp"
+  chmod 0440 "$tmp"
+  visudo -cqf "$tmp" || { rm -f "$tmp"; echo "provision.sh: the sudo rule for $DISPATCHER_USER does not parse" >&2; exit 1; }
+  mv -f "$tmp" "$sudoers"
+fi
+chown root:root "$sudoers"
+chmod 0440 "$sudoers"
+visudo -cq || { echo "provision.sh: sudo's configuration does not parse with $sudoers" >&2; exit 1; }
+
 # The boot it finished in, so create.sh can tell this boot's run from an earlier one.
-echo "factory-build provisioned: $(docker --version), rootless for $FACTORY_USER; node $(/usr/local/bin/node --version); devcontainer $(devcontainer --version); $DISPATCHER_USER at factory $FACTORY_COMMIT; boot $(cat /proc/sys/kernel/random/boot_id)" \
+echo "factory-build provisioned: $(docker --version), rootless for $FACTORY_USER; node $(/usr/local/bin/node --version); devcontainer $(devcontainer --version); $DISPATCHER_USER at factory $FACTORY_COMMIT in $FACTORY_CHECKOUT; helper $HELPER_IMAGE; boot $(cat /proc/sys/kernel/random/boot_id)" \
   > /etc/factory-build-provisioned

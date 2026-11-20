@@ -140,9 +140,17 @@ set before the asker gets them: a set resolved every 30 minutes failed the first
 CloudFront's changing addresses (#0-247). A domain added to or removed from the devcontainer's `init-firewall.sh`
 changes the copy in `factory-egress.sh` in `provision.sh` too: Factory guards and `create.sh` refuse the two apart.
 
+Steps 3, 5, 6 and 7 below describe a VM made from a `provision.sh` of #0-277 and on (ADR-0062); the dispatcher's own
+side of them (its refusal on a running rollback, its sweep, `cli.mjs sweep`) comes with the `FACTORY_COMMIT` that
+carries #0-277's code, the one recreation that applies both. A VM made before has `factory` in `dispatcher`'s home,
+and `install-builder-app.sh` refuses to run on it: recreate it.
+
 1. **Create:** `scripts/factory-admin/build-vm/create.sh`. It refuses an instance that exists (`delete.sh` first),
    downloads Ubuntu's image once (Lima checks the pinned sha256), runs `provision.sh` (Docker CE rootless for user
-   `factory`, its egress filter, git, Node at `.node-version`, the devcontainer CLI), checks the boundary (the rootful
+   `factory`, its egress filter, git, Node at `.node-version`, the devcontainer CLI; the user `dispatcher`, the sudo
+   rule by which it runs `docker` and the devcontainer CLI as `factory`, root's checkout of `factory` in
+   `/opt/factory-checkout`, `/home/dispatcher/state`, `/home/factory/tasks` and the pinned helper image), checks the
+   boundary (the rootful
    daemon masked, `factory`'s rootless and filtered, the Mac rejected, `example.com` unreachable, GitHub reachable),
    restarts the VM once and checks it again (what holds only on a fresh VM fails there), and clones
    `github.com/profitbuild/incident-platform` (anonymously, while it is public) into
@@ -154,23 +162,45 @@ changes the copy in `factory-egress.sh` in `provision.sh` too: Factory guards an
    copy to the Mac, an extra disk, provision or probe. Run it from an up-to-date `main`: the VM's contents come from
    your checkout's `provision.sh`, its clone from GitHub's `main`, and `create.sh` warns when the two differ. Measured
    2026-11-14: about 65 s from Lima's cache, the reboot included.
-2. **Enter**, always as `factory`, the user of the rootless daemon (`docker` needs no `DOCKER_HOST`: the default
-   socket is its): `limactl shell factory-build sudo -iu factory`, then `cd incident-platform`. Never `docker` as
+2. **Enter**, always as `factory`, the user of the rootless daemon (the default socket is its; on a VM that has run a
+   dispatcher task, all of `factory`'s home is what a task's code could write, its shell's startup files included, so
+   that shell is the task's: use the scripts, which run no login shell, or a VM made anew): `limactl shell factory-build sudo -iu factory`, then
+   `cd incident-platform`. Never `docker` as
    root in the VM (`sudo docker`): `/run/docker.sock` leads to `factory`'s daemon, which code a test runs can replace
    through `factory`'s own systemd unit, so root's client would talk to that code (ADR-0057).
-3. **Start the devcontainer:** `devcontainer up --workspace-folder .`, then `devcontainer exec --workspace-folder . bash`;
-   the firewall's start log and `example.com` check are as in Setup 1. For phone notifications export
-   `FACTORY_NTFY_TOPIC` in the VM's shell before `up` (Setup 5); its host is not in the VM's allow-list: add it to
-   `VM_ONLY_DOMAINS` in `provision.sh` (the only list `check-allowlists.sh` lets hold it) in a PR, then recreate the
-   VM. Not there by default: ntfy.sh is a publishing service, a channel out for code a test runs.
+3. **Start the devcontainer** (the rollback, ADR-0062 point 5: only while no dispatcher run is active), from the Mac:
+   `scripts/factory-admin/build-vm/rollback-start.sh`, then `scripts/factory-admin/build-vm/rollback-exec.sh` (bash
+   inside it, as `dev`). The first refuses unless the VM's daemon holds no container and no object of a dispatcher
+   run, starts the devcontainer with the label `factory.rollback=1` the dispatcher refuses to start on, and checks again before you log
+   in; the second enters it by that label. It starts only on a daemon that holds no container at all (a task's code
+   could have left one, labelled or not, that would mount your logins' volumes): a run's leftovers go with the
+   dispatcher's `cli.mjs sweep`, an earlier rollback's stopped container with `limactl shell factory-build sudo -u
+   factory -H env DOCKER_HOST=unix:///run/docker.sock docker rm <id>` (its logins stay in their volumes); after `up` it accepts only the one container it
+   made. It sees only the daemon's containers and a run's labelled objects: what a dispatcher task left elsewhere in
+   `factory`'s reach (its home, a Docker CLI plugin, a systemd unit, this clone, an unlabelled named volume, the image
+   store and build cache the rollback's image is built from) survives the run, so a rollback after a dispatcher run, with
+   your logins, starts on a VM made anew (`delete.sh`, `create.sh`; ADR-0062's Consequences, accepted for the
+   migration). Never a bare `devcontainer up` or `exec --workspace-folder .`: it would not
+   find the labelled container and would make a second, unlabelled one on the same credential volumes. The firewall's
+   start log and `example.com` check are as in Setup 1. The VM's devcontainer sends no phone notifications (Setup 5):
+   `rollback-start.sh` runs `up` through `sudo -u factory`, which passes none of your shell's variables, and a topic
+   given as an argument would be readable by every process of the VM; its host is not in the VM's allow-list either
+   (ntfy.sh is a publishing service, a channel out for code a test runs).
 4. **Check the clone** (#0-202), inside the devcontainer (the clone is `dev`'s, not `factory`'s):
    `git status --ignored --short` prints nothing: no `docker/.env`, no `application-local.yml`, no
    `.claude/settings.local.json` of yours.
 5. **Log in inside the devcontainer**, as in Setup 2: `claude` (it prints a URL; open it on the Mac and paste the
    code back) and the bot's token with `gh auth login --with-token`. Both are kept in the devcontainer's volumes,
-   on the VM's disk: `delete.sh` removes them with it, and you enter them again after the next `create.sh`.
+   on the VM's disk, until the next dispatcher run: its sweep removes every volume of the daemon but its own cache, so
+   you enter them again before each rollback (ADR-0062 point 5), and after the next `create.sh`. Stop the rollback
+   (`limactl shell factory-build sudo -u factory -H env DOCKER_HOST=unix:///run/docker.sock docker stop <its
+   container>`, the id `rollback-start.sh` printed)
+   before a dispatcher run: the dispatcher refuses to start while it runs.
 6. **builder-app's key** (#0-272; once per VM, and at each rotation): the VM holds a user `dispatcher` (an ordinary
-   uid, under the same egress filter, its home mode 700) and a clone of `factory` at `FACTORY_COMMIT`. Generate a
+   uid, under the same egress filter, its home mode 700, its state in `/home/dispatcher/state`), the one checkout of
+   `factory` at `FACTORY_COMMIT` in `/opt/factory-checkout` (root's, mode 755, written by no user: the dispatcher runs
+   from it and its task containers mount it read-only, ADR-0062 point 3), and a sudo rule by which `dispatcher` runs
+   `docker` and the devcontainer CLI as `factory`, nothing else (`/etc/sudoers.d/factory-dispatcher`, ADR-0062 point 1). Generate a
    private key in the settings of the GitHub App `profitbuild-builder`, then, on the Mac,
    `scripts/factory-admin/build-vm/install-builder-app.sh <app id> <installation id> <the downloaded .pem>`, run in your
    own terminal, with the file's path given by dragging it from Finder into the terminal window (a file a browser
@@ -179,13 +209,14 @@ changes the copy in `factory-egress.sh` in `provision.sh` too: Factory guards an
    the key on stdin into `/home/dispatcher/.config/factory/`, checks it and the modes, runs `factory`'s `check-app` as
    `dispatcher` and deletes the download once that passed. On a rotation delete the old key in the app's settings
    afterwards; after `delete.sh`, delete the old VM's key there.
-7. **Run the autopilot** there as in "Running it". Your own sessions stay on the Mac, in your checkout. The local
+7. **Run the autopilot** there (the rollback, while no dispatcher run is active), through `rollback-exec.sh`, as in
+   "Running it". Your own sessions stay on the Mac, in your checkout. The local
    model ("Local model" below) is not reached from the VM: `OLLAMA_URL`'s `host.docker.internal` is the VM there, so
    `localReview` reports `Ollama not reachable` and skips (ADR-0056); the VM's filter rejects the Mac (ADR-0057).
 
 **Changing the VM:** its contents only in `provision.sh`, its size or image only in `factory-build.yaml`, then
 `delete.sh` and `create.sh`: a VM is recreated, never patched by hand. Every pin is bumped by hand (Renovate does not
-read these files) and `verify-pins.sh` must print six `verified:` lines in the same PR:
+read these files) and `verify-pins.sh` must print seven `verified:` lines in the same PR:
 - the image: the two `images:` lines (Ubuntu's dated directory under `cloud-images.ubuntu.com/releases/noble/` and
   the file's sha256 from its `SHA256SUMS`);
 - Node: `NODE_VERSION` and its two sha256 (`linux-arm64`, `linux-x64`, from nodejs.org's `SHASUMS256.txt`), with
@@ -194,7 +225,9 @@ read these files) and `verify-pins.sh` must print six `verified:` lines in the s
 - Docker's apt key: `DOCKER_KEY_FPR`, which changes only when Docker rotates its key, confirmed in three places first;
 - Docker CE: `DOCKER_VERSION` and `CONTAINERD_VERSION`, versions of Docker's noble repository
   (`apt-cache madison docker-ce` in the VM lists them);
-- the dispatcher's code: `FACTORY_COMMIT`, a commit on `profitbuild/factory`'s `main` (#0-272), until 4.7's tag.
+- the dispatcher's code: `FACTORY_COMMIT`, a commit on `profitbuild/factory`'s `main` (#0-272), until 4.7's tag;
+- the helper image of the tasks' work directories: `HELPER_IMAGE` (`buildpack-deps:noble-scm` by its index digest,
+  #0-277), an index Docker Hub serves with an amd64 and an arm64 image.
 **Stopping it** (12 GiB of RAM while it runs): `limactl stop factory-build`; `limactl start factory-build` brings it
 back with the clone and the logins.
 
