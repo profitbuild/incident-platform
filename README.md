@@ -713,11 +713,13 @@ security boundary, so every rule that matters is also enforced outside the model
   `factory`'s home (a link planted there would turn a root write into root for `factory`). `create.sh` checks all of it
   on every VM it makes, and it and Factory guards refuse a VM copy of the devcontainer's allow-list that differs from it either way.
 - **The factory's own repository, `profitbuild/factory`** (backlog #0-267, ADR-0060 D5): public, changed only by the
-  owner's pull requests. Its ruleset `main` requires a pull request, the code owner's review and its two CI checks
-  (`Test`, `Lint Workflows`, bound to GitHub Actions) and refuses force pushes and deletion; its ruleset `tags` has
+  owner's pull requests. Its ruleset `main` requires a pull request, the code owner's review and its CI checks
+  (`Test`, `Test (git 2.43)`, `Lint Workflows`, bound to GitHub Actions; `Secret Scan` below) and refuses force pushes and deletion; its ruleset `tags` has
   no bypass and refuses moving or deleting any tag, since a product loads the factory at a pinned tag. Secret
   scanning and push protection, private vulnerability reporting, immutable releases; Actions limited to GitHub's own,
-  pinned by SHA, with a read-only token; a ruleset of its own restricts tag creation to the admin role. Its code is
+  pinned by SHA, with a read-only token; a ruleset of its own restricts tag creation to the admin role. Its CI pulls
+  one image, `ubuntu:24.04` pinned by digest, from Docker Hub, and git from Ubuntu's archive through apt's signed
+  index (`Test (git 2.43)`), sources the owner accepted on 2026-11-20 (#0-276). Its code is
   written by a session holding the hour's token of the GitHub App `profitbuild-factory-dev` and no other GitHub
   credential (#0-269, ADR-0060 D5 as amended): installed on `factory` alone, Contents and Pull requests write,
   Metadata read; probed on 2026-11-19, GitHub refused it a push to `main`, the merge of its own unapproved pull
@@ -761,6 +763,29 @@ security boundary, so every rule that matters is also enforced outside the model
   Tried with its real token on 2026-11-20 (#0-272 AC6): refused every branch outside `factory/**` and every tag,
   allowed to create, force-move and delete its own; and, holding no Workflows permission, it moves no ref, its own
   included, across a change of `.github/workflows/` (GitHub answers 403).
+- **builder-app's push** (backlog #0-276, stage 4.3b, ADR-0060 D7 as amended; `factory` PR #16): no git with the
+  dispatcher's rights runs in a repository an agent wrote.
+  - Every git is `/usr/bin/git`, started by one function alone (a static test): its `cwd` the dispatcher's, `GIT_DIR`
+    given (but for the `git init --bare` that makes the repository), no hooks, fsmonitor, credential helper or
+    commit-graph, `protocol.allow=never`, no system or global config.
+  - Every child of the dispatcher gets an environment built from an allowlist (`childEnv`, a static test).
+  - The task's commits reach the push as a bundle, bytes, never by a fetch from the task's clone: its header exactly
+    one prerequisite (the task's base) and one ref at the given sha; its own objects through `git index-pack --strict`
+    (never git's `fsckObjects`, which git 2.43, the VM's, ignores for a bundle); the ref descending from the base.
+  - Each push has a repository of its own (`git init --bare`, mode 700, removed after any end), its alternates onto
+    `FACTORY_REPO_DIR`'s objects only, whose `objects`, `objects/info` and `objects/pack` must be the dispatcher's,
+    writable by no one else, with no alternates of their own; its config equal to
+    a reference `git init --bare`'s, keys and values, after init and again before the token is asked for.
+  - The refspec is the code's, `<sha>:refs/heads/factory/<branch>`, never `+` nor `:<ref>`, the branch the task's own;
+    the URL `https://github.com/<repository>.git` of the adapter's repository, and the token source must be that
+    repository's.
+  - Every credential goes to GitHub's exact origin or a test's loopback alone (`pinnedOrLoopback`): the API's (the
+    mint, `check-app --api`, `dev-token --api`) and the push's, held where the token is handed over.
+  - Behind those, the askpass answers only the push URL's origin and `GIT_ALLOW_PROTOCOL` is `https`; a refused push is
+    reported by git's kind of refusal, never the remote's text.
+  - Proven on the VM's git: `factory`'s required check `Test (git 2.43)` runs the whole suite on Ubuntu 24.04's git
+    as an ordinary user. Gaps behind them: #0-281 (the request helper, redirects, the scans' bounds), #0-278 AC7
+    (who writes `FACTORY_REPO_DIR`).
 
 **Known gaps**: a bypass actor or an admin added in the UI is seen only when the owner runs
 `repository-settings.rb check` (#0-113, ADR-0034), and so is a secret added in the UI (ADR-0035); a scan that

@@ -5,7 +5,8 @@
   written with an app of its own), its open points settled on 2026-11-19 (where the app's key lives, how the session
   starts); its Consequences amended on 2026-11-19 (step 4.2 split, #0-271 and #0-272: when ADR-0034 and
   ADR-0052 are amended); D7 amended on 2026-11-20 by #0-275 (v0's one lock for the whole dispatcher) and by #0-276
-  (the commits cross as a bundle into a fresh push repository)
+  (the commits cross as a bundle into a fresh push repository); its Consequences amended on 2026-11-20 by #0-276
+  (new sources of `factory`'s CI)
 - **Backlog:** #0-267 (stage 4.1); stage 4's later items are created as their turn comes, each from its step of the
   plan `.ai/context/migration/stage-4.md`
 - **Date:** 2026-11-17
@@ -167,3 +168,8 @@ and `--plugin-dir` (code.claude.com/docs/en/headless.md, cli-reference.md).
   answer taken as the trace, a head or commit read from the container's git and not checked against the recorded
   chain, a git with the dispatcher's rights run in a repository an agent wrote, or `factory` code naming
   incident-platform's paths or modules.
+- **New sources of software, for `factory`'s CI** (amended 2026-11-20, #0-276, the owner, on review round 4 of
+  `factory` PR #16): Docker Hub, for the image `ubuntu:24.04` of the job `Test (git 2.43)`, pinned by digest; and
+  Ubuntu's archive, for its git, through apt's signed index, the version held by the job (any git but 2.43 fails it),
+  not a package pin. The job reads no secret. One update path for the digest, which `verify-pins.sh` here pins too
+  for another use, is #0-281's.

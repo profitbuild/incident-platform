@@ -31,7 +31,7 @@ no item yet.
 ## Where we are
 
 Stages 0 to 3 are done. **Current: stage 4**: 4.1 done (2026-11-18, with #0-268, #0-269 and #0-270 on 2026-11-19);
-4.2 done (4.2a 2026-11-19, 4.2b 2026-11-20); 4.3 in progress, split into #0-275..#0-278: 4.3a (#0-275) done 2026-11-20 by `factory` PR #15; 4.3b (#0-276) next. Each
+4.2 done (4.2a 2026-11-19, 4.2b 2026-11-20); 4.3 in progress, split into #0-275..#0-278: 4.3a (#0-275) done 2026-11-20 by `factory` PR #15; 4.3b (#0-276) done 2026-11-20 by `factory` PR #16; 4.3c (#0-277) next. Each
 step's record: `migration/stage-4.md`.
 
 ## Stages
@@ -75,7 +75,7 @@ app as a PR's author, `audit-data.sh` reading it, and the app's Issues permissio
 (split on 2026-11-20: #0-275 the foundation, with #0-261; #0-276 the push from a push repository the dispatcher owns; #0-277 Docker and the
 task container; #0-278 the product's code from `main`; #0-273, done 2026-11-20 by `factory` PR #14, moved dev-token onto
 the shared checks first; #0-280, from 4.3a's review, the gate's schema checked against `run-tests.sh` before 4.4 reads
-a gate's answer), 4.4 the control flow ported with its tests, 4.5 push, PR, trailers and trace (#0-212, #0-204), 4.6 the
+a gate's answer; #0-281, from 4.3b's review, the credential checks held at the call that sends them and the scans' bounds), 4.4 the control flow ported with its tests, 4.5 push, PR, trailers and trace (#0-212, #0-204), 4.6 the
 credential proxy and `stream-json` transcripts, 4.7 the adapter, the switch and the three runs of the exit.
 ADR-0055: the container has no token; push, PR and commit trailers by the dispatcher; builder-app (never on `factory`);
 the gate contract, incident-platform's adapter first. Exit: 3 PRs opened by it.
