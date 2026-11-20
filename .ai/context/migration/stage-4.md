@@ -651,6 +651,63 @@ owner 2026-11-20, before its code, and done the same day, `factory` PR #16).**
   this ADR is written before its code; they take effect with its merge, and the ADR follows if the PR changes them.
   Kept for the end state: the task container checked before anything runs (#0-284), and what persists
   across tasks once a task holds a credential (#0-285).
+- **Decided for #0-277's last part, the move of `FACTORY_COMMIT` (2026-11-20, the owner, after `factory` PR #18
+  merged as `c5fe3264`; before its code):**
+  - **The pin:** `FACTORY_COMMIT` moves to `c5fe32646b99d49fe4bfb7dab4d4e2b1f73372d1`, the merge of PR #18
+    (`verify-pins.sh` step 6), applied by one VM recreation with the VM part (PR #672).
+  - **The dispatcher's env file has one author, `install-builder-app.sh` (A1).** `cli.mjs` reads both `FACTORY_*` and
+    `BUILDER_APP_*` from the one file `node --env-file` loads, every `FACTORY_*` required with no default, and the
+    script already writes that file whole, atomically, as `dispatcher` (a second author would lose one's lines on the
+    other's write; two env files would change `factory`'s code, whose `SWEEP_COMMAND` names one). Each value from one
+    source, never typed twice: `FACTORY_HELPER_IMAGE` from `provision.sh`'s `HELPER_IMAGE`, `FACTORY_STATE_DIR` and
+    `FACTORY_REPO_DIR` from `provision.sh`'s paths, the three limits from `.claude/settings.autopilot.json`; and the
+    script refuses a VM whose provisioning marker names another `FACTORY_COMMIT` or helper image than the checkout's
+    `provision.sh`, so what it writes is what that VM holds.
+  - **The limits are today's autopilot's, 2/10/5, read from `.claude/settings.autopilot.json`** (the owner's choice):
+    one source for both paths until 4.7's switch, so their runs compare under the same thresholds; the dispatcher
+    merges nothing in stage 4 anyway. The same value is not a shared budget: each path counts in its own state, and
+    only the owner's rule that one path runs at a time (4.7) keeps two from merging on one day. When the autopilot is
+    retired, the limits' source moves with it (4.7).
+  - **`FACTORY_REPO_DIR` is `/home/dispatcher/repo`, the dispatcher's own clone of the product (B1).** Unlike the
+    checkout of `factory` (code, pinned, root's, never updated in place), the product's clone is data the dispatcher
+    must bring up to `main` before every task, so it is `dispatcher`'s: a root-owned clone would need a wider sudo rule
+    to fetch. In a home of mode 700, nothing of `factory`'s reaches it (the "dispatcher's alone" way of #0-278 AC7,
+    whose objects feed every push through `alternates`, #0-276); its fetches go through the egress chain as any uid's
+    from 1000 up; its git is `dispatcher`'s own, so no `safe.directory`. `provision.sh` makes it once, as `dispatcher`,
+    a link refused; bringing it to `main` before a run is 4.3d's and 4.4's code. The name is the product's role, not
+    its name (ADR-0055).
+  - **The trial's adapter is a file of the trial (C1),** in the dispatcher's state directory, written for AC3's trial
+    and recorded; its `repository` must equal `provision.sh`'s `PRODUCT_REPO_URL`'s owner/name, since during the trial
+    it is a second source of the repository a token is narrowed to (#0-278 AC8); incident-platform's `.factory/adapter.json`, validated by Factory guards, stays 4.7's.
+  - **AC8:** `install-builder-app.sh` passes `--repository profitbuild/incident-platform` to `check-app`, its test
+    matching the whole call; the repository it passes, read from `provision.sh`'s `PRODUCT_REPO_URL`, stays beside the
+    adapter until #0-278 AC8 takes it from there.
+  - **Carried here from the reviews:** round 5 of the VM part (the socket address one variable in `provision.sh`;
+    `create.sh`'s socket path), and `factory` PR #18's round 2 non-blocking findings for the end state, into #0-284
+    (refusals that name a position, never a value the daemon gave: label keys, mount destinations, object names; a
+    static guard that nothing but the starter reads a call's stderr, and `factory`'s README sentence that claims one;
+    a bounded copy of a failed call's stderr that only the owner reads, its path named in the refusal; the refusal of
+    a feature's entry naming the differing keys, as ADR-0062 point 4 says).
+  - **Then:** the VM recreated, builder-app's key installed again, and the trials of AC3, AC10 and AC13 recorded here.
+- **Done for that move (2026-11-20, in its pull request; applied at the VM's recreation):** `FACTORY_COMMIT` is
+  `c5fe3264` (`verify-pins.sh`: identical to `factory`'s `main`); `provision.sh` makes the dispatcher's bare clone
+  `/home/dispatcher/repo` as `dispatcher` (a link refused, `refs/heads/main` checked) and names it in its marker, holds
+  the product's URL (`PRODUCT_REPO_URL`, now read by `create.sh` too) and, within `provision.sh`, the socket address
+  (`DOCKER_SOCK`) once (it stays a literal in `create.sh`'s and the rollback scripts' `DOCKER_HOST`);
+  `create.sh` checks the clone (dispatcher's, with `main`) and says why its own checks use the daemon's socket;
+  `install-builder-app.sh` writes the whole env file (the two ids, `FACTORY_STATE_DIR`, `FACTORY_REPO_DIR`,
+  `FACTORY_HELPER_IMAGE` from `provision.sh`, the three limits from `.claude/settings.autopilot.json`), refuses a VM
+  whose marker names another pin, helper or clone (before the key is written), and runs `check-app --repository`
+  (AC8); its test matches the whole env file and the whole call (four mutations, each caught). #0-284 carries PR #18's
+  round 2 findings for the end state (AC4 to AC7). Not done here: the trials, which need the recreated VM.
+- **Changed on that move's review, round 1 (2026-11-20, the owner's choice of the recommendations):** the clone is
+  checked to be a bare clone of `PRODUCT_REPO_URL` (`core.bare`, `remote.origin.url`) with `main`, in `provision.sh`
+  at every boot and in `create.sh` (probed: a fresh clone, a second boot, a foreign origin and a link, the last two
+  refused with the cure, recreating the VM); `create.sh` reads `DISPATCHER_REPO` and `DISPATCHER_STATE` from
+  `provision.sh`; the marker names the state directory too, and `install-builder-app.sh` compares it (four mismatch
+  cases now); the limits are a snapshot of the install: a change of them reaches the dispatcher when the script runs
+  again (stated in it and in docs/ai-factory.md step 6). Not done: a CI test of the clone block and of the refusals
+  for a missing `jq` or source (VM-only code, tried on the VM as the other blocks of these scripts are).
 - **Not done:** 4.3c, 4.3d; and, from 4.3a's review, `taskImage` bounded, symlinks under the adapter's paths, a
   reason without GitHub's text, resuming by `runId` or one running task at most, a blocked task counted by the
   breaker, a retried mint's leftover token, a script whose last segment is `.`, the item-id format tied to the

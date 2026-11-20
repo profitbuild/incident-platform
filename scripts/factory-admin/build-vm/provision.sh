@@ -63,13 +63,22 @@ FACTORY_USER=factory
 # create.sh), as every change here: Lima reads this file when it creates the VM.
 DISPATCHER_USER=dispatcher
 FACTORY_REPO_URL=https://github.com/profitbuild/factory.git
-FACTORY_COMMIT=3888a9004b418dff160c1f0aaa0bab504c3346cb  # gitleaks:allow: a public commit id of profitbuild/factory, no secret
+FACTORY_COMMIT=c5fe32646b99d49fe4bfb7dab4d4e2b1f73372d1  # gitleaks:allow: a public commit id of profitbuild/factory, no secret
 # The one checkout of factory on the VM (ADR-0062 point 3): root's, outside every user's home, so `factory`'s daemon can
 # mount it read-only into a task container and neither `factory` nor `dispatcher` can write it; the dispatcher runs
 # from it too (backlog #0-277).
 FACTORY_CHECKOUT=/opt/factory-checkout
 # The dispatcher's state (#0-275's FACTORY_STATE_DIR): its own, mode 700, which the dispatcher refuses otherwise.
 DISPATCHER_STATE=/home/dispatcher/state
+# The product: its repository, cloned by create.sh for the rollback's devcontainer and here for the dispatcher, whose
+# FACTORY_REPO_DIR is a bare clone of its own in its home (backlog #0-277: the dispatcher's alone, #0-278 AC7's way;
+# its git reads refs/heads/main there). One source: create.sh and install-builder-app.sh read both, and
+# DISPATCHER_STATE, from this file.
+PRODUCT_REPO_URL=https://github.com/profitbuild/incident-platform.git
+DISPATCHER_REPO=/home/dispatcher/repo
+# The rootless daemon's socket, through ADR-0057's link: the address every docker call that must not be misled sets as
+# DOCKER_HOST (the dispatcher's sudo rule's env_file, the helper image's pull below; review round 5 of #0-277's VM part).
+DOCKER_SOCK=unix:///run/docker.sock
 # The parent of every task's work directory (ADR-0062 point 2): `factory`'s, mode 700, made and filled only by one-shot
 # containers of its daemon.
 FACTORY_TASKS=/home/factory/tasks
@@ -501,7 +510,7 @@ as_factory sh -c '
   || { echo "provision.sh: cannot make $FACTORY_TASKS as $FACTORY_USER" >&2; exit 1; }
 # Both by DOCKER_HOST, as every docker call that must not be misled: factory's ~/.docker is the agent side's, and a
 # context planted there would send the pull to another daemon (review round 4 of #0-277's VM part).
-as_factory_docker() { as_factory env DOCKER_HOST=unix:///run/docker.sock docker "$@"; }
+as_factory_docker() { as_factory env DOCKER_HOST="$DOCKER_SOCK" docker "$@"; }
 if ! as_factory_docker image inspect "$HELPER_IMAGE" >/dev/null 2>&1; then
   as_factory_docker pull --quiet "$HELPER_IMAGE" >/dev/null
 fi
@@ -557,6 +566,25 @@ if [ "$head_now" != "$FACTORY_COMMIT" ] || [ -n "$tree_now" ]; then
   echo "provision.sh: $FACTORY_CHECKOUT is not a clean checkout of $FACTORY_COMMIT" >&2; exit 1
 fi
 
+# --- The dispatcher's clone of the product: FACTORY_REPO_DIR, bare, dispatcher's own ------------------------------------
+# Made once, as dispatcher (its fetch goes through the egress chain, as any uid's from 1000 up), refused when a link or
+# something else is there; bringing it up to main before a run is the dispatcher's code (steps 4.3d and 4.4), never
+# this script's. A clone in its home of mode 700: nothing of factory's reads or writes it, so the objects it feeds every
+# push with (#0-276's alternates) are the dispatcher's alone. Unlike the checkout of factory above (code, pinned,
+# root's), this is data the dispatcher must update, so a root-owned clone would need a wider sudo rule.
+# shellcheck disable=SC2016 # expanded by the shell runuser starts, with the arguments after `_`
+runuser -u "$DISPATCHER_USER" -- env HOME="$dispatcher_home" sh -c '
+  if [ -L "$1" ] || { [ -e "$1" ] && [ ! -d "$1" ]; }; then echo "$1 is a link or not a directory" >&2; exit 3; fi
+  [ -d "$1" ] || /usr/bin/git clone --quiet --bare -- "$2" "$1" || exit 1
+  # What is there must be this product'"'"'s bare clone with main, or the objects it feeds every push with are not the
+  # product'"'"'s (review round 1 of the FACTORY_COMMIT move): each answer read, then judged.
+  bare=$(/usr/bin/git --git-dir="$1" config --get core.bare) || bare=
+  origin=$(/usr/bin/git --git-dir="$1" config --get remote.origin.url) || origin=
+  [ "$bare" = true ] && [ "$origin" = "$2" ] || { echo "$1 is not a bare clone of $2" >&2; exit 1; }
+  /usr/bin/git --git-dir="$1" rev-parse --verify --quiet "refs/heads/main^{commit}" >/dev/null \
+    || { echo "$1 has no refs/heads/main" >&2; exit 1; }' _ "$DISPATCHER_REPO" "$PRODUCT_REPO_URL" \
+  || { echo "provision.sh: cannot make $DISPATCHER_REPO as $DISPATCHER_USER, or what is there is not the product's clone: recreate the VM (delete.sh, create.sh)" >&2; exit 1; }
+
 # --- dispatcher drives factory's Docker as factory: one sudo rule, two programs (ADR-0062 point 1) ---------------------
 # `dispatcher` may run, as `factory` and with no prompt, exactly docker and the pinned devcontainer CLI, with sudo's reset
 # environment; nothing else, and `factory` has no rule at all. The rule holds its whole environment itself, so nothing of
@@ -573,7 +601,7 @@ fi
 # The file's name holds no `.` (sudo's #includedir skips such a file silently); written to a temporary file, checked by
 # visudo, then moved into place, so a bad rule never lands.
 dispatcher_env=/etc/factory-dispatcher.env
-printf 'DOCKER_HOST=unix:///run/docker.sock\n' > "$dispatcher_env.tmp"
+printf 'DOCKER_HOST=%s\n' "$DOCKER_SOCK" > "$dispatcher_env.tmp"
 chown root:root "$dispatcher_env.tmp"; chmod 0644 "$dispatcher_env.tmp"; mv -f "$dispatcher_env.tmp" "$dispatcher_env"
 sudoers=/etc/sudoers.d/factory-dispatcher
 rule="Defaults:$DISPATCHER_USER env_reset, !setenv, secure_path=\"/usr/local/bin:/usr/bin:/bin\", runcwd=\"/\", env_file=$dispatcher_env
@@ -590,5 +618,5 @@ chmod 0440 "$sudoers"
 visudo -cq || { echo "provision.sh: sudo's configuration does not parse with $sudoers" >&2; exit 1; }
 
 # The boot it finished in, so create.sh can tell this boot's run from an earlier one.
-echo "factory-build provisioned: $(docker --version), rootless for $FACTORY_USER; node $(/usr/local/bin/node --version); devcontainer $(devcontainer --version); $DISPATCHER_USER at factory $FACTORY_COMMIT in $FACTORY_CHECKOUT; helper $HELPER_IMAGE; boot $(cat /proc/sys/kernel/random/boot_id)" \
+echo "factory-build provisioned: $(docker --version), rootless for $FACTORY_USER; node $(/usr/local/bin/node --version); devcontainer $(devcontainer --version); $DISPATCHER_USER at factory $FACTORY_COMMIT in $FACTORY_CHECKOUT; helper $HELPER_IMAGE; repo $DISPATCHER_REPO; state $DISPATCHER_STATE; boot $(cat /proc/sys/kernel/random/boot_id)" \
   > /etc/factory-build-provisioned

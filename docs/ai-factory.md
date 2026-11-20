@@ -140,16 +140,17 @@ set before the asker gets them: a set resolved every 30 minutes failed the first
 CloudFront's changing addresses (#0-247). A domain added to or removed from the devcontainer's `init-firewall.sh`
 changes the copy in `factory-egress.sh` in `provision.sh` too: Factory guards and `create.sh` refuse the two apart.
 
-Steps 3, 5, 6 and 7 below describe a VM made from a `provision.sh` of #0-277 and on (ADR-0062); the dispatcher's own
-side of them (its refusal on a running rollback, its sweep, `cli.mjs sweep`) comes with the `FACTORY_COMMIT` that
-carries #0-277's code, the one recreation that applies both. A VM made before has `factory` in `dispatcher`'s home,
-and `install-builder-app.sh` refuses to run on it: recreate it.
+Steps 3, 5, 6 and 7 below describe a VM made from this checkout's `provision.sh` (ADR-0062, with the `FACTORY_COMMIT`
+that carries #0-277's dispatcher code: its refusal on a running rollback, its sweep, `cli.mjs sweep`). A VM made from
+an earlier one (before #0-277, or from PR #672's, whose pin and marker differ) is refused by `install-builder-app.sh`,
+which compares the VM's provisioning marker with this checkout: recreate it.
 
 1. **Create:** `scripts/factory-admin/build-vm/create.sh`. It refuses an instance that exists (`delete.sh` first),
    downloads Ubuntu's image once (Lima checks the pinned sha256), runs `provision.sh` (Docker CE rootless for user
    `factory`, its egress filter, git, Node at `.node-version`, the devcontainer CLI; the user `dispatcher`, the sudo
    rule by which it runs `docker` and the devcontainer CLI as `factory`, root's checkout of `factory` in
-   `/opt/factory-checkout`, `/home/dispatcher/state`, `/home/factory/tasks` and the pinned helper image), checks the
+   `/opt/factory-checkout`, `/home/dispatcher/state`, the dispatcher's bare clone of the product `/home/dispatcher/repo`,
+   `/home/factory/tasks` and the pinned helper image), checks the
    boundary (the rootful
    daemon masked, `factory`'s rootless and filtered, the Mac rejected, `example.com` unreachable, GitHub reachable),
    restarts the VM once and checks it again (what holds only on a fresh VM fails there), and clones
@@ -206,8 +207,13 @@ and `install-builder-app.sh` refuses to run on it: recreate it.
    own terminal, with the file's path given by dragging it from Finder into the terminal window (a file a browser
    downloads carries `com.apple.macl`: macOS lets only the apps you pointed it to read it, whatever the folder's
    permission; neither Claude Code's `!` nor a typed path could, 2026-11-20). It sends
-   the key on stdin into `/home/dispatcher/.config/factory/`, checks it and the modes, runs `factory`'s `check-app` as
-   `dispatcher` and deletes the download once that passed. On a rotation delete the old key in the app's settings
+   the key on stdin into `/home/dispatcher/.config/factory/`, writes the env file (the app's two ids and the
+   dispatcher's settings, each from its source: `provision.sh`'s paths and helper image, the three limits of
+   `.claude/settings.autopilot.json`; it refuses a VM made from another `provision.sh`), checks it and the modes, runs
+   `factory`'s `check-app --repository profitbuild/incident-platform` as `dispatcher` and deletes the download once
+   that passed. The VM also holds the dispatcher's own bare clone of the product, `/home/dispatcher/repo`
+   (`FACTORY_REPO_DIR`), made by `provision.sh` as `dispatcher`. The three limits are a snapshot taken at this run:
+   after you change them in `.claude/settings.autopilot.json`, run the script again for the dispatcher to follow. On a rotation delete the old key in the app's settings
    afterwards; after `delete.sh`, delete the old VM's key there.
 7. **Run the autopilot** there (the rollback, while no dispatcher run is active), through `rollback-exec.sh`, as in
    "Running it". Your own sessions stay on the Mac, in your checkout. The local

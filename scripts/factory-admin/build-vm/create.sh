@@ -31,11 +31,17 @@
 set -euo pipefail
 
 NAME=factory-build
-# This product's repository, named here: the factory is to build other products too (ADR-0055), so in stage 4, when
-# these scripts move to the `factory` repository, the URL becomes the product adapter's setting.
-REPO_URL=https://github.com/profitbuild/incident-platform.git
 CLONE=/home/factory/incident-platform
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+# This product's repository, provision.sh's PRODUCT_REPO_URL (one source with the dispatcher's clone, backlog #0-277):
+# the factory is to build other products too (ADR-0055), so when these scripts move to the `factory` repository the URL
+# becomes the product adapter's setting.
+REPO_URL=$(sed -n 's/^PRODUCT_REPO_URL=\(https:\/\/github\.com\/[A-Za-z0-9_.-]*\/[A-Za-z0-9_.-]*\.git\)$/\1/p' "$here/provision.sh")
+[ -n "$REPO_URL" ] || { echo "create.sh: cannot read PRODUCT_REPO_URL from provision.sh" >&2; exit 1; }
+# The dispatcher's clone and state, provision.sh's DISPATCHER_REPO and DISPATCHER_STATE (one source, FAC-A01).
+D_REPO=$(sed -n 's|^DISPATCHER_REPO=\(/[A-Za-z0-9/_.-]*\)$|\1|p' "$here/provision.sh")
+D_STATE=$(sed -n 's|^DISPATCHER_STATE=\(/[A-Za-z0-9/_.-]*\)$|\1|p' "$here/provision.sh")
+[ -n "$D_REPO" ] && [ -n "$D_STATE" ] || { echo "create.sh: cannot read DISPATCHER_REPO or DISPATCHER_STATE from provision.sh" >&2; exit 1; }
 root=$(cd "$here/../../.." && pwd)
 
 fail() { echo "create.sh: $*" >&2; exit 1; }
@@ -129,7 +135,9 @@ check_boundary() {
   [ "$uid" -ge 1000 ] || boundary_fail "factory's uid $uid is below 1000, outside the filtered range"
   # Commands as factory without its login shell (`sudo -iu` would run ~/.profile, which code a test can rewrite on a VM
   # agents have used, and make a check pass falsely: review round 4 of #0-116); curl -q skips ~/.curlrc, and DOCKER_HOST
-  # names factory's daemon over any context in ~/.docker.
+  # names factory's daemon over any context in ~/.docker. By the daemon's own socket, not the /run/docker.sock link the
+  # dispatcher and the rollback scripts use, on purpose: these checks judge the daemon itself, and the link is checked
+  # apart (the feature's mount of /var/run/docker.sock below, and the daemon dispatcher's docker reaches).
   as_factory=(sudo -u factory -H env "DOCKER_HOST=unix:///run/user/$uid/docker.sock")
   [ "$(vm systemctl is-enabled docker.service 2>/dev/null || true)" = masked ] || boundary_fail "the rootful docker.service is not masked"
   # Each read answers first, then is judged: a `limactl shell` or `sudo` that fails is no pass (review round 1 of #0-116).
@@ -287,8 +295,16 @@ check_boundary() {
   vm "${as_factory[@]}" docker run --rm -v /opt/factory-checkout:/opt/factory:ro alpine \
     sh -c 'test -f /opt/factory/dispatcher/bin/check-app.mjs && ! touch /opt/factory/.w 2>/dev/null' \
     || boundary_fail "factory's daemon cannot mount /opt/factory-checkout, or mounts it writable"
+  # The dispatcher's clone of the product (FACTORY_REPO_DIR): dispatcher's, a bare clone of REPO_URL, with main.
+  repo=$(vm sudo stat -c '%U %F' "$D_REPO") || boundary_fail "no $D_REPO"
+  [ "$repo" = "dispatcher directory" ] || boundary_fail "$D_REPO is $repo, not dispatcher's directory"
+  bare=$(vm "${as_dispatcher[@]}" /usr/bin/git --git-dir="$D_REPO" config --get core.bare) || boundary_fail "cannot read $D_REPO's core.bare"
+  origin=$(vm "${as_dispatcher[@]}" /usr/bin/git --git-dir="$D_REPO" config --get remote.origin.url) || boundary_fail "cannot read $D_REPO's origin"
+  [ "$bare" = true ] && [ "$origin" = "$REPO_URL" ] || boundary_fail "$D_REPO is not a bare clone of $REPO_URL ($bare, $origin)"
+  vm "${as_dispatcher[@]}" /usr/bin/git --git-dir="$D_REPO" rev-parse --verify --quiet 'refs/heads/main^{commit}' >/dev/null \
+    || boundary_fail "$D_REPO has no refs/heads/main"
   # The directories of ADR-0062 points 2 and 3, the helper image at its pin, the lock's flock.
-  for want in "factory 700 /home/factory/tasks" "dispatcher 700 /home/dispatcher/state" \
+  for want in "factory 700 /home/factory/tasks" "dispatcher 700 $D_STATE" \
               "dispatcher 700 /home/dispatcher/.config" "dispatcher 700 /home/dispatcher/.config/factory"; do
     got=$(vm sudo stat -c '%U %a %F' "${want##* }") || boundary_fail "no ${want##* }"
     [ "$got" = "${want% *} directory" ] || boundary_fail "${want##* } is $got, not ${want% *} directory"

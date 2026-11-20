@@ -3,11 +3,14 @@
 # Tests for scripts/factory-admin/build-vm/install-builder-app.sh (backlog #0-272), offline: `limactl` is a stub on
 # PATH that runs the VM's commands here, with the VM's paths (/home/dispatcher, /etc/factory-build-provisioned, Node)
 # moved under one temporary directory per case, and `sudo` dropped. What a case checks:
-#   - a good run writes the key (equal to the downloaded one) and the env file (the two ids, nothing else), both mode
-#     600 with no `.new` left, runs check-app with that env file, and deletes the downloaded key;
+#   - a good run writes the key (equal to the downloaded one) and the env file (the two ids and the dispatcher's six
+#     settings, each from its one source: provision.sh and .claude/settings.autopilot.json; backlog #0-277), both mode
+#     600 with no `.new` left, runs check-app with that env file and `--repository` (the whole call matched, AC8), and
+#     deletes the downloaded key;
 #   - the key never travels in an argument (argv is readable by every user of the VM): no call holds its text;
 #   - every refusal names its cause and keeps the downloaded key: wrong arguments, a link or a file that is no key, no
-#     VM, a stopped one, one provisioned without `dispatcher`, modes or owners not as required, a copy whose digest
+#     VM, a stopped one, one provisioned without `dispatcher` or from another provision.sh (its pin, helper image or
+#     clone not this checkout's), modes or owners not as required, a copy whose digest
 #     differs, check-app failing;
 #   - a second key replaces the first (a rotation).
 # Needs GNU stat (Linux): run by .github/workflows/factory-guards.yml and .github/scripts/ci-local.sh.
@@ -16,6 +19,15 @@ set -uo pipefail
 
 SRC=$(cd "$(dirname "$0")/../.." && pwd)
 SCRIPT=$SRC/scripts/factory-admin/build-vm/install-builder-app.sh
+PROV=$SRC/scripts/factory-admin/build-vm/provision.sh
+LIMITS=$SRC/.claude/settings.autopilot.json
+# What the script must write and check, read here independently of it: plain sed and jq on the same sources.
+P_COMMIT=$(sed -n 's/^FACTORY_COMMIT=\([0-9a-f]\{40\}\).*$/\1/p' "$PROV")
+P_HELPER=$(sed -n 's/^HELPER_IMAGE=\(.*\)$/\1/p' "$PROV")
+P_STATE=$(sed -n 's/^DISPATCHER_STATE=\(.*\)$/\1/p' "$PROV")
+P_REPO=$(sed -n 's/^DISPATCHER_REPO=\(.*\)$/\1/p' "$PROV")
+P_REPOSITORY=$(sed -n 's|^PRODUCT_REPO_URL=https://github.com/\(.*\)\.git$|\1|p' "$PROV")
+MARKER="factory-build provisioned: docker; node v24; dispatcher at factory $P_COMMIT in /opt/factory-checkout; helper $P_HELPER; repo $P_REPO; state $P_STATE; boot 1"
 WORK=$(mktemp -d)
 trap 'rm -rf "$WORK"' EXIT
 failures=0
@@ -86,8 +98,7 @@ new_case() {
   export VM
   mkdir -p "$VM/etc" "$VM/home/dispatcher/.config/factory" "$VM/opt/factory-checkout/dispatcher/bin"
   chmod 700 "$VM/home/dispatcher" "$VM/home/dispatcher/.config" "$VM/home/dispatcher/.config/factory"
-  echo "factory-build provisioned: docker; node v24; dispatcher at factory 3888a900 in /opt/factory-checkout; helper h; boot 1" \
-    > "$VM/etc/factory-build-provisioned"
+  echo "$MARKER" > "$VM/etc/factory-build-provisioned"
   # The fake check-app: logs the env file it was given and what it holds, exits $STUB_CHECK_RC.
   cat > "$VM/node" <<'NODE'
 #!/usr/bin/env bash
@@ -117,14 +128,19 @@ if [ "$RC" -ne 0 ]; then fail "good run: exit $RC ($OUT)"
 else
   if [ "$(cat "$(conf)/builder-app.pem")" = "$KEYTEXT" ]; then ok "the VM's key is the downloaded one"
   else fail "the VM's key differs"; fi
-  if [ "$(cat "$(conf)/env")" = "$(printf 'BUILDER_APP_ID=5844656\nBUILDER_APP_INSTALLATION_ID=183942865')" ]; then
-    ok "the env file holds the two ids and nothing else"
+  want_env=$(printf '%s\n' BUILDER_APP_ID=5844656 BUILDER_APP_INSTALLATION_ID=183942865 \
+    "FACTORY_STATE_DIR=$P_STATE" "FACTORY_REPO_DIR=$P_REPO" "FACTORY_HELPER_IMAGE=$P_HELPER" \
+    "FACTORY_MAX_BLOCKED=$(jq -r .env.FACTORY_MAX_BLOCKED "$LIMITS")" \
+    "FACTORY_AUDIT_EVERY=$(jq -r .env.FACTORY_AUDIT_EVERY "$LIMITS")" \
+    "FACTORY_MAX_MERGES_PER_DAY=$(jq -r .env.FACTORY_MAX_MERGES_PER_DAY "$LIMITS")")
+  if [ "$(cat "$(conf)/env")" = "$want_env" ]; then
+    ok "the env file holds the two ids and the dispatcher's six settings, from their sources, and nothing else"
   else fail "env file: $(cat "$(conf)/env")"; fi
   if [ "$(mode "$(conf)/builder-app.pem")" = 600 ] && [ "$(mode "$(conf)/env")" = 600 ]; then ok "key and env file are mode 600"
   else fail "modes: key $(mode "$(conf)/builder-app.pem"), env $(mode "$(conf)/env")"; fi
   if ls "$(conf)"/*.new >/dev/null 2>&1; then fail "a .new file is left"; else ok "no .new file is left"; fi
-  if grep -qF "node --env-file=$(conf)/env $VM/opt/factory-checkout/dispatcher/bin/check-app.mjs" "$VM/node.log" \
-    && grep -qx 'BUILDER_APP_ID=5844656' "$VM/node.log"; then ok "check-app ran with that env file"
+  if grep -qxF "node --env-file=$(conf)/env $VM/opt/factory-checkout/dispatcher/bin/check-app.mjs --repository $P_REPOSITORY" "$VM/node.log" \
+    && grep -qx 'BUILDER_APP_ID=5844656' "$VM/node.log"; then ok "check-app ran with that env file and --repository $P_REPOSITORY (the whole call)"
   else fail "check-app call: $(cat "$VM/node.log" 2>/dev/null)"; fi
   if [ ! -e "$KEY" ]; then ok "the downloaded key is deleted"; else fail "the downloaded key is still there"; fi
   if grep -qF 'MIIEsecretLINE' "$VM/calls"; then fail "the key's text is in a limactl argument"
@@ -147,6 +163,14 @@ new_case; STUB_INSTANCES="" run 5844656 183942865 "$KEY"; expect_fail "no VM" "n
 new_case; STUB_STATUS=Stopped run 5844656 183942865 "$KEY"; expect_fail "a stopped VM" "is Stopped, not Running"
 new_case; echo "factory-build provisioned: docker; boot 1" > "$VM/etc/factory-build-provisioned"
 run 5844656 183942865 "$KEY"; expect_fail "a VM provisioned without dispatcher" "was not provisioned with dispatcher"
+zeros=0000000000000000000000000000000000000000
+for pair in "factory $P_COMMIT|factory $zeros" "helper $P_HELPER;|helper other:tag@sha256:$zeros$zeros${zeros:0:24};" \
+            "repo $P_REPO;|repo /home/dispatcher/other;" "state $P_STATE;|state /home/dispatcher/other;"; do
+  from=${pair%%|*} to=${pair#*|}
+  new_case; m=$(cat "$VM/etc/factory-build-provisioned"); printf '%s\n' "${m/"$from"/"$to"}" > "$VM/etc/factory-build-provisioned"
+  run 5844656 183942865 "$KEY"; expect_fail "a VM from another provision.sh (${from%% *})" "provisioned from another provision.sh"
+  if [ -e "$(conf)/builder-app.pem" ]; then fail "a VM from another provision.sh (${from%% *}): the key was written"; fi
+done
 new_case; echo "factory-build provisioned: docker; node v24; dispatcher at factory 3888a900; boot 1" > "$VM/etc/factory-build-provisioned"
 run 5844656 183942865 "$KEY"; expect_fail "a VM from before /opt/factory-checkout" "provisioned before /opt/factory-checkout"
 if [ -e "$(conf)/builder-app.pem" ] || [ -e "$(conf)/env" ]; then fail "a VM from before /opt/factory-checkout: something was written"
