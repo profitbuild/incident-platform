@@ -10,7 +10,9 @@ Each step's section ends with its **Record** (done, why, not done, why not; `.ai
 keeps a record"), updated by the PR that changes it.
 
 Exit (ADR-0055): 3 PRs opened by the dispatcher. Rollback: today's `/backlog-autopilot` in the devcontainer, kept
-working until stage 5's exit. Rule of the migration: one factory change at a time, then application items.
+working until stage 5's exit; from 4.3c on it shares the VM by time with the dispatcher (only while no dispatcher run
+is active, the owner's logins entered again before it), since no credential may live on the VM's daemon while the
+dispatcher runs (ADR-0062 point 5). Rule of the migration: one factory change at a time, then application items.
 
 ## The picture at the end of stage 4
 
@@ -310,8 +312,9 @@ Split on 2026-11-20 (the owner's choice A), one `factory` pull request each, in 
 - **4.3b, #0-276:** done 2026-11-20, `factory` PR #16 (merge `3c588db3`). "Carried from #0-271's review" below: the push repository the dispatcher owns, the pinned refspec, the repository from
   the adapter, children from an allowlisted environment; how, decided with the owner on 2026-11-20 (the Record's
   "Decided for 4.3b").
-- **4.3c, #0-277:** "Docker for the dispatcher" (an analysis and the owner's choice first, then `provision.sh`) and the
-  task container.
+- **4.3c, #0-277:** "Docker for the dispatcher" (decided with the owner on 2026-11-20, ADR-0062; the Record's "Decided
+  for 4.3c") and the task container; with it #0-282, incident-platform's task configuration for that container (each
+  needs the other: #0-282's check is #0-277's, #0-277's trial on the VM runs #0-282's configuration).
 - **4.3d, #0-278:** "Product code from `main` only" and `next-item.sh`'s open pull requests as a file.
 
 - **CLI:** `node dispatcher/src/cli.mjs run [--item 0-N] [--resume <branch>] --adapter <product>/.factory/adapter.json`.
@@ -323,7 +326,7 @@ Split on 2026-11-20 (the owner's choice A), one `factory` pull request each, in 
   ACL on the socket must be set at every start of the daemon (`/run/user/<uid>` is a tmpfs, and the daemon's unit is
   `factory`'s own, which code a test runs can change, ADR-0057), so the setting belongs to a root-owned unit; the
   alternative is a sudoers rule letting `dispatcher` run `docker` as `factory`. Tested here, where `docker exec` is
-  first used.
+  first used. Decided 2026-11-20: the sudo rule (ADR-0062; the Record's "Decided for 4.3c").
 - **Carried from #0-271's review** (`factory` PR #9; the code holds them as preconditions, 4.3 makes them checks):
   - **A push repository the dispatcher owns.** The token goes only to a git run in a repository the dispatcher made,
     whose config no agent's uid can write; the task's commits reach it as a bundle, never by a fetch from the task's
@@ -352,11 +355,13 @@ Split on 2026-11-20 (the owner's choice A), one `factory` pull request each, in 
   `["scripts/factory/"]`), `taskImage`,
   `profile`, `factoryVersion`. **Gate contract (`factory/schemas/gate.schema.json`):** today's `run-tests.sh` JSON:
   `status` (`pass` | `fixable` | `stop`), `exitCode`, `modules`, `log`, `head`, `artifact`, `summary[]`.
-- **Task container:** a fresh clone of the product at the base into `$FACTORY_STATE_DIR/tasks/<runId>/work`, owned by
-  the uid the container's `dev` maps to (as `create.sh` does today); `devcontainer up --workspace-folder <work>` with
+- **Task container:** a fresh clone of the product at the base into a work directory of `factory`'s (ADR-0062: not
+  `$FACTORY_STATE_DIR`, which the daemon cannot reach), owned by the uid the container's `dev` maps to (as `create.sh`
+  does today: here by a one-shot container, ADR-0062 point 2); `devcontainer up --workspace-folder <work>` with
   `factory` mounted read-only at `/opt/factory`; `~/.claude` a per-task volume (nothing to log in to, D4); `~/.m2` a
   shared cache volume (open: a task can poison it for the next; proposal: accept in v0, per-task copy if a seeded case
-  shows it). `docker rm -f` and the volume removed at the end, BLOCKED or not.
+  shows it). At the end, BLOCKED or not, and at the next run's start: every container and network of the daemon, every
+  volume but `~/.m2`, and the work directory removed (ADR-0062 point 7).
 - **Product code from `main` only (D6):** the adapter's commands and `trustedPaths` are read from the base commit
   (for incident-platform: `next-item.sh`, `changed-paths.sh`, `run-tests.sh`); the queue command runs in a short-lived
   container from `main` too. The dispatcher names no product path itself (ADR-0055).
@@ -527,6 +532,64 @@ owner 2026-11-20, before its code, and done the same day, `factory` PR #16).**
     `factory`'s CI, accepted by the owner (review round 4's `NEEDS_HUMAN`), held in ADR-0060's Consequences.
 - **ADRs changed (4.3b):** ADR-0060 D7 amended before the code (#0-276, PR #668); ADR-0060's Consequences amended by
   this step's closing PR (the new sources of `factory`'s CI).
+- **Decided for 4.3c with the owner (2026-11-20, `/research` of #0-277 and review round 1 of the decisions, before its
+  code; ADR-0062):**
+  - **`docker` and `devcontainer` run as `factory`, never as `dispatcher`,** through one sudoers rule
+    (`/etc/sudoers.d/factory-dispatcher`, no `.` in the name since `#includedir` skips such a file, 0440, `visudo -c`):
+    exactly the two programs by full path, as `factory`, with no prompt (`sudo -n`), `env_reset`, no `setenv`; no rule for
+    `factory`. Why not an ACL on the socket: the `devcontainer` CLI would parse the product's configuration and run
+    its host side as `dispatcher`, the uid of builder-app's key, and `factory` can restart its daemon or change its
+    runtime directory's ACL at any moment. The precedent is `create.sh`'s own `sudo -u factory ... docker`. No secret
+    in such a call's arguments, which sudo logs (4.6's token: stdin or the like, decided there).
+  - **The work directory lives and dies by one-shot containers** of `factory`'s daemon, the helper image
+    `buildpack-deps:noble-scm` (Docker official, git 2.43 and coreutils: probed) pinned by digest: under
+    `/home/factory/tasks` (700, `factory`'s), a helper mounting the parent makes `<runId>/`, writes the bundle from
+    its stdin to a file (git reads no bundle from a pipe: probed on the VM's git), `git clone -b base` (a bundle of a
+    bare sha is empty, one with no `HEAD` checks out nothing: probed), `chown -R -h 1000:1000`; removal is
+    `rm -rf <runId>` from the parent (dot entries and the directory itself), at the end and at the next run's start.
+    Why: git as a third program would read `factory`'s agent-writable `~/.gitconfig`; the dispatcher has no root to
+    `chown`, and outside the user namespace `factory` cannot remove what `dev` wrote; the daemon cannot reach
+    `$FACTORY_STATE_DIR`; `rm -rf <dir>/*` (round 1's) leaves `.git` and every dot entry.
+  - **One factory checkout, root's:** `/opt/factory-checkout` at `FACTORY_COMMIT` (`root:root`, 0755) by
+    `provision.sh`, checked at boot; mounted read-only at `/opt/factory`, and the dispatcher runs from it too. Why: the
+    dispatcher's clone under its 0700 home cannot be mounted by the daemon, and a copy of `factory`'s could be rewritten
+    by one task's test for the next.
+  - **The container's configuration is the dispatcher's, from a task configuration the product ships for it**
+    (review round 2): `taskImage` names it (incident-platform's is #0-282), the dispatcher reads it from the base in
+    `FACTORY_REPO_DIR` (as data, its own JSONC reader), checks it against a closed list (the build, `remoteUser`, the
+    in-container commands; `capAdd` from `NET_ADMIN`/`NET_RAW`; `--add-host` to `host-gateway`; listed `containerEnv`
+    keys; features by id and lockfile digest, `docker-outside-of-docker`'s socket accepted by name) and writes the
+    override through the helper's stdin; `mounts`, `workspaceMount`, `updateRemoteUserUID: false`, `containerUser` its
+    own; anything else refused, `initializeCommand` included. Why: incident-platform's interactive configuration mounts
+    the bot's token and Claude's login and carries the bot's environment, and a list over it would put a product's
+    needs into the factory's code.
+  - **No credential on `factory`'s daemon while the dispatcher runs; the rollback shares the VM by time** (review
+    rounds 2 to 5): `rollback-start.sh` refuses while a `factory.task` object exists, labels the rollback's container
+    `factory.rollback=1`, and checks again after `up` and before the logins (removing its container if a run began);
+    every rollback command goes through the label (`rollback-start.sh`, `rollback-exec.sh`); the dispatcher refuses to
+    start while a running container carries that label, makes itself visible (the task's labelled network) and checks
+    again before creating the task container, so a rollback still building is seen by one side; a refusal names what
+    it found and `cli.mjs sweep`; otherwise its sweep removes everything but
+    `factory-dispatcher-m2` (containers, then networks, then volumes, the result checked), the rollback's credential
+    volumes, a killed run's leftovers and anonymous volumes included, so each run after a rollback erases its logins.
+    Why: a test with the Docker socket mounts any volume of the daemon itself; the Mac's devcontainer (round 1's
+    choice) would reopen #0-240 and #0-116; a refusal on "a credential volume exists" (round 2's) never let the sweep
+    run (arc-9c51), and one on "a running container without the task's label" (round 3's) took a killed run's
+    Testcontainers for a rollback and locked both paths (arc-5e17): a label is positive, never inferred.
+  - **The task image in v0 is built on the VM from the product's task configuration** (ADR-0055 until stage C):
+    `taskImage` is its path, bounded (no leading `-`, inside the clone); the dispatcher records the built image's ID in
+    `task.json` and runs the task's containers from it; the image holds `timeout`. First decided as "by registry
+    digest"; corrected the same day before any code (the owner, on the analysis of the environments' VM): an image
+    built on the VM has an ID but no registry digest, which comes when CI builds and publishes the image. The ID and the
+    helper's digest stop a tag swap and a changed pull, no more: the image store is on the agent's side.
+  - **Ends:** a call runs under `timeout -s TERM -k <grace> <limit>` inside the container, since `docker exec` without a
+    tty forwards no signal (probed 2026-11-20); past it, `docker kill` by the label `factory.task=<runId>`, the output
+    no longer awaited, the task BLOCKED. At the end and at the next run's start every container and network of the
+    daemon, every volume but `factory-dispatcher-m2`, and the work directory are removed, in that order, the result
+    checked.
+  - **The dispatcher runs from the root-owned checkout:** its clone in its home retired, `install-builder-app.sh`'s
+    `check-app` path moved, the checkout's fetch root's (stated in `provision.sh`).
+  - **`~/.m2` shared in v0**, as proposed above.
 - **Not done:** 4.3c, 4.3d; and, from 4.3a's review, `taskImage` bounded, symlinks under the adapter's paths, a
   reason without GitHub's text, resuming by `runId` or one running task at most, a blocked task counted by the
   breaker, a retried mint's leftover token, a script whose last segment is `.`, the item-id format tied to the
@@ -536,7 +599,8 @@ owner 2026-11-20, before its code, and done the same day, `factory` PR #16).**
   may write it; `check-app` taking the repository from the adapter once the adapter is a file; the host checked in
   `app-token.mjs`'s request helper, with redirects refused, and `dev-token`'s `mint` and `revokeQuietly` through it;
   the static scans' named bounds and their missing functions; the git 2.43 job's floor of tests; its uid comment;
-  one update path for the `ubuntu:24.04` digest kept in two places.
+  one update path for the `ubuntu:24.04` digest kept in two places, and one for the helper image's digest (ADR-0062
+  point 8).
 - **Why not, from 4.3b's reviews:** the first two matter only for 4.4's long-lived task repository and its caller
   (4.4, "Carried from 4.3b's decisions"); who may write `FACTORY_REPO_DIR` and the adapter's file are 4.3d's (#0-278
   AC7, AC8); the rest is defence in depth behind controls that hold today, an item of its own (#0-281).
