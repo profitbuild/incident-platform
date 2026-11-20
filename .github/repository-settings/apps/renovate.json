@@ -1,0 +1,11 @@
+{
+  "slug": "renovate",
+  "app_id": 2740,
+  "permissions": {
+    "administration": "read", "checks": "write", "contents": "write", "issues": "write", "members": "read",
+    "metadata": "read", "packages": "read", "pull_requests": "write", "statuses": "write",
+    "vulnerability_alerts": "read", "workflows": "write"
+  },
+  "events": ["issue_comment", "issues", "pull_request", "pull_request_review_comment", "push", "repository"],
+  "repository_selection": "selected"
+}

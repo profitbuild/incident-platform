@@ -22,7 +22,8 @@ n=0
 dir=""
 
 # gh stub: `api [--method M] [--input -] <path>` against $GH_STUB_LIVE (rulesets/<id>.json, repo.json, admins.json,
-# writers.json: the collaborators with Write, whom permission=push lists after the admins); every
+# writers.json: the collaborators with Write, whom permission=push lists after the admins; installations.json: the
+# organization's app installations, backlog #0-272); every
 # call is logged as "<METHOD> <path>" in its calls file. GH_STUB_HIDE=bypass,repo hides what only an admin
 # sees (setting: one repository setting, from an admin's token too); environments are
 # live/environments/<name>.env.json, .policies.json and .secrets.json, the repository's secrets live/repo-secrets.json; GH_STUB_FAIL=<text> fails a call whose path contains it; GH_STUB_NOT_LIST=1 answers the list with an object.
@@ -67,6 +68,9 @@ when ['GET', 'repos/o/r']
 when ['GET', 'repos/o/r/environments?per_page=100']
   envs = Dir.glob(File.join(live, 'environments', '*.env.json')).sort.map { |f| JSON.parse(File.read(f)) }
   puts JSON.generate('total_count' => envs.size, 'environments' => envs)
+when ['GET', 'orgs/o/installations?per_page=100']
+  list = JSON.parse(File.read(File.join(live, 'installations.json')))
+  puts JSON.generate('total_count' => list.size, 'installations' => list)
 when ['GET', 'repos/o/r/actions/secrets?per_page=100']
   names = JSON.parse(File.read(File.join(live, 'repo-secrets.json')))
   puts JSON.generate('total_count' => names.size, 'secrets' => names.map { |n| { 'name' => n } })
@@ -197,6 +201,13 @@ layout() {
                                                 "delete_branch_on_merge" => true, "allow_auto_merge" => false))
       File.write("live/admins.json", JSON.generate([{ "login" => "owner" }]))
       File.write("live/writers.json", JSON.generate([{ "login" => "bot" }]))
+      Dir.mkdir(".github/repository-settings/apps") rescue nil
+      app = { "slug" => "builder", "app_id" => 7, "permissions" => { "contents" => "write", "metadata" => "read" },
+              "events" => [], "repository_selection" => "selected" }
+      File.write(".github/repository-settings/apps/builder.json", JSON.pretty_generate(app))
+      File.write("live/installations.json", JSON.generate([{ "id" => 70, "app_id" => 7, "app_slug" => "builder",
+        "target_type" => "Organization", "repository_selection" => "selected", "events" => [],
+        "permissions" => { "metadata" => "read", "contents" => "write" } }]))
     '
 }
 
@@ -333,7 +344,7 @@ tag_ruleset() {
     rb '
       t = { "name" => "tags", "target" => "tag", "enforcement" => "active",
             "conditions" => { "ref_name" => { "include" => ["~ALL"], "exclude" => [] } },
-            "bypass_actors" => [{ "actor_id" => 2740, "actor_type" => "Integration", "bypass_mode" => "always" },
+            "bypass_actors" => [{ "actor_id" => 7, "actor_type" => "Integration", "bypass_mode" => "always" },
                                 { "actor_id" => 4, "actor_type" => "RepositoryRole", "bypass_mode" => "always" }],
             "rules" => [{ "type" => "deletion" }, { "type" => "update", "parameters" => { "update_allows_fetch_and_merge" => false } }] }
       File.write(".github/repository-settings/rulesets/tags.json", JSON.pretty_generate(t))
@@ -347,6 +358,23 @@ tag_target_branch() { tag_ruleset; live 13 'r["target"] = "branch"'; }
 # GitHub stores a rule's parameter at its default as no parameter at all: `apply` of #0-272 created `update` with
 # update_allows_fetch_and_merge false and read it back without it, so a file names only what GitHub keeps.
 update_default_dropped() { tag_ruleset; live 13 'r["rules"].find { |x| x["type"] == "update" }.delete("parameters")'; }
+# The organization's app installations (backlog #0-272): every one has a file, and each file matches its installation.
+inst() { rb "f = \"live/installations.json\"; l = JSON.parse(File.read(f)); $1; File.write(f, JSON.generate(l))"; }
+app_file() { rb "f = \".github/repository-settings/apps/builder.json\"; a = JSON.parse(File.read(f)); $1; File.write(f, JSON.generate(a))"; }
+app_unlisted() { inst 'l << { "id" => 80, "app_id" => 2740, "app_slug" => "renovate", "repository_selection" => "all", "events" => [], "permissions" => { "contents" => "write" } }'; }
+app_unlisted_before() { before; app_unlisted; }
+app_uninstalled() { inst 'l.clear'; }
+app_wider() { inst 'l[0]["permissions"]["issues"] = "write"'; }
+app_all_repositories() { inst 'l[0]["repository_selection"] = "all"'; }
+app_events() { inst 'l[0]["events"] = ["push"]'; }
+app_other_id() { inst 'l[0]["app_id"] = 8'; }
+app_misnamed() { app_file 'a["slug"] = "other"'; }
+app_bad_access() { app_file 'a["permissions"]["contents"] = "maybe"'; }
+app_no_selection() { app_file 'a.delete("repository_selection")'; }
+no_apps() { rm -rf "$dir/.github/repository-settings/apps"; inst 'l.clear'; }
+# A ruleset that lets through an app no file names (review round 1 of #0-272's second pull request).
+unknown_integration() { tag_ruleset; spec tags 'r["bypass_actors"][0]["actor_id"] = 9'; live 13 'r["bypass_actors"].find { |a| a["actor_type"] == "Integration" }["actor_id"] = 9'; }
+unknown_integration_hidden() { unknown_integration; hidden; }
 bad_repository() { put .github/repository-settings/repository.json '{ "delete_branch_on_merge": true }'; }
 # --main: main is the first commit (the layout), the pull request a second one. commit <message> commits the case.
 commit() { git -C "$dir" add -A .; git -C "$dir" -c user.name=t -c user.email=t@example.org commit -qm "$1"; }
@@ -378,9 +406,9 @@ before() {
 before_hidden() { before; hidden; }
 
 echo "repository-settings: check, what passes"
-MSG="2 ruleset\(s\), 1 environment\(s\), 1 setting\(s\), the admins, the writers and the secrets match \.github/repository-settings/ on o/r\.$" \
+MSG="2 ruleset\(s\), 1 environment\(s\), 1 setting\(s\), the admins, the writers, 1 app\(s\) and the secrets match \.github/repository-settings/ on o/r\.$" \
     case_ pass "GitHub holds the files (its own fields ignored, arrays in another order)" as_is
-MSG="not visible to this token, so not compared: the bypass actors of 'checks', the bypass actors of 'review', the repository setting delete_branch_on_merge, the repository's admins, the repository's writers, the secrets of environment 'scans', the repository's secrets" \
+MSG="not visible to this token, so not compared: the bypass actors of 'checks', the bypass actors of 'review', the repository setting delete_branch_on_merge, the repository's admins, the repository's writers, the organization's app installations, the secrets of environment 'scans', the repository's secrets" \
     case_ pass "a token that is not an admin's: bypass actors and settings named as not compared" hidden
 unset GH_STUB_HIDE
 MSG="not visible to this token, so not compared: the repository setting delete_branch_on_merge\)" \
@@ -424,7 +452,7 @@ MSG="repository\.json must be \{\"settings\"" case_ fail "repository.json with a
 MSG="repository\.json::the collaborators of o/r with Write or Maintain are bot, someone; the file says bot: the role Write bypasses" \
     case_ fail "a writer the file does not name (backlog #0-272)" other_writer
 MSG="repository\.json::the collaborators of o/r with Write or Maintain are none; the file says bot" case_ fail "a writer the file names, gone on GitHub" no_writer
-MSG="2 ruleset\(s\).*the admins, the writers and the secrets match \.github/repository-settings/ on o/r\.$" \
+MSG="2 ruleset\(s\).*the admins, the writers, 1 app\(s\) and the secrets match \.github/repository-settings/ on o/r\.$" \
     case_ pass "a writer with the role Maintain is a writer" maintain_writer
 MSG="repository\.json must be \{\"settings\".*\(none of them an admin\)" case_ fail "an admin listed as a writer" admin_writer
 MSG="repository\.json must be \{\"settings\"" case_ fail "repository.json without writers" no_writers_key
@@ -433,6 +461,25 @@ MSG="tags\.json::ruleset 'tags' differs from GitHub's: bypass_actors: the file s
 MSG="tags\.json::ruleset 'tags' differs from GitHub's: target: the file says \"tag\", GitHub \"branch\"" case_ fail "a tag ruleset turned into a branch ruleset" tag_target_branch
 MSG="tags\.json::ruleset 'tags' differs from GitHub's: rules\.update\.update_allows_fetch_and_merge: in the file, not on GitHub" \
     case_ fail "a rule parameter at its default, which GitHub does not keep (backlog #0-272)" update_default_dropped
+MSG="the app 'renovate' \(app id 2740\) is installed on o but in no file under \.github/repository-settings/apps/" \
+    case_ fail "an app installed on the organization with no file (backlog #0-272)" app_unlisted
+MSG="apps/builder\.json::the app 'builder' is not installed on o" case_ fail "an app file whose app is not installed" app_uninstalled
+MSG="the app 'builder' differs from its installation on o: permissions: the file says \{\"contents\":\"write\",\"metadata\":\"read\"\}, GitHub \{\"contents\":\"write\",\"issues\":\"write\",\"metadata\":\"read\"\}" \
+    case_ fail "an installation holding more than its file" app_wider
+MSG="the app 'builder' differs from its installation on o: repository_selection: the file says selected, GitHub all" \
+    case_ fail "an installation on every repository" app_all_repositories
+MSG="the app 'builder' differs from its installation on o: events: the file says \[\], GitHub \[\"push\"\]" \
+    case_ fail "an installation subscribed to an event" app_events
+MSG="the app 'builder' differs from its installation on o: app_id: the file says 7, GitHub 8" case_ fail "another app under that slug" app_other_id
+MSG="apps/builder\.json::.*apps/builder\.json must be \{\"slug\": <the file's name>" case_ fail "an app file whose slug is not its name" app_misnamed
+MSG="apps/builder\.json must be \{\"slug\"" case_ fail "an app permission that is no access level" app_bad_access
+MSG="apps/builder\.json must be \{\"slug\"" case_ fail "an app file without repository_selection" app_no_selection
+MSG="2 ruleset\(s\).*the admins, the writers, 0 app\(s\) and the secrets match" case_ pass "no app installed and no app file" no_apps
+MSG="tags\.json::.*the bypass actor Integration 9 is the app_id of no file under \.github/repository-settings/apps/" \
+    case_ fail "a ruleset letting through an app no file names" unknown_integration
+MSG="the bypass actor Integration 9 is the app_id of no file" NOCALLS='.' \
+    case_ fail "and with CI's token too, before GitHub is asked" unknown_integration_hidden
+unset GH_STUB_HIDE
 MSG="ruleset 'checks' differs from GitHub's: rules\.required_status_checks\.strict_required_status_checks_policy" case_ fail "without --main, the working tree's files" pr_other
 MSG="ruleset 'checks' differs from GitHub's: rules\.required_status_checks\.strict_required_status_checks_policy" ARGS="--main HEAD^1" \
     case_ fail "--main, a pull request that changes the files: its own" pr_settings
@@ -493,7 +540,7 @@ echo "repository-settings: plan and apply"
 MSG="^would: create ruleset 'checks';would: create ruleset 'review';would: delete ruleset 'Protect main' \(id 7\): no file names it;would: set delete_branch_on_merge=true$" \
     MODE=plan NOCALLS='(^|;)(POST|PUT|PATCH|DELETE) ' case_ pass "plan lists the changes, creates before deletes, and writes nothing" before
 MSG="Nothing to change" MODE=apply NOCALLS='(^|;)(POST|PUT|PATCH|DELETE) ' case_ pass "apply when GitHub holds the files writes nothing" as_is
-MSG="apply: update ruleset 'review' \(id 12\).*2 ruleset\(s\), 1 environment\(s\), 1 setting\(s\), the admins, the writers and the secrets match" MODE=apply CALLS='PUT repos/o/r/rulesets/12' \
+MSG="apply: update ruleset 'review' \(id 12\).*2 ruleset\(s\), 1 environment\(s\), 1 setting\(s\), the admins, the writers, 1 app\(s\) and the secrets match" MODE=apply CALLS='PUT repos/o/r/rulesets/12' \
     case_ pass "apply updates a ruleset changed in the UI, in place" no_code_owners
 MSG="apply: delete ruleset 'Protect main'.*match \.github/repository-settings/ on o/r\.$" MODE=apply \
     CALLS=';POST repos/o/r/rulesets;POST repos/o/r/rulesets;DELETE repos/o/r/rulesets/7;PATCH repos/o/r;GET ' \
@@ -516,6 +563,11 @@ MSG="the admins of o/r are owner, someone; the file says owner: .*; apply does n
     NOCALLS='(^|;)(POST|PUT|PATCH|DELETE) ' case_ fail "apply with an admin the file does not name changes nothing" other_admin_before
 MSG="Write or Maintain are bot, someone; the file says bot: .*; apply does not change that" MODE=apply \
     NOCALLS='(^|;)(POST|PUT|PATCH|DELETE) ' case_ fail "apply with a writer the file does not name changes nothing" other_writer_before
+MSG="by hand: the app 'renovate' \(app id 2740\) is installed on o but in no file.*apply: create ruleset.*::error::the app 'renovate'" \
+    MODE=apply CALLS='POST repos/o/r/rulesets' \
+    case_ fail "apply applies the rulesets, names an unlisted app by hand, and its check still fails on it" app_unlisted_before
+MSG="by hand: the app 'builder' differs.*nothing apply can change; the rest is by hand" MODE=plan \
+    NOCALLS='(^|;)(POST|PUT|PATCH|DELETE) ' case_ fail "plan with only an app difference changes nothing" app_wider
 
 if [ "$failures" -gt 0 ]; then
     echo "::error::$failures of $n cases failed (backlog #0-113)"

@@ -18,6 +18,14 @@
 #                          `writers`: the logins with Write or Maintain, whom the bypass of `branches` and
 #                          `renovate` (the role Write) also reaches (backlog #0-272); `repository_secrets`: the
 #                          repository-level secrets allowed (none: one of them reaches a run on any branch)
+#   apps/<slug>.json       one GitHub App installed on the organization each (backlog #0-272): its `slug`, `app_id`, the
+#                          `permissions` and `events` of its installation and its `repository_selection`. Every
+#                          installation the organization holds has a file: an app's Contents write reaches every ref no
+#                          ruleset covers, and builder-app's confinement to factory/** rests on knowing which apps hold
+#                          it (Renovate was found on every repository of the organization, factory included, when
+#                          these files were first written, 2026-11-20). Which repositories a `selected` installation
+#                          holds is not compared: GitHub lists them only to a token of the app or a user's own token
+#                          of an app, not to gh's (tried 2026-11-20); check-app (factory) proves builder-app's.
 #
 # and this script is the one way between them and GitHub:
 #
@@ -46,7 +54,8 @@
 #
 # What `check` cannot see with CI's token: a ruleset's `bypass_actors` (GitHub shows them only to an admin,
 # so an actor added in the UI goes unnoticed in CI), the repository settings (not in the read-only
-# repository response), the admins and the writers (the collaborators list needs more than read), and which secrets exist,
+# repository response), the admins and the writers (the collaborators list needs more than read), the organization's
+# app installations (an organization owner's list), and which secrets exist,
 # in the repository and in each environment. `apply` creates and updates environments but never deletes one
 # (its secrets would go with it), and never writes a secret: those are the owner's, in Settings. It says so in its
 # summary; run by the owner (an admin token), it compares all three, and `plan`/`apply` refuse to run
@@ -66,6 +75,8 @@ require_relative 'run-blocks'
 
 USAGE = 'usage: repository-settings.rb check|plan|apply [--repo <owner/name>] [--root <repository root>] [--main <commit>]'
 RULESET_KEYS = %w[name target enforcement conditions bypass_actors rules].freeze
+APP_KEYS = %w[app_id events permissions repository_selection slug].freeze
+APP_ACCESS = %w[read write admin].freeze
 ENVIRONMENT_KEYS = %w[name can_admins_bypass deployment_branch_policy protection_rules branch_policies secrets].freeze
 # The app every required check must come from: GitHub Actions (the app that runs this repository's workflows).
 GITHUB_ACTIONS_APP = 15368
@@ -266,6 +277,46 @@ def load_repository(ref)
     return empty
   end
   repo
+end
+
+# {slug => {file:, spec:}} of apps/*.json (backlog #0-272); none is fine (an organization without apps). The file is
+# named after the slug, so one app has one file.
+def load_apps(ref)
+  apps = {}
+  settings_files(ref, 'apps').each do |file|
+    spec = load_json(file, ref)
+    next unless spec
+    perms = spec.is_a?(Hash) ? spec['permissions'] : nil
+    unless spec.is_a?(Hash) && spec.keys.sort == APP_KEYS &&
+           spec['slug'].is_a?(String) && File.basename(file) == "#{spec['slug']}.json" &&
+           spec['app_id'].is_a?(Integer) && spec['app_id'].positive? &&
+           perms.is_a?(Hash) && !perms.empty? && perms.values.all? { |v| APP_ACCESS.include?(v) } &&
+           spec['events'].is_a?(Array) && spec['events'].all? { |e| e.is_a?(String) && !e.empty? } &&
+           %w[selected all].include?(spec['repository_selection'])
+      fail!("#{file} must be {\"slug\": <the file's name>, \"app_id\": <id>, \"permissions\": {<name>: " \
+            '"read"|"write"|"admin", ...}, "events": [<event>, ...], "repository_selection": "selected"|"all"}',
+            file: file)
+      next
+    end
+    apps[spec['slug']] = { file: file, spec: spec }
+  end
+  apps
+end
+
+# Every app a ruleset lets through (a bypass actor of type Integration) is an app with a file under apps/, of that
+# app_id (backlog #0-272, review round 1): a wrong id in a ruleset would hand its refs to another app, and `check`
+# could not see it, since GitHub holds what the file applied. From the files alone, so CI checks it too.
+def check_integrations(specs, apps)
+  ids = apps.values.map { |a| a[:spec]['app_id'] }
+  specs.each_value do |s|
+    s[:spec]['bypass_actors'].each do |actor|
+      next unless actor.is_a?(Hash) && actor['actor_type'] == 'Integration'
+      next if ids.include?(actor['actor_id'])
+
+      fail!("#{s[:file]}: the bypass actor Integration #{actor['actor_id']} is the app_id of no file under #{DIR}/apps/: " \
+            'an app a ruleset lets through is one the organization has installed, written down', file: s[:file])
+    end
+  end
 end
 
 # --- every required check is reported on every pull request, and every such job is required ------------
@@ -549,12 +600,57 @@ def compare(repo, specs, repository)
                          'decided in Settings, Collaborators, then written in the file'
       result[:findings] << ["#{DIR}/repository.json", result[:writers]]
     end
+    compare_apps(repo, repository['apps'], result)
   else
     result[:hidden] << "the repository's admins"
     result[:hidden] << "the repository's writers"
+    result[:hidden] << "the organization's app installations"
   end
   compare_environments(repo, repository, result)
   result
+end
+
+# The organization's app installations against apps/*.json (backlog #0-272), with an admin token. Changed in Settings,
+# GitHub Apps only: apply writes none, so each difference is also a step by hand.
+def compare_apps(repo, apps, result)
+  org = repo.split('/').first
+  live = {}
+  one_page("orgs/#{org}/installations?per_page=100", 'installations').each do |i|
+    live[i['app_slug']] = i
+  end
+  by_hand = lambda do |file, msg|
+    result[:findings] << [file, msg]
+    result[:manual] << msg
+  end
+  (live.keys - apps.keys).sort.each do |slug|
+    by_hand.call(nil, "the app '#{slug}' (app id #{live[slug]['app_id']}) is installed on #{org} but in no file " \
+                      "under #{DIR}/apps/: an app's Contents write reaches every ref no ruleset covers; uninstall " \
+                      'it, or write its file')
+  end
+  apps.each do |slug, a|
+    want = a[:spec]
+    got = live[slug]
+    unless got
+      by_hand.call(a[:file], "the app '#{slug}' is not installed on #{org}: install it as the file says, or remove the file")
+      next
+    end
+    diffs = []
+    diffs << "app_id: the file says #{want['app_id']}, GitHub #{got['app_id']}" unless got['app_id'] == want['app_id']
+    unless (got['permissions'] || {}).sort == want['permissions'].sort
+      diffs << "permissions: the file says #{JSON.generate(want['permissions'].sort.to_h)}, GitHub " \
+               "#{JSON.generate((got['permissions'] || {}).sort.to_h)}"
+    end
+    unless (got['events'] || []).sort == want['events'].sort
+      diffs << "events: the file says #{want['events'].sort}, GitHub #{(got['events'] || []).sort}"
+    end
+    unless got['repository_selection'] == want['repository_selection']
+      diffs << "repository_selection: the file says #{want['repository_selection']}, GitHub #{got['repository_selection']}"
+    end
+    diffs.each do |d|
+      by_hand.call(a[:file], "the app '#{slug}' differs from its installation on #{org}: #{d} (change it in the " \
+                             "organization's Settings, GitHub Apps, then the file)")
+    end
+  end
 end
 
 # The environments, their branch policies and, with an admin token, the secrets they and the repository hold.
@@ -630,7 +726,7 @@ def check(repo, specs, repository, main: nil, ref: nil)
            else " (this commit's files: it changes them)"
            end
   puts "Repository settings: #{specs.size} ruleset(s), #{repository['environments'].size} environment(s), " \
-       "#{repository['settings'].size} setting(s), the admins, the writers and the secrets match #{DIR}/#{source} on #{repo}#{note}."
+       "#{repository['settings'].size} setting(s), the admins, the writers, #{repository['apps'].size} app(s) and the secrets match #{DIR}/#{source} on #{repo}#{note}."
 end
 
 def describe(action)
@@ -697,10 +793,11 @@ end
 
 ref = files_ref(opts['--main'])
 specs = load_rulesets(ref)
-repository = load_repository(ref).merge('environments' => load_environments(ref))
+repository = load_repository(ref).merge('environments' => load_environments(ref), 'apps' => load_apps(ref))
 workflows = load_workflows
 check_required_checks(specs, workflows)
 check_workflow_secrets(repository['environments'], workflows)
+check_integrations(specs, repository['apps'])
 exit 1 if $errors > 0
 repo = repo_name(opts)
 case mode

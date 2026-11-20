@@ -445,16 +445,25 @@ with `gh api repos/{owner}/{repo}/...` after changing anything in Settings).
   owner runs the check (its summary names what it skipped).
 - **Every other branch and every tag is guarded too** (backlog #0-272, ADR-0034 as amended), so that builder-app
   (stage 4.2b), whose Contents write reaches every ref no ruleset covers, writes no branch or tag but `factory/**`
-  (what else Contents write reaches: "Known gaps of the rulesets" below). Four more rulesets, files next to `main`'s:
+  (what else Contents write reaches: "Known gaps of the rulesets" below), and only builder-app and the admin write
+  `factory/**`. Five more rulesets, files next to `main`'s:
   - **`branches`:** every branch but `main`, `factory/**` and `renovate/**`; creation, update, deletion and force push
     refused. Its bypass is the role Write, `always`: the owner and the bot account.
   - **`renovate`:** `renovate/**`, the same rules; the role Write and the Renovate app (`Integration` 2740).
   - **`tags`:** update, deletion and force push refused, no bypass at all.
   - **`tag-creation`:** creation, the admin role only.
+  - **`factory`:** `factory/**`, the rules of `branches`; builder-app (`Integration` 5844656) and the admin role, so
+    the owner's merge of a builder pull request still deletes its branch (GitHub deletes it as the one who merged).
 
   A role's bypass covers no app, a probe on `factory` showed (2026-11-19), so an app passes only when named.
   `repository.json` lists the writers (Write or Maintain) as it lists the admins, and the owner's `check` fails on a
   collaborator the file does not name: whoever got Write would bypass `branches`.
+- **Every GitHub App installed on the organization is a file** (`.github/repository-settings/apps/`, backlog #0-272):
+  its app id, the permissions and events of its installation and whether it holds every repository or a selection.
+  The owner's `check` fails on an installation no file names, on a file whose app is not installed and on any
+  difference; CI's token cannot list installations, so CI skips it and says so. Written on 2026-11-20, when Renovate
+  turned out to be installed on every repository of the organization, `factory` included, with Contents and Workflows
+  write (it had done nothing there); the owner narrowed it to this repository that day.
 - Actions must be pinned to a full-length commit SHA (`sha_pinning_required`, backlog #0-60): a
   workflow with a tag-pinned `uses:` fails to start, so a tag no longer depends on review alone. It
   was turned on once `main` had no tag-pinned `uses:` left and its run was green (2026-09-29);
@@ -723,15 +732,32 @@ security boundary, so every rule that matters is also enforced outside the model
   Its CI scans every commit a pull request or a push adds for secrets (`Secret Scan`, this repository's job and
   scripts, a required check; #0-268). Lint Workflows here keeps `factory`'s copies equal to their originals
   (`check-factory-copies.rb`, #0-268): its tool pins and actions' SHAs, the copied scripts, `setup-node`,
-  `zizmor.yml`, `.node-version` and the denies, both ways, against a fresh clone of `factory@main`; this repository
+  `zizmor.yml`, `.node-version`, the denies and builder-app's permissions (#0-272), both ways, against a fresh clone of
+  `factory@main`; this repository
   leads (ADR-0061), so a pull request here that changes a compared file fails on a difference it brings until
   `factory` matches, and a difference `main` has already is a warning; the clone is outside input (a symlink in it
   fails the check, a parse error is named, never quoted). No
-  other bot or app is on it (builder-app is never installed there).
+  other bot or app is on it (builder-app is never installed there). Until 2026-11-20 Renovate was, installed on every
+  repository of the organization; the owner narrowed it to this one that day, and `apps/` here keeps it so (#0-272).
   With one code owner, who cannot approve their own pull request, every merge is the owner's bypass (the admin role,
   through a pull request), which skips the review and the required checks: the owner merges only once
   `gh pr checks` is green. Set by the owner with `gh api` and read back on 2026-11-18; no `repository-settings`
   files yet (stage T).
+- **builder-app and the dispatcher on the build VM** (backlog #0-272, stage 4.2b, ADR-0060 D3): the GitHub App
+  `profitbuild-builder` holds Contents and Pull requests write and Metadata read, no webhook, no event, and is
+  installed on this repository alone (`apps/profitbuild-builder.json`; its permissions are `factory`'s
+  `builder-permissions.json`, which `check-factory-copies.rb` holds equal, G2). Its key has one copy, on the VM, for
+  the user `dispatcher` (`provision.sh`): an ordinary uid, so the VM's egress chain takes its traffic as it takes
+  `factory`'s; no subordinate range, no login shell, no group but its own; its home and `.config/factory` mode 700, so
+  `factory`, the user of every task, reads neither. `install-builder-app.sh` sends the key on stdin into its file
+  (never through `/tmp` or an argument), checks its digest, writes the env file with the two ids, checks the modes
+  (key and env file 600, the env file being trusted as code) and owners, runs `factory`'s `check-app` as `dispatcher`
+  (the installation and a narrowed token hold exactly those permissions and reach this repository alone, the app has
+  no installation on `factory`) and only then deletes the downloaded key. `dispatcher` runs `factory` at the commit
+  `provision.sh` pins (`verify-pins.sh`: on `factory`'s `main`), refused at boot unless it is a clean checkout of it.
+  Tried with its real token on 2026-11-20 (#0-272 AC6): refused every branch outside `factory/**` and every tag,
+  allowed to create, force-move and delete its own; and, holding no Workflows permission, it moves no ref, its own
+  included, across a change of `.github/workflows/` (GitHub answers 403).
 
 **Known gaps**: a bypass actor or an admin added in the UI is seen only when the owner runs
 `repository-settings.rb check` (#0-113, ADR-0034), and so is a secret added in the UI (ADR-0035); a scan that
@@ -778,9 +804,11 @@ planned for 2026-11-19 and postponed by the owner that day).
 **Known gaps of the rulesets** (#0-272, ADR-0034 as amended):
 - The bot account (Write) may still create, force-push and delete the owner's branches, which `branches` lets the
   role Write through, until stage 5's exit.
-- The Renovate app reaches only `renovate/**` and, like every actor with Contents write, `factory/**`, which no
-  ruleset covers until builder-app's own (`factory`, #0-272's second pull request) closes it to everyone but
-  builder-app and the admin.
+- The Renovate app reaches `renovate/**` only; `factory/**` is builder-app's and the admin's.
+- Which repositories an installation holds when it holds a selection is compared by nothing: GitHub lists them only
+  to a token of the app, or to a user's token of an app, not to `gh`'s (tried 2026-11-20). `check` sees an installation
+  that turns to every repository; builder-app's own list is proven by `check-app` (it reaches this repository alone,
+  and has no installation on `factory`).
 - An app in no bypass is refused on every other branch: Dependabot's security updates (off today, #0-74) would need
   it listed as an `Integration` in `branches`.
 - The rulesets guard branches and tags only, and Contents write reaches more: an app holding it may edit or delete a
@@ -791,6 +819,14 @@ planned for 2026-11-19 and postponed by the owner that day).
   allow for.
 - An app's approval counts as a required review (tried there too), which today only the code owner's required review
   (`* @lukaszplawiak`) keeps from merging anything.
+
+**Known gaps of builder-app's key** (#0-272):
+- At rest it is protected by the Mac's FileVault alone: the VM's disk is a file under `~/.lima`. A secret store waits
+  for stage C.
+- Root on the VM reads it, and the owner is root there (`limactl shell`, sudo).
+- `dispatcher`'s traffic passes the egress chain of `factory`, whose list is wider than it needs (registries, apt,
+  Anthropic); a list of its own is #0-274. No list stops a key sent through GitHub itself.
+- Its Pull requests write lets it edit and close any pull request and dismiss reviews on it, not only its own.
 
 Layers and their limits: docs/ai-factory.md, "What isolates what".
 

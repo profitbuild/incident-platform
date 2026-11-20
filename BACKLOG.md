@@ -168,9 +168,9 @@ Code, Javadoc, config comments and commits reference items as `backlog #N`.
 | [0-263](#0-263-nothing-runs-a-bug-fixs-test-on-the-code-before-the-fix) | Nothing runs a bug fix's test on the code before the fix | ci | Medium | Open |
 | [0-264](#0-264-a-green-pr-is-merged-on-a-base-that-moved-under-it) | A green PR is merged on a base that moved under it | ci | Medium | Open |
 | [0-265](#0-265-a-task-back-after-a-pause-is-resumed-without-asking-whether-it-still-makes-sense) | A task back after a pause is resumed without asking whether it still makes sense | ci | Low | Open |
-| [0-272](#0-272-builder-app-exists-its-key-is-the-vms-and-it-can-write-only-its-own-branches-step-42b) | builder-app exists, its key is the VM's, and it can write only its own branches (step 4.2b) | ci | High | Open |
+| [0-272](#0-272-builder-app-exists-its-key-is-the-vms-and-it-can-write-only-its-own-branches-step-42b) | builder-app exists, its key is the VM's, and it can write only its own branches (step 4.2b) | ci | High | In progress |
 | [0-273](#0-273-dev-tokenmjs-keeps-its-own-copy-of-the-token-checks) | `dev-token.mjs` keeps its own copy of the token checks | ci | Low | Open |
-| [0-274](#0-274-dispatcher-on-the-build-vm-passes-no-egress-filter) | `dispatcher` on the build VM passes no egress filter | ci | Medium | Open |
+| [0-274](#0-274-dispatcher-passes-the-egress-list-of-factory-wider-than-it-needs) | `dispatcher` passes the egress list of `factory`, wider than it needs | ci | Low | Open |
 | [0-133](#0-133-incidentresolvedevent-carries-no-openedat) | `IncidentResolvedEvent` carries no `openedAt` | tech-debt | Low | Open |
 | [0-134](#0-134-diff-cover-is-installed-by-version-without-hashes) | `diff-cover` is installed by version, without hashes | ci | Low | Open |
 | [0-135](#0-135-kubectl-in-ci-is-downloaded-unverified) | kubectl in CI is downloaded unverified | ci | Low | Open |
@@ -3771,15 +3771,18 @@ AC2. On three resumed tasks the disposition agrees with the owner's.
 
 ### 0-272. builder-app exists, its key is the VM's, and it can write only its own branches (step 4.2b)
 
-**Type:** ci · **Priority:** High · **Status:** Open (migration stage 4, step 4.2b; ADR-0055, ADR-0060 D3). Split from
-4.2 by the owner on 2026-11-19; the rulesets were added by the same analysis.
+**Type:** ci · **Priority:** High · **Status:** In progress (migration stage 4, step 4.2b; ADR-0055, ADR-0060 D3; pull
+request 1 merged 2026-11-20, PR #663; the app created that day). Split from 4.2 by the owner on 2026-11-19; the
+rulesets were added by the same analysis.
 **Autopilot:** human-only · **Risk:** high · **Complexity:** medium · **Depends on:** #0-271
 **Touches:** factory (scripts/factory-admin/build-vm/provision.sh, install-builder-app.sh and verify-pins.sh,
 .github/repository-settings/ (rulesets/, repository.json, apps/), .github/scripts/repository-settings.rb,
-check-factory-copies.rb and their tests, a comment in .github/workflows/ci.yml: owner-only), decisions (ADR-0034 amended: the rulesets beyond `main`, their
-bypass actors, the probes' findings, the writers, the wider `check`; .ai/decisions/README.md), root (README.md
-"Infrastructure Hardening", .ai/context/migration/stage-4.md "4.2" and "4.3", .ai/context/migration.md), the repository
-`profitbuild/factory` (`BUILDER_PERMISSIONS` as a JSON file, a draft pull request from its container), the owner's
+check-factory-copies.rb and their tests, a comment in .github/workflows/ci.yml, a step in
+.github/workflows/factory-guards.yml and .github/scripts/test-install-builder-app.sh: owner-only), decisions (ADR-0034
+amended: the rulesets beyond `main`, their bypass actors, the probes' findings, the writers, the organization's app
+installations, the wider `check`; .ai/decisions/README.md), root (README.md
+"Infrastructure Hardening", .ai/context/migration/stage-4.md "4.2" and "4.3", .ai/context/migration.md,
+docs/ai-factory.md "Build VM"), the repository `profitbuild/factory` (`BUILDER_PERMISSIONS` as a JSON file, a draft pull request from its container), the owner's
 settings on GitHub (the app, its installation, the rulesets, by `repository-settings.rb plan`/`apply`)
 
 **Problem.** With Contents write, builder-app can push to every branch that `main`'s ruleset does not cover, which
@@ -3837,9 +3840,12 @@ cleaned up:
   - Contents read and write, Pull requests read and write, Metadata read; nothing else (no Issues until 4.5, no
     Checks, Statuses, Workflows or Administration);
   - installed on incident-platform alone.
-- **`provision.sh`** adds a system user `dispatcher`: its home mode 700, `/home/dispatcher/.config/factory` mode 700,
-  both its own; `factory` cannot read them. It clones `profitbuild/factory` as `dispatcher` at a commit pinned in
-  `provision.sh` (checked by `verify-pins.sh`), until 4.7's tag, so `check-app` has code to run.
+- **`provision.sh`** adds a user `dispatcher` with an ordinary uid, no subordinate range, no login shell (H2 of the
+  analysis of pull request 2, 2026-11-20: the VM's egress chain takes every uid from 1000 up, so its traffic passes
+  it; a system uid would reach any host): its home mode 700, `/home/dispatcher/.config/factory` mode 700, both its
+  own; `factory` cannot read them. It clones `profitbuild/factory` as `dispatcher` at a commit pinned in
+  `provision.sh` (I1; `verify-pins.sh` checks it is on `factory`'s `main`), until 4.7's tag, so `check-app` has code
+  to run; a boot whose clone is not a clean checkout of the pin is refused.
 - **The key has one copy, on the VM (E2).** The owner generates it in the app's settings and sends it on stdin
   straight into the file (`limactl shell factory-build sudo -u dispatcher sh -c 'umask 077; cat > …'`), never through
   `/tmp` (`limactl copy` lands there with the default umask, readable by `factory` for a moment), and deletes the
@@ -3847,7 +3853,12 @@ cleaned up:
   VM is the rotation; otherwise a second key is added, the dispatcher switched and the old key deleted once a
   quarter, and at once on any doubt.
 - **`build-vm/install-builder-app.sh`** (on the Mac, the owner's): writes the key as above and the ids into `.../env`,
-  both mode 600, checks the modes and owners, and runs `check-app` as `dispatcher`.
+  both mode 600, checks the key's digest, the modes and owners, and runs `check-app` as `dispatcher`; it deletes the
+  download only once all of it passed.
+- **Every app installed on the organization is a file** (J1, after probe P3 showed the owner's token lists the
+  installations, 2026-11-20): `.github/repository-settings/apps/<slug>.json`, checked by `repository-settings.rb`
+  (an installation no file names fails, as does any difference). Writing them found Renovate on every repository,
+  `factory` included; the owner narrowed it to incident-platform that day.
 - **One source for the permissions (G2):** `factory` moves `BUILDER_PERMISSIONS` into a JSON file that
   `builder-token.mjs` imports; incident-platform's `.github/repository-settings/apps/profitbuild-builder.json` is what
   `repository-settings.rb` checks the installation against, and `check-factory-copies.rb` fails when the two differ.
@@ -3888,14 +3899,61 @@ AC8. On the VM, set by `provision.sh` and `install-builder-app.sh` and checked a
      The env file is trusted as code (it can set `NODE_OPTIONS`, #0-271), and 4.2a's code cannot check it in time,
      since Node loads it first (review of `factory` PR #9, round 3).
 AC9. One source for builder-app's permissions (G2 above): `repository-settings.rb check` fails when the installation
-     differs from `apps/profitbuild-builder.json`, and `check-factory-copies.rb` when that file differs from
-     `factory`'s (tests); not a second hand-kept copy (review of `factory` PR #9, arc-a01b).
+     differs from `apps/profitbuild-builder.json`, or when an app is installed on the organization with no file, and
+     `check-factory-copies.rb` when that file's permissions differ from `factory`'s `builder-permissions.json` (tests);
+     not a second hand-kept copy (review of `factory` PR #9, arc-a01b). Which repositories an installation's selection
+     holds is not compared: GitHub lists them only to an app's or a user's app token, not to `gh`'s (probe P4,
+     2026-11-20: 403, also with `read:user`), so README names it as a gap and `check-app` proves builder-app's.
 AC10. README "Infrastructure Hardening" names the controls added and the gaps left:
      - the key at rest is protected by the Mac's FileVault, since the VM's disk is a file under `~/.lima`;
      - root on the VM reads the key;
-     - `dispatcher`'s traffic passes no egress filter (#0-274);
+     - `dispatcher`'s traffic passes the egress chain of `factory`, whose list is wider than it needs (#0-274);
      - builder-app's Pull requests write lets it edit, close and dismiss reviews on any pull request;
      - a secret store waits for stage C.
+
+**Result so far.**
+- *Pull request 1* (PR #663, merged 2026-11-20, merge `36a6a375`): the four rulesets and the writers. `apply`, run by
+  the owner from the branch, created the four, then read them back: GitHub keeps the `update` rule without
+  `update_allows_fetch_and_merge` at its default `false`, so the files name the rule alone (commit `de2fd97b`, a test
+  case). AC1: the owner's `check` on `main` after the merge: 5 rulesets, the admins, the writers and the secrets match.
+  AC3: `test-repository-settings.sh`. AC4: ADR-0034 amended and retitled. AC2 so far: the owner's push to the
+  pull request's branch passed by the bypass (`Bypassed rule violations … Cannot update this protected ref`), and the
+  owner's merge deleted the head branch; the bot account created and deleted a branch of its own on 2026-11-20
+  (`probe/0-272-bot`, the repository's activity log names `lukaszplawiakbot`). AC2 met.
+- *`factory` PR #13* (merged 2026-11-20, merge `3888a900`): `BUILDER_PERMISSIONS` read from
+  `dispatcher/src/github/builder-permissions.json` (G2); reviewed `/review factory#13 127`, then `7`.
+- *The app* (2026-11-20): `profitbuild-builder`, app id 5844656, installation 183942865; selected, Contents and Pull
+  requests write, Metadata read, no event, read back through `orgs/profitbuild/installations` (probe P3, which also
+  showed Renovate's app id, 2740, and its installation on every repository).
+- *Pull request 2, live* (2026-11-20, from its branch, before the merge):
+  - `verify-pins.sh`: six `verified:` lines, the sixth `profitbuild/factory main contains 3888a900… (identical)`.
+  - The VM recreated (`delete.sh`, `create.sh`). The first `create.sh` failed: the clone was made `--no-checkout`,
+    and with the pin at `main`'s tip the checkout was skipped, so the tree was empty and the clean-checkout check
+    refused the boot. Fixed (the checkout runs every time), tried on a scratch VM, then `create.sh` passed: the
+    boundary holds after creation and a reboot, `dispatcher at factory 3888a900…`; `dispatcher` uid 1001, its own
+    group alone, no subordinate range, home and `.config/factory` 700, the clone at the pin and clean.
+  - AC5, AC8: the owner generated the key and ran `install-builder-app.sh` in a terminal of their own (a download
+    carries `com.apple.macl`: neither Claude Code's `!` nor a typed path could read it, only a path dragged from
+    Finder; `head -c 0`, which macOS's head refuses, was fixed on the way). Digests equal; home and `.config/factory`
+    700, env and key 600, all `dispatcher`'s; `check-app` as `dispatcher`: the key readable by uid 1001 alone, the
+    installation of app 5844656 holds exactly the three permissions, the token narrowed to incident-platform reaches
+    only it and holds them, no installation on `factory` (404), the token revoked; the download deleted.
+  - The ruleset `factory` applied (`plan`: that one ruleset and nothing else; `check` after `apply`: 6 rulesets, the
+    admins, the writers, 3 apps and the secrets match).
+  - AC6, as builder-app through GitHub's git refs API (a one-off script run as `dispatcher` with factory's
+    `mintBuilderToken`; the activity log names `profitbuild-builder[bot]`): creating a branch outside `factory/**`
+    422, fast-forwarding the owner's branch 422, deleting it 422, creating a tag 422; creating `factory/probe-0-272`
+    201, force-moving it (not a fast-forward) 200, deleting it 204. A first run that force-moved branches to `main`'s
+    parent got 403 instead, `Resource not accessible by integration`: that move changed `.github/workflows/ci.yml`,
+    and an app without Workflows permission moves no ref across a change of a workflow, its own `factory/**`
+    included. As the bot account: creating `factory/probe-bot` was refused (exit 1, no creation in the activity log).
+    AC6 met.
+  - AC7: as `factory`, `ls /home/dispatcher` is `Permission denied`. And `dispatcher`'s egress: `api.github.com` 200,
+    `example.com` refused (the VM's chain takes it, H2).
+  - Every probe branch deleted afterwards; none and no tag is left.
+  - The VM was made from `provision.sh` before review round 3 of this pull request, which then made its clean-checkout
+    check read each git answer before judging it (a failing `git status` would have read as clean). The VM differs
+    from `main`'s `provision.sh` in that failure path only; it is recreated at the next move of the `factory` pin.
 
 ### 0-273. `dev-token.mjs` keeps its own copy of the token checks
 
@@ -3921,25 +3979,30 @@ AC1. `dev-token.mjs` holds no check of its own that `checked-token.mjs` or `url-
      unchanged, plus the key-file refusals 4.2a has (a symlink, a FIFO, another owner where testable).
 AC2. `checked-token.mjs` no longer cites this item.
 
-### 0-274. `dispatcher` on the build VM passes no egress filter
+### 0-274. `dispatcher` passes the egress list of `factory`, wider than it needs
 
-**Type:** ci · **Priority:** Medium · **Status:** Open (migration stage 4; found by the analysis of #0-272, 2026-11-19).
+**Type:** ci · **Priority:** Low · **Status:** Open (migration stage 4; found by the analysis of #0-272, 2026-11-19;
+problem restated by the analysis of its second pull request, 2026-11-20).
 **Autopilot:** human-only · **Risk:** medium · **Complexity:** low · **Depends on:** #0-272
 **Touches:** factory (scripts/factory-admin/build-vm/provision.sh and its checks: owner-only), root (README.md
 "Infrastructure Hardening", .ai/context/migration/stage-4.md)
 
-**Problem.** The VM's egress filter (`factory-egress.sh` and `factory-dns.sh` in `provision.sh`) matches one uid,
-`factory`'s (`-m owner --uid-owner "$FILTERED"`), because everything a task runs runs as `factory` (ADR-0057). #0-272
-adds the user `dispatcher`, which holds builder-app's key and, from 4.6, the Anthropic API key behind the credential
-proxy. Its traffic matches no rule, so a process running as `dispatcher` reaches any host. The dispatcher has no
-dependencies (Node built-ins only), so that is code of ours gone wrong, not a package; but it is the one process with
-both keys, and its reach is the widest on the VM.
+**Problem.** As first written, this item said the VM's egress filter (`factory-egress.sh` and `factory-dns.sh` in
+`provision.sh`) matched `factory`'s uid alone, so `dispatcher` would reach any host. It does not: it matches every uid
+from 1000 up (`FILTERED=1000-4294967294`, `-m owner --uid-owner`), any user added later included. #0-272 therefore
+gave `dispatcher` an ordinary uid (its H2), and its traffic passes the same chain: GitHub, Anthropic's API and the
+VM's image and package hosts reach it; private networks, the gateway (the Mac) and every other host do not. What is
+left is the list's width: `dispatcher` needs GitHub (the API and git) and, from 4.6, Anthropic's API; the registries,
+apt hosts and Maven's are `factory`'s needs. It is the one process with both keys. No list stops a key sent through
+GitHub itself, so a narrower one buys less than the chain already does.
 
-**Work.** The filter also covers `dispatcher`'s uid, with its own list: GitHub (the API and git, as for `factory`) and
-from 4.6 Anthropic's API. The list is checked the way `check-allowlists.sh` checks today's two.
+**Work.** A list of `dispatcher`'s own in the chain (a rule on its uid before the shared one): GitHub, and from 4.6
+Anthropic's API. Checked the way `check-allowlists.sh` checks today's two.
 
 **Acceptance criteria.**
-AC1. As `dispatcher` on the VM: a request to a host outside its list fails; `check-app` passes.
-AC2. A VM whose filter for `dispatcher` cannot start refuses to start `dispatcher`'s work, as `factory`'s session does
-     today (fail closed).
-AC3. README "Infrastructure Hardening" drops the gap that #0-272 named.
+AC1. As `dispatcher` on the VM: a host on `factory`'s list but not on `dispatcher`'s (a registry) is refused;
+     `check-app` passes.
+AC2. A VM whose rule for `dispatcher` cannot be set refuses to start `dispatcher`'s work (fail closed), as `factory`'s
+     session does today.
+AC3. README "Infrastructure Hardening" drops the gap #0-272 named ("`dispatcher`'s traffic passes the egress chain of
+     `factory`, whose list is wider than it needs").

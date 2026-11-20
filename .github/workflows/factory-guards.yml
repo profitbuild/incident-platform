@@ -174,6 +174,11 @@ jobs:
       - name: Build VM allow-list copy equals the devcontainer's
         run: scripts/factory-admin/build-vm/check-allowlists.sh
 
+      # Backlog #0-272: the script that puts builder-app's key on the build VM sends it on stdin only, checks the modes
+      # and owners factory's env file needs, and deletes the downloaded key only after check-app passed there.
+      - name: Builder app install tests
+        run: .github/scripts/test-install-builder-app.sh
+
       # The step runner of .github/scripts/ci-local.sh, the owner's local run of this job and of lint-workflows
       # (backlog #0-166): it must run these steps as the runner does, or a local green means nothing.
       - name: Local CI runner tests
