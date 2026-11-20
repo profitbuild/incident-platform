@@ -6,6 +6,9 @@ section in the same PR, as it updates `.ai/context/migration.md`. Items are crea
 4.1 (#0-267) is done; its review left #0-268 and #0-269, both done on 2026-11-19, and #0-269's review left #0-270,
 done the same day (`/review factory#<n>`).
 
+Each step's section ends with its **Record** (done, why, not done, why not; `.ai/context/migration.md`, "Every step
+keeps a record"), updated by the PR that changes it.
+
 Exit (ADR-0055): 3 PRs opened by the dispatcher. Rollback: today's `/backlog-autopilot` in the devcontainer, kept
 working until stage 5's exit. Rule of the migration: one factory change at a time, then application items.
 
@@ -25,7 +28,7 @@ Per task: claim → fresh clone and container → per phase one `claude -p` per 
 after, `stream-json` saved) → gate by `docker exec` → checks outside the container (D7) → push and PR as builder-app →
 state recorded → container removed.
 
-## 4.1 The `factory` repository and the accepted ADR — item #0-267
+## 4.1 The `factory` repository and the accepted ADR — item #0-267, done 2026-11-18
 
 - **Owner:** set ADR-0060 to Accepted. `gh repo create profitbuild/factory --public`; secret scanning and push
   protection on; Actions: SHA pinning required, default token read-only, workflows cannot approve PRs; a ruleset on
@@ -62,6 +65,26 @@ state recorded → container removed.
   factory#<n>` reviews a `factory` pull request from files, `scripts/factory-admin/fetch-factory-pr.sh`; how a `factory`
   change is made, review and merge included, is `factory`'s CONTRIBUTING.md, factory PR #7); additions to #0-268 (three more copies, a deny for branch
   deletion by push in both repositories) and to #0-249 (`factory`'s Dockerfile installs Claude Code the same way).
+
+**Record (4.1, done 2026-11-18; its follow-ups 2026-11-19).**
+- **Done:** ADR-0060 Accepted (PR #655); `profitbuild/factory` created and read back (rulesets `main`, `tags`,
+  `tag-creation`; required checks `Test`, `Lint Workflows`, `Secret Scan`; Actions and repository settings above);
+  the skeleton (factory PR #1); the secret scan and the copies check (#0-268); the dev app and its devcontainer
+  (#0-269); `/review factory#<n>` and CONTRIBUTING.md (#0-270).
+- **Why:** ADR-0060 D5: a public `factory` holding no builder credential, changed only through the owner's reviewed
+  pull requests; tags immutable because a product loads `factory` at a pinned tag; `factory`'s code written by an app
+  of its own because a session with the owner's token is an admin no ruleset binds (#0-269); a copy of a control kept
+  in step with its original from here, since this repository leads (ADR-0061).
+- **ADRs changed:** ADR-0060 Accepted (PR #655) and its D5 amended (the dev app, #0-269); ADR-0061 new (#0-268, the
+  product checks `factory`'s copies and leads); ADR-0038 amended (#0-270, `factory.md` applies to every `factory` pull
+  request).
+- **Not done:** `repository-settings` files for `factory`; the organisation's two-factor requirement; a comparison of
+  the dev app's identity in two files; a probe of a release on an existing tag.
+- **Why not:** the settings files at stage T, the owner's choice of 2026-11-18 (the `gh api` read-back is the
+  evidence until then); two-factor postponed by the owner in the session of 2026-11-19 ("next step first"; no item: README "Known gaps"
+  names it, and stage 9's checks raise it again); the dev app's identity deferred to stage T by
+  ADR-0061 (its app id and permissions: #0-279, since `apps/` gave them an offline counterpart); no tag exists on
+  `factory` yet, so the probe waits for the first one (stage T).
 
 ## 4.2 builder-app — #0-271 (4.2a, the code) and #0-272 (4.2b, the app, the VM and the rulesets)
 
@@ -117,7 +140,24 @@ What was built, in `dispatcher/` (Node built-ins only):
 - **Left for a real app** (#0-272's AC5): GitHub's 404 for `factory`, the narrowed token's one repository, and
   `metadata: read` in its answer.
 
-### 4.2b The app, the key and the confinement (#0-272, in incident-platform and on GitHub)
+**Record (4.2a, done 2026-11-19).**
+- **Done:** the settings from the environment, the key's file checks, the checked and cached token, the push through
+  askpass with an allowlisted environment and `GIT_ALLOW_PROTOCOL=https`, errors carrying `status`/`kind`,
+  `check-app` (factory PR #9, three review rounds).
+- **Why:** the code that reads the key is written, reviewed and tested with a key made in the test before the real
+  key exists (the owner's split of 4.2, 2026-11-19); "environment only" as ADR-0055 says, Node's own `--env-file` so no
+  parser is ours (the owner's choice in review round 1).
+- **ADRs changed:** ADR-0060's Consequences amended (2026-11-19, the owner's split of 4.2 into #0-271 and #0-272:
+  when each amendment of ADR-0034 and ADR-0052 lands); the code carried out ADR-0060 D3 and ADR-0055's "environment
+  only" without changing them.
+- **Not done:** dev-token on the shared checks; the trusted clone, the pinned refspec, the repository from the
+  adapter and children from an allowlist as checks (the code holds them as preconditions); the checks only a real
+  app can show.
+- **Why not:** dev-token kept by #0-271's AC4 to keep its review on builder-app, done by #0-273 (factory PR #14,
+  2026-11-20); the push's checks need the adapter and the task clone, so 4.3b (#0-276); the real app's checks were
+  #0-272's AC5, met 2026-11-20.
+
+### 4.2b The app, the key and the confinement (#0-272, in incident-platform and on GitHub) — done 2026-11-20, PRs #663 and #664
 
 - **Owner (GitHub, organisation `profitbuild`):** a GitHub App `profitbuild-builder`:
   - no webhook;
@@ -128,7 +168,7 @@ What was built, in `dispatcher/` (Node built-ins only):
   Created 2026-11-20: app id 5844656, installation 183942865 (`apps/profitbuild-builder.json`), read back through the
   organization's installations. Its key is generated only when `install-builder-app.sh` runs, so the download lies on
   the Mac for minutes.
-- **Done so far:** pull request 1, the four rulesets and the writers, merged 2026-11-20 (PR #663; applied by the owner
+- **Pull request 1:** the four rulesets and the writers, merged 2026-11-20 (PR #663; applied by the owner
   before the merge, `check` on `main` after it: AC1); `factory` PR #13, `BUILDER_PERMISSIONS` in
   `dispatcher/src/github/builder-permissions.json`, merged 2026-11-20 (merge `3888a900`, the dispatcher's pin).
 - **The order (the owner's choice A2, 2026-11-19):** two pull requests, the confinement first (the rulesets below, no
@@ -233,6 +273,35 @@ bypass covers the roles above it.
   builder-app (Pull requests write) from approving the bot's or Renovate's pull requests into a merge. Stage 10's
   conditions in `.ai/context/migration.md` now name it.
 
+**Record (4.2b, done 2026-11-20: PRs #663 and #664, `factory` PR #13).**
+- **Done:**
+  - five rulesets here: `branches`, `renovate`, `tags`, `tag-creation`, `factory` (builder-app and the admin role); the
+    writers in `repository.json`;
+  - every app installed on the organization as a file under `apps/`, checked by `repository-settings.rb`, and a
+    ruleset's `Integration` actor tied to one; Renovate narrowed from every repository to this one;
+  - the app `profitbuild-builder` (app 5844656, installation 183942865); its permissions one list with `factory`'s
+    `builder-permissions.json` (`check-factory-copies.rb`);
+  - the user `dispatcher` on the VM, `factory` cloned at a pinned commit, `install-builder-app.sh`, `verify-pins.sh`'s
+    sixth pin;
+  - live, from the branch: the VM recreated, the key installed, `check-app` passed, AC6 tried as builder-app and the
+    bot, AC7, the egress (#0-272's Result).
+- **Why:** the confinement before the key, so the key never exists without it (A2); Renovate in a namespace of its own
+  (C2); tags as `factory`'s (D2); one copy of the key, on the VM (E2); one source for the permissions (G2); an
+  ordinary uid for `dispatcher`, so the VM's egress chain takes it (H2); the pin on `factory`'s `main` until 4.7's tag
+  (I1); every installation as a file once the owner's token proved it can list them (J1, probe P3).
+- **ADRs changed:** ADR-0034's "Amendment (#0-272)" (the rulesets beyond `main`, their bypass actors, the probes'
+  findings, the writers, and with the second pull request the ruleset `factory`, the apps as files and the
+  `Integration` check); ADR-0061 amended (builder-app's permissions, its fifth comparison).
+- **Not done:** a narrower egress list for `dispatcher`; a comparison of which repositories a selected installation
+  holds; `dispatcher`'s access to `factory`'s Docker; the Issues permission and the PR-author parts; a secret store
+  for the key; the VM recreated after review round 3's last fix of `provision.sh`.
+- **Why not:** the shared chain already refuses every host off its list, the Mac and private networks, and no list
+  stops a key sent through GitHub, so a list of its own is #0-274 (Low); GitHub lists a selection's repositories to
+  no `gh` token (probe P4, 403 even with `read:user`), so it is a named gap and `check-app` proves builder-app's;
+  nothing in 4.2b used Docker, so 4.3c (F2, #0-277); the labels and the author are 4.5's, where a PR is first opened;
+  a secret store is stage C's; the fix changes only what a failing `git status` does, so the VM is recreated at the
+  next move of the `factory` pin (noted in #0-272's Result).
+
 ## 4.3 The dispatcher's core
 
 Split on 2026-11-20 (the owner's choice A), one `factory` pull request each, in this order:
@@ -272,7 +341,8 @@ Split on 2026-11-20 (the owner's choice A), one `factory` pull request each, in 
   `tasks/<runId>/task.json` (`runId`, `item`, `branch`, `baseSha`, `phase`, `round`, `calls[]`, `status`, `pr`),
   written to a temporary file and renamed. A restart resumes a task at its last completed phase; every phase is safe to
   run twice (an existing PR for the branch is found before one is created).
-- **Retries (#0-261):** every GitHub call through one helper: 5xx, 429, a timeout or a DNS error is retried with
+- **Retries (#0-261):** every GitHub call of the dispatcher's run through one helper (two by design outside it, the
+  Record below: `check-app`, the owner's quick check, and the mint, which 4.4's flow wraps whole): 5xx, 429, a timeout or a DNS error is retried with
   backoff and jitter (1 s doubling to 60 s), not counted as an attempt; ten in a row stop the task as BLOCKED with the
   reason. The GraphQL rate limit (`rateLimit { remaining resetAt }`) is read before a GraphQL pass; v0 uses REST.
 - **Adapter (`factory/schemas/adapter.schema.json`):** `repository`, `gate` (command and its contract), `changedPaths`
@@ -294,6 +364,38 @@ Split on 2026-11-20 (the owner's choice A), one `factory` pull request each, in 
 - **Open:** `next-item.sh` calls `gh pr list` for its locks and there is no token in a container (proposal: the
   dispatcher passes the open PRs as a file, a change to `next-item.sh`'s arguments).
 
+**Record (4.3, in progress: split 2026-11-20, PR #665).**
+- **Done:** the split into #0-275..#0-278 (above), in an order where each part is reviewed on its own and the first two
+  need neither Docker nor the VM; #0-273 first (dev-token on the shared checks), so 4.3b changes one API with two
+  callers rather than leaving a third copy.
+- **Decided for 4.3a (#0-275) with the owner, 2026-11-20, before its code:**
+  - **The lock:** Node opens `$FACTORY_STATE_DIR/lock` (0600, `O_NOFOLLOW`) and runs `/usr/bin/flock -n -x 3` on that
+    descriptor. Why: Node has no `flock`; a lock file with a pid (#0-251, #0-253's failures) can go stale or outlive a
+    killed run; an abstract socket can be taken first by another user of the VM. `flock(2)` belongs to the open file,
+    which Node holds: the kernel frees it when the process dies, and a live run cannot lose it. The lock file's
+    `dev` and `ino` are checked against its path after locking.
+  - **One lock for the whole dispatcher in v0:** a narrowing of ADR-0060 D7's lock per task, equivalent while one task
+    runs at a time; the note in ADR-0060 lands with #0-275's pull request (its Touches). Probed 2026-11-20 in a Linux
+    container: `flock(1)` exits 0 and the lock stays with Node's descriptor, a second lock is refused meanwhile, and
+    `kill -9` of Node frees it.
+  - **A secret-shaped value refused anywhere in the environment** (PEM, `ghs_`, `ghp_`, `gho_`, `ghu_`, `ghr_`,
+    `github_pat_`), not only in `FACTORY_*` and `BUILDER_APP_*`: the env file reaches `process.env` whole. The
+    refusal names the variable alone.
+  - **The breaker stops `run`** when `consecutiveBlocked` reaches `FACTORY_MAX_BLOCKED`. A `state.json` that does not
+    exist is a first run and starts at zero; one that exists and cannot be read or holds the wrong types trips the
+    breaker, and the refusal tells the owner what to do, since the reset is the owner's.
+  - **Retries:** 5xx, 429, a timeout or a network error (DNS included); `Retry-After` honoured at 429, at most 60 s;
+    a 403 only when it carries `retry-after` or `x-ratelimit-remaining: 0` (GitHub's secondary limit arrives as 403
+    or 429), a plain 403 returned at once. One helper around `githubRequest`, so one policy; `check-app` does not
+    retry (the owner wants a quick answer), the flow of 4.4 wraps the mint.
+  - **`FACTORY_STATE_DIR` is made by the VM's provisioning** (700, `dispatcher`'s; #0-277), and the dispatcher only
+    refuses one that is not so, rather than fixing it quietly.
+  - **`BUILDER_APP_KEY` keeps its default path:** ADR-0052 point 5's "no defaults" names the three limits; and
+    ADR-0055's "configuration from the environment only" holds, since the variable overrides it and the default is
+    a path, no secret: the key itself is a file of `dispatcher`'s (ADR-0060 D3), checked at every read.
+- **Not done:** all of 4.3's code.
+- **Why not:** in progress, one item at a time (#0-275 first).
+
 ## 4.4 The control flow, ported
 
 - **From `backlog-autopilot.js` into `dispatcher/src/flow/`:** the phases (preflight, pick, plan, implement, review
@@ -314,6 +416,8 @@ Split on 2026-11-20 (the owner's choice A), one `factory` pull request each, in 
   thread (`--agent <name>`, or the definition's body as `--append-system-prompt-file` with its tools and model);
   whether hooks of the plugin run in that mode (they stay a second layer until 6c); what replaces ADR-0058's isolation
   probe (proposal: the init event's agent and tools).
+
+**Record (4.4):** not started; it waits for 4.3.
 
 ## 4.5 Push, PR, trailers and trace
 
@@ -339,6 +443,8 @@ Split on 2026-11-20 (the owner's choice A), one `factory` pull request each, in 
   `Rounds:`); an existing PR is reused, not duplicated.
 - **Open:** how a reused draft is retitled (#0-254's case, now the dispatcher's own code).
 
+**Record (4.5):** not started; it waits for 4.4.
+
 ## 4.6 The credential proxy and the transcripts
 
 - **Owner:** a Console workspace for the factory with a monthly spend limit; an API key in it, at
@@ -359,6 +465,8 @@ Split on 2026-11-20 (the owner's choice A), one `factory` pull request each, in 
 - **Open, to settle by a spike:** that Claude Code with `ANTHROPIC_BASE_URL` and `ANTHROPIC_AUTH_TOKEN` needs no login;
   the cost of a run at the Console's prices, from stage 3's baseline (#0-205) and the proxy's own counts.
 
+**Record (4.6):** not started; `FACTORY_PROXY_ADDR` and #0-274 (a narrower egress list) are wanted here.
+
 ## 4.7 The adapter, the switch and the three runs
 
 - **incident-platform:** `.factory/adapter.json` (the gate `scripts/factory/run-tests.sh`, changed-paths
@@ -374,13 +482,15 @@ Split on 2026-11-20 (the owner's choice A), one `factory` pull request each, in 
   as done by stage 4; the bot account and `factory-ops` kept for the rollback until stage 5's exit;
   `.ai/context/migration.md` and this file record the runs (as `stage-3.md` does).
 
+**Record (4.7):** not started.
+
 ## Owner's steps, in order
 
 1. ADR-0060 Accepted; `profitbuild/factory` created with its baseline (4.1). Done 2026-11-18.
 2. The confinement and the app (4.2b, #0-272), in this order:
    1. the four rulesets and the writers applied (`repository-settings.rb plan`, then `apply`, from the branch just
       before the merge; pull request 1). Done 2026-11-20;
-   2. builder-app created and installed on incident-platform (done 2026-11-20); then, from pull request 2's branch:
+   2. builder-app created and installed on incident-platform (done 2026-11-20); then, from pull request 2's branch (done 2026-11-20, PR #664):
       the VM recreated (`delete.sh`, `create.sh`: Lima reads `provision.sh` only when it creates the VM, and the new
       one adds `dispatcher` and its clone; the bot's token and Claude Code's login are entered again), the key
       generated and `install-builder-app.sh` run, the `factory` ruleset applied, AC6's tries; then the merge.

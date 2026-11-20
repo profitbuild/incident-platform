@@ -169,7 +169,7 @@ Code, Javadoc, config comments and commits reference items as `backlog #N`.
 | [0-264](#0-264-a-green-pr-is-merged-on-a-base-that-moved-under-it) | A green PR is merged on a base that moved under it | ci | Medium | Open |
 | [0-265](#0-265-a-task-back-after-a-pause-is-resumed-without-asking-whether-it-still-makes-sense) | A task back after a pause is resumed without asking whether it still makes sense | ci | Low | Open |
 | [0-274](#0-274-dispatcher-passes-the-egress-list-of-factory-wider-than-it-needs) | `dispatcher` passes the egress list of `factory`, wider than it needs | ci | Low | Open |
-| [0-275](#0-275-the-dispatchers-foundation-cli-configuration-state-lock-retries-and-the-adapters-schema-step-43a) | The dispatcher's foundation: CLI, configuration, state, lock, retries and the adapter's schema (step 4.3a) | ci | High | Open |
+| [0-275](#0-275-the-dispatchers-foundation-cli-configuration-state-lock-retries-and-the-adapters-schema-step-43a) | The dispatcher's foundation: CLI, configuration, state, lock, retries and the adapter's schema (step 4.3a) | ci | High | In progress |
 | [0-276](#0-276-builder-apps-push-only-from-a-trusted-clone-to-the-tasks-own-branch-step-43b) | builder-app's push only from a trusted clone, to the task's own branch (step 4.3b) | ci | High | Open |
 | [0-277](#0-277-the-dispatcher-drives-factorys-docker-and-a-task-container-step-43c) | The dispatcher drives `factory`'s Docker and a task container (step 4.3c) | ci | High | Open |
 | [0-278](#0-278-the-products-code-runs-only-from-main-step-43d) | The product's code runs only from `main` (step 4.3d) | ci | High | Open |
@@ -3805,7 +3805,8 @@ AC3. README "Infrastructure Hardening" drops the gap #0-272 named ("`dispatcher`
 
 ### 0-275. The dispatcher's foundation: CLI, configuration, state, lock, retries and the adapter's schema (step 4.3a)
 
-**Type:** ci · **Priority:** High · **Status:** Open (migration stage 4, step 4.3a; ADR-0055, ADR-0060 D1, D6, D8;
+**Type:** ci · **Priority:** High · **Status:** In progress (migration stage 4, step 4.3a; plan agreed 2026-11-20, code
+in `factory`; ADR-0055, ADR-0060 D1, D6, D8;
 split from 4.3 on 2026-11-20, the owner's choice A).
 **Autopilot:** human-only (`factory` code, written interactively in its devcontainer) · **Risk:** medium ·
 **Complexity:** medium · **Depends on:** #0-272
@@ -3821,8 +3822,9 @@ can be written and tested first, on their own.
 
 **Work.** `stage-4.md` "4.3", parts CLI, state, retries and adapter:
 - `node dispatcher/src/cli.mjs run [--item 0-N] [--resume <branch>] --adapter <path>`; configuration from the
-  environment only (`FACTORY_STATE_DIR`, `FACTORY_REPO_DIR`, `BUILDER_APP_*`, `FACTORY_MAX_BLOCKED`,
-  `FACTORY_AUDIT_EVERY`, `FACTORY_MAX_MERGES_PER_DAY`, no defaults, ADR-0052 point 5), refused by name, never value;
+  environment only: `FACTORY_STATE_DIR`, `FACTORY_REPO_DIR`, `FACTORY_MAX_BLOCKED`, `FACTORY_AUDIT_EVERY`,
+  `FACTORY_MAX_MERGES_PER_DAY` with no defaults (ADR-0052 point 5), and `BUILDER_APP_*` as 4.2a reads them
+  (`BUILDER_APP_KEY` keeps its default path, `stage-4.md` "4.3" Record); each refused by name, never value;
 - `$FACTORY_STATE_DIR`: `lock` (one `flock`, one task at a time), `state.json` (the breaker's counts, today's
   `state.sh`), `tasks/<runId>/task.json`, each written to a temporary file and renamed; a restart resumes at the last
   completed phase, and every phase is safe to run twice;
@@ -3847,8 +3849,9 @@ AC4. A retried 503, 429, timeout or DNS error is not counted; ten in a row make 
 AC5. The schemas refuse a missing or unknown field, and incident-platform's adapter as `stage-4.md` describes it passes.
 AC6. The requirements of #0-261 this step builds (the lock, the state that survives a restart, the retries) are in
      `stage-4.md` "4.3", each with the test that shows it.
-AC7. A setting whose value is shaped like a secret (a PEM block, a value starting `ghs_`, `ghp_`, `gho_` or
-     `github_pat_`) is refused by its name, never its value (tests).
+AC7. A variable of the dispatcher's environment, any of them and not only its settings, whose value is shaped like
+     a secret (a PEM block, a value starting `ghs_`, `ghp_`, `gho_`, `ghu_`, `ghr_` or `github_pat_`) is refused by
+     its name, never its value or its prefix (tests).
 
 ### 0-276. builder-app's push only from a trusted clone, to the task's own branch (step 4.3b)
 
@@ -3895,7 +3898,8 @@ way `dispatcher` controls `factory`'s containers, never the reverse.
 
 **Work.** An analysis of the two (and any other) ways, the owner's choice in an ADR, then: `provision.sh` sets it and
 `create.sh` checks it; the task container: a fresh clone of the product at the base into
-`$FACTORY_STATE_DIR/tasks/<runId>/work`, owned by the uid the container's `dev` maps to, `devcontainer up` with
+`$FACTORY_STATE_DIR/tasks/<runId>/work` (`provision.sh` makes `FACTORY_STATE_DIR` itself, 700 and `dispatcher`'s, which
+#0-275 refuses otherwise, and checks that `/usr/bin/flock`, util-linux's, is there, since #0-275's lock runs it), owned by the uid the container's `dev` maps to, `devcontainer up` with
 `factory` mounted read-only at `/opt/factory`, a per-task `~/.claude` volume, the shared `~/.m2` cache (accepted in
 v0), all removed at the end, BLOCKED or not; the container and every process started in it get their environment from
 #0-276's allowlisted builder, never `process.env`.
