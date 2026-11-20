@@ -75,7 +75,7 @@ app as a PR's author, `audit-data.sh` reading it, and the app's Issues permissio
 (split on 2026-11-20: #0-275 the foundation, with #0-261; #0-276 the push from a push repository the dispatcher owns; #0-277 Docker and the
 task container; #0-278 the product's code from `main`; #0-273, done 2026-11-20 by `factory` PR #14, moved dev-token onto
 the shared checks first; #0-280, from 4.3a's review, the gate's schema checked against `run-tests.sh` before 4.4 reads
-a gate's answer; #0-281, from 4.3b's review, the credential checks held at the call that sends them and the scans' bounds; #0-282, incident-platform's task configuration for the container, with 4.3c (ADR-0062 point 4)), 4.4 the control flow ported with its tests, 4.5 push, PR, trailers and trace (#0-212, #0-204), 4.6 the
+a gate's answer; #0-281, from 4.3b's review, the credential checks held at the call that sends them and the scans' bounds; #0-282, incident-platform's task configuration for the container, with 4.3c (ADR-0062 point 4); #0-283, the image's firewall sudo rule and unpinned Claude Code, which reach every task since #0-282), 4.4 the control flow ported with its tests, 4.5 push, PR, trailers and trace (#0-212, #0-204), 4.6 the
 credential proxy and `stream-json` transcripts, 4.7 the adapter, the switch and the three runs of the exit.
 ADR-0055: the container has no token; push, PR and commit trailers by the dispatcher; builder-app (never on `factory`);
 the gate contract, incident-platform's adapter first. Exit: 3 PRs opened by it.

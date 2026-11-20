@@ -1,9 +1,10 @@
 # ADR-0062: The dispatcher drives `factory`'s Docker as `factory`, through one sudo rule, and hands it the task's clone as a bundle
 
 - **Status:** Accepted (2026-11-20, by the owner; points 2 to 5 and 7 completed on review round 1, points 2, 4, 5, 6 and
-  8 on review round 2, points 4 and 5 on review round 3, points 4, 5 and 7 on review round 4, points 5 and 7 on review round 5, the same day, before any code); amends ADR-0060's
+  8 on review round 2, points 4 and 5 on review round 3, points 4, 5 and 7 on review round 4, points 5 and 7 on review round 5, the same day, before any code; point 4 amended on #0-282's review, the same day,
+  with what the feature contributes to the image's label); amends ADR-0060's
   Consequences on the task image (point 6)
-- **Backlog:** #0-277
+- **Backlog:** #0-277; point 4 amended on #0-282's review
 - **Date:** 2026-11-20
 - **Author:** human (the owner chose the options of a `/research` of #0-277 in an interactive session); written by
   Claude Code
@@ -73,8 +74,8 @@ Two facts the item had not weighed (the `/research` of 2026-11-20):
      `${localEnv:...}`, which reads the host's environment; none of the bot's `GIT_AUTHOR_*`, `FACTORY_BOT_LOGIN`, or a
      secret's shape);
    - features by id and the digest of the product's `devcontainer-lock.json`, from a list, with their options from a
-     list too (`docker-outside-of-docker`'s `moby: false` among them); its Docker socket mount is accepted by name,
-     since it is ADR-0057's boundary (Testcontainers needs it);
+     list too (`docker-outside-of-docker`'s `moby: false` among them); its Docker socket mount is accepted as the
+     feature's declared mount (below), since it is ADR-0057's boundary (Testcontainers needs it);
    - set by the dispatcher: `mounts` (`<runId>/w`, `/opt/factory` read-only, a per-task `~/.claude` volume, the shared
      `~/.m2` cache), `workspaceMount`, `workspaceFolder`, `updateRemoteUserUID: false` (ADR-0057), `containerUser:
      root` (the feature's start script needs it; the agents run as `remoteUser`), the label;
@@ -82,7 +83,18 @@ Two facts the item had not weighed (the `/research` of 2026-11-20):
      product chose but the listed feature's;
    - after the build, the image's own `devcontainer.metadata` label (which `devcontainer up` merges into the
      configuration, and a Dockerfile's `LABEL` can fill) is read and held to the same list; a difference refuses the
-     task.
+     task. A listed feature's entry in it is accepted only if it equals, whole and value by value, the entry the
+     factory's list holds for that feature's id and the digest of the product's lockfile (its `integrity`), never
+     looked up at run time; any other content under that id refuses the task, since a Dockerfile's `LABEL` or a build
+     cache on the agent's side can write an entry with that id. The list's values are taken from the feature's own
+     artifact at that digest (its `devcontainer-feature.json`), not from a label built on `factory`'s daemon. As an
+     example, at `docker-outside-of-docker` 1.10.1 (`sha256:698f5900…eca0`) #0-282's trial read the entry as `id`,
+     `securityOpt: ["label=disable"]`, `entrypoint: "/usr/local/share/docker-init.sh"`, the socket mount
+     (`/var/run/docker.sock` to `/var/run/docker-host.sock`, `type: bind`) and `customizations` (a VS Code extension
+     and a setting); the list holds the current ones. A feature's new version (`devcontainer upgrade` moving the
+     lockfile) is refused until the list holds its entry: the owner moves the factory's list and `FACTORY_COMMIT`
+     first, the product's lockfile after (it is shared with the owner's container), and the refusal names the id, the
+     digest and the differing keys.
 5. **No credential lives on `factory`'s daemon while the dispatcher runs; the rollback shares the VM by time.** A
    test with the Docker socket (`docker-outside-of-docker`, for Testcontainers) can mount any volume of that daemon
    itself, whatever the dispatcher mounts. So the rollback (today's `/backlog-autopilot` in the VM's devcontainer)

@@ -2,7 +2,9 @@
 # ============================================================
 # Outbound firewall of the factory's devcontainer: default deny, then an allow-list. Modelled on the
 # reference devcontainer of Claude Code (github.com/anthropics/claude-code, .devcontainer/), adapted to
-# this project. Run as root at container start (postStartCommand). Needs NET_ADMIN and NET_RAW.
+# this project. Run as root at container start (postStartCommand). Needs NET_ADMIN and NET_RAW. The dispatcher's task
+# container runs it too (task.json, backlog #0-282); `dev` may add hosts to it through sudo, within the VM's egress
+# list (backlog #0-283).
 #
 # IPv4 only: every allowed service is reached over IPv4, so IPv6 allows loopback and nothing else (without
 # this, a container with an IPv6 route would bypass the whole allow-list). If the container has IPv6 and

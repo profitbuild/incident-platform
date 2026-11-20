@@ -1,0 +1,29 @@
+{
+  // The task container's configuration (backlog #0-282, ADR-0062 point 4): what the dispatcher builds and runs each
+  // task in, beside the owner's interactive devcontainer.json, which stays as it is. It shares that file's directory,
+  // so the build context, the Dockerfile and the firewall are the same. It holds only what the dispatcher's closed
+  // list carries: no mount (the dispatcher sets the workspace, /opt/factory read-only, a per-task ~/.claude and the
+  // ~/.m2 cache), no credential, none of the bot's or the autopilot's variables, nothing read from the host's
+  // environment (${localEnv:...}), no initializeCommand, no `name`. `updateRemoteUserUID` (false, ADR-0057),
+  // `containerUser` (root, for the feature's start script), `workspaceMount` and `workspaceFolder` are the
+  // dispatcher's.
+  "build": {
+    "dockerfile": "Dockerfile"
+  },
+  "remoteUser": "dev",
+  // NET_ADMIN and NET_RAW for init-firewall.sh; host.docker.internal for Testcontainers, whose containers rootless
+  // Docker publishes on the VM's address (ADR-0057).
+  "capAdd": ["NET_ADMIN", "NET_RAW"],
+  "runArgs": ["--add-host=host.docker.internal:host-gateway"],
+  "containerEnv": {
+    "TESTCONTAINERS_HOST_OVERRIDE": "host.docker.internal",
+    "TESTCONTAINERS_RYUK_DISABLED": "false"
+  },
+  // The container's own allow-list, as in the owner's container, without ntfy (a task sends no notification).
+  "postStartCommand": "sudo /usr/local/bin/init-firewall.sh",
+  "features": {
+    "ghcr.io/devcontainers/features/docker-outside-of-docker:1": {
+      "moby": false
+    }
+  }
+}
