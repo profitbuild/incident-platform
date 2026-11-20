@@ -755,13 +755,20 @@ security boundary, so every rule that matters is also enforced outside the model
   the user `dispatcher` (`provision.sh`): an ordinary uid, so the VM's egress chain takes its traffic as it takes
   `factory`'s; no subordinate range, no login shell, no group but its own; its home and `.config/factory` mode 700, so
   `factory`, the user of every task, reads neither. `install-builder-app.sh` sends the key on stdin into its file
-  (never through `/tmp` or an argument), checks its digest, writes the env file with the two ids, checks the modes
+  (never through `/tmp` or an argument), checks its digest, writes the env file (its one author: the two ids and the
+  dispatcher's settings, each read from its one source, on a VM whose provisioning matches this checkout's
+  `provision.sh`, #0-277), checks the modes
   (key and env file 600, the env file being trusted as code) and owners, runs `factory`'s `check-app` as `dispatcher`
   (the installation and a narrowed token hold exactly those permissions and reach this repository alone, the app has
   no installation on `factory`) and only then deletes the downloaded key. `dispatcher` runs `factory` at the commit
   `provision.sh` pins (`verify-pins.sh`: on `factory`'s `main`), refused at boot unless it is a clean checkout of it:
-  on a VM made from a `provision.sh` of #0-277 and on, from `/opt/factory-checkout` (root's, 0755, the next bullet);
-  on one made before, from a clone in `dispatcher`'s home, where `install-builder-app.sh` refuses to run (recreate it).
+  on a VM made from this checkout's `provision.sh`, from `/opt/factory-checkout` (root's, 0755, the next bullet); on
+  one made from an earlier `provision.sh` (a clone in `dispatcher`'s home, or the checkout without the dispatcher's
+  clone of the product), `install-builder-app.sh` refuses to run, comparing the VM's provisioning marker with the
+  checkout (recreate it).
+  The product's clone the dispatcher reads `main` from (`FACTORY_REPO_DIR`) is its own, bare, in its home
+  (`/home/dispatcher/repo`, made by `provision.sh` as `dispatcher`, its fetches through the egress chain): nothing of
+  `factory`'s reaches the objects it feeds every push with (#0-276).
   Tried with its real token on 2026-11-20 (#0-272 AC6): refused every branch outside `factory/**` and every tag,
   allowed to create, force-move and delete its own; and, holding no Workflows permission, it moves no ref, its own
   included, across a change of `.github/workflows/` (GitHub answers 403).
@@ -784,7 +791,8 @@ security boundary, so every rule that matters is also enforced outside the model
   container it made. `create.sh` checks the rule (as root's `sudo -l` lists it: exactly the two programs, nothing for
   `factory`; both programs run through it, `docker` reaching `unix:///run/docker.sock`; another program,
   `--preserve-env` and `-D` refused; `factory` reading nothing of `dispatcher`'s), the checkout's owner, pin, cleanliness and modes, the
-  directories and the helper image. Limits: `factory`'s image store and home are the agent's side and live across
+  dispatcher's clone of the product (its, bare, of the product's URL, with `main`), the directories and the helper
+  image. Limits: `factory`'s image store and home are the agent's side and live across
   tasks (ADR-0062's Consequences, #0-285); `rollback-start.sh` sees only the daemon's containers and a run's `factory.task` objects, so what a task left in
   `factory`'s reach outside them survives, and a rollback with the owner's logins after a dispatcher run starts on a VM
   made anew (accepted for the migration, while the rollback is kept, until stage 5's exit; not enforced); the task container is checked only after `up` has started it

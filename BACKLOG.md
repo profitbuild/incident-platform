@@ -176,7 +176,7 @@ Code, Javadoc, config comments and commits reference items as `backlog #N`.
 | [0-281](#0-281-the-dispatchers-credential-checks-are-held-at-the-call-that-sends-them-and-its-static-scans-close-their-bounds) | The dispatcher's credential checks are held at the call that sends them, and its static scans close their bounds | ci | Medium | Open |
 | [0-282](#0-282-incident-platform-ships-a-task-configuration-for-the-dispatchers-container) | incident-platform ships a task configuration for the dispatcher's container | ci | High | Open |
 | [0-283](#0-283-the-devcontainer-image-lets-dev-widen-its-firewall-and-installs-claude-code-unpinned) | The devcontainer image lets `dev` widen its firewall and installs Claude Code unpinned | ci | Medium | Open |
-| [0-284](#0-284-the-task-container-is-checked-before-anything-runs-in-it) | The task container is checked before anything runs in it | ci | Medium | Open |
+| [0-284](#0-284-the-task-container-is-checked-before-anything-runs-in-it-and-its-refusals-hold-none-of-the-agent-sides-text) | The task container is checked before anything runs in it, and its refusals hold none of the agent side's text | ci | Medium | Open |
 | [0-285](#0-285-what-a-task-leaves-in-factorys-reach-outside-the-daemon-is-decided-before-a-task-holds-a-credential) | What a task leaves in `factory`'s reach outside the daemon is decided before a task holds a credential | ci | High | Open |
 | [0-133](#0-133-incidentresolvedevent-carries-no-openedat) | `IncidentResolvedEvent` carries no `openedAt` | tech-debt | Low | Open |
 | [0-134](#0-134-diff-cover-is-installed-by-version-without-hashes) | `diff-cover` is installed by version, without hashes | ci | Low | Open |
@@ -3859,6 +3859,10 @@ way `dispatcher` controls `factory`'s containers, never the reverse. Decided 202
   product's lockfile after); the container and
   every process started in it get their environment from #0-276's allowlisted builder, never `process.env`.
 - The task configuration itself is the product's: incident-platform's is #0-282.
+- The `FACTORY_COMMIT` move (incident-platform, after `factory` PR #18): `install-builder-app.sh` the dispatcher's env
+  file's one author (the two ids and the six `FACTORY_*` settings, each from its one source, a VM provisioned from
+  another `provision.sh` refused before the key is written); the dispatcher's bare clone of the product,
+  `FACTORY_REPO_DIR` (`stage-4.md` "Decided for #0-277's last part").
 
 **Acceptance criteria.**
 AC1. An ADR records the way `dispatcher` reaches `factory`'s Docker and why, the owner's choice: ADR-0062 (done before
@@ -3888,7 +3892,8 @@ AC6. The task's commits leave the container only as `git bundle create -` on `do
 AC7. The task's clone shares no inode with `FACTORY_REPO_DIR`: it is made by a one-shot container from a bundle (a test
      that a file of the clone's `objects/` is not one of `FACTORY_REPO_DIR`'s); `FACTORY_REPO_DIR` feeds every push
      through `alternates` (#0-276).
-AC8. `install-builder-app.sh` passes `--repository profitbuild/incident-platform` to `check-app` once `FACTORY_COMMIT`
+AC8. (Done in the `FACTORY_COMMIT` move, the repository read from `provision.sh`'s `PRODUCT_REPO_URL`.)
+     `install-builder-app.sh` passes `--repository profitbuild/incident-platform` to `check-app` once `FACTORY_COMMIT`
      moves past `factory` PR #16 (which made it required); `test-install-builder-app.sh` matches the whole call, the
      option included, not a prefix (review of #0-276, arc-7c42).
 AC9. No `docker`, `devcontainer` or container command runs as `dispatcher`: every one goes through the starter of
@@ -3937,11 +3942,16 @@ AC5. A path the adapter names that is a symlink, or reaches one, resolving outsi
 AC6. `changed-paths` runs against the push repository (#0-276) with the base and the head given as SHAs (a fresh bare
      repository has no refs and an unborn `HEAD`), and where it runs (as `dispatcher` or in a short-lived container,
      which cannot read `$FACTORY_STATE_DIR`) is decided and stated (a test of each SHA given).
-AC7. Who may write `FACTORY_REPO_DIR` is decided and held: through `alternates` its objects feed every push (#0-276),
+AC7. (The way is taken in #0-277's `FACTORY_COMMIT` move: the clone is the dispatcher's alone, a bare clone in its
+     home of mode 700, made by `provision.sh` as `dispatcher` and checked to be the product's; what is left is the
+     test, and that no product code runs as `dispatcher` where it could write the clone (AC6's `changed-paths`). A bare
+     clone has no `remote.origin.fetch`: the update before a run names `+refs/heads/main:refs/heads/main` itself.)
+     Who may write `FACTORY_REPO_DIR` is decided and held: through `alternates` its objects feed every push (#0-276),
      which checks `objects`, `objects/info` and `objects/pack` but not the loose-object directories or the pack files;
      those are checked the same way, or the clone is shown to be the dispatcher's alone (a test).
 AC8. Once the adapter is a file `dispatcher` reads, `check-app` takes the repository from it (`--adapter`), or the
-     item states why `--repository`'s literal (`install-builder-app.sh`, #0-277 AC8) stays beside it: one source of
+     item states why `--repository` (`install-builder-app.sh`, read from `provision.sh`'s `PRODUCT_REPO_URL`, #0-277
+     AC8) stays beside it: one source of
      the repository a token is narrowed to (review of #0-276).
 
 ### 0-279. The dev app's ids and permissions are kept in two places with no check
@@ -4109,13 +4119,13 @@ AC1. In a task container, `sudo /usr/local/bin/init-firewall.sh <host>` opens no
 AC2. The owner's container still opens its ntfy host.
 AC3. Claude Code's install is pinned by version and checksum, and the pin is checked as the other tools' are.
 
-### 0-284. The task container is checked before anything runs in it
+### 0-284. The task container is checked before anything runs in it, and its refusals hold none of the agent side's text
 
 **Type:** ci · **Priority:** Medium · **Status:** Open (found by the review of `factory` PR #18, #0-277, 2026-11-20;
 for migration stage 4, step 4.4).
 **Autopilot:** human-only · **Risk:** medium · **Complexity:** medium · **Depends on:** #0-277
-**Touches:** the repository `profitbuild/factory` (the dispatcher's task container and its tests), decisions (ADR-0062
-point 4, if the order changes what it says), root (README "Infrastructure Hardening")
+**Touches:** the repository `profitbuild/factory` (the dispatcher's task container, its refusals and its starter, and their tests, and its README), decisions
+(ADR-0062 point 4, if the order changes what it says), root (README "Infrastructure Hardening")
 
 **Problem.** The dispatcher checks the image's `devcontainer.metadata` label and the container's mounts, privilege and
 capabilities only after `devcontainer up` has built the image, created and started the container and run the
@@ -4123,15 +4133,32 @@ configuration's `postCreateCommand` and `postStartCommand` with the merged metad
 refuse (`privileged`, `mounts`, `securityOpt`, from a Dockerfile `LABEL` or a poisoned build cache of `factory`'s
 daemon) has taken effect by then, inside ADR-0057's boundary. The check after `up` reads `Privileged`, `CapAdd` and
 `Mounts` only, not `HostConfig.SecurityOpt`, `PidMode`, `NetworkMode`, `IpcMode`, `Devices` or `UsernsMode`.
+The same checks' refusals (round 2 of PR #18's review) still quote text the agent's side can shape through `factory`'s
+image store and daemon: a label's keys and a mount's destination reach `task.json`'s reason, container and volume names
+the dispatcher's stderr; from 4.6 a task holds a token such text could carry. Nothing holds the rule PR #18 set (no
+stderr of that side in a refusal or a record): the starter still returns a call's stderr, so 4.4's phases could quote it
+unnoticed, and `factory`'s README says a static test holds it, which checks only the one starter. With stderr dropped,
+the owner sees only a failed call's command and exit code on the VM. And the refusal of a feature's label entry names
+its id and digest, not the differing keys ADR-0062 point 4 says.
 
 **Work.** `devcontainer build`, the label checked, then `up` from the recorded image ID, so a new task and a resumed one
 take one path and nothing of the product's runs before the check; the container's `HostConfig` checked whole against
-what the dispatcher set.
+what the dispatcher set; refusals naming a position (an index, "an unexpected mount") or a hash, never a value the
+daemon gave; a static guard that nothing but the starter reads a call's stderr (or the starter keeping it to itself);
+a bounded copy of a failed call's stderr in a file only the owner reads (mode 600 under the run's state directory),
+its path, never its content, in the refusal; the feature entry's refusal naming the differing keys.
 
 **Acceptance criteria.**
 AC1. No lifecycle command of a task configuration runs before the image's label passed the closed list (a test).
 AC2. A new task and a resumed one start their container the same way, from the image ID (a test).
 AC3. The container's `HostConfig` fields beyond the dispatcher's are refused (each a test).
+AC4. No refusal, `task.json` reason or line of the dispatcher's stderr holds a label key, a mount destination or an
+     object name the daemon gave (tests with a planted secret-shaped value in each).
+AC5. A module of `src/` other than the starter that reads a call's stderr fails a static test; `factory`'s README
+     names what that test holds.
+AC6. A failed call's stderr is kept, bounded, in a mode-600 file of the run's state directory, which the refusal names
+     by path (a test).
+AC7. The refusal of a feature's label entry names the keys that differ from the list's (a test).
 
 ### 0-285. What a task leaves in `factory`'s reach outside the daemon is decided before a task holds a credential
 

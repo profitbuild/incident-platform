@@ -31,7 +31,7 @@ no item yet.
 ## Where we are
 
 Stages 0 to 3 are done. **Current: stage 4**: 4.1 done (2026-11-18, with #0-268, #0-269 and #0-270 on 2026-11-19);
-4.2 done (4.2a 2026-11-19, 4.2b 2026-11-20); 4.3 in progress, split into #0-275..#0-278: 4.3a (#0-275) done 2026-11-20 by `factory` PR #15; 4.3b (#0-276) done 2026-11-20 by `factory` PR #16; 4.3c (#0-277) in progress, its way decided 2026-11-20 (ADR-0062: `docker` and `devcontainer` as `factory` through one sudo rule, the clone as a bundle into a work directory of `factory`'s): the VM's part in incident-platform's working PR, the dispatcher's in `factory` PR #18, applied together by one VM recreation that moves `FACTORY_COMMIT`; its end-state follow-ups #0-284 (4.4: the task container checked before anything runs) and #0-285 (before 4.6: what a task leaves in `factory`'s reach, before a task holds a credential). Each
+4.2 done (4.2a 2026-11-19, 4.2b 2026-11-20); 4.3 in progress, split into #0-275..#0-278: 4.3a (#0-275) done 2026-11-20 by `factory` PR #15; 4.3b (#0-276) done 2026-11-20 by `factory` PR #16; 4.3c (#0-277) in progress, its way decided 2026-11-20 (ADR-0062: `docker` and `devcontainer` as `factory` through one sudo rule, the clone as a bundle into a work directory of `factory`'s): the VM's part in incident-platform's working PR, the dispatcher's in `factory` PR #18 (merged as `c5fe3264`), applied together by one VM recreation that moves `FACTORY_COMMIT` (the pull request after #672), then the trials; its end-state follow-ups #0-284 (4.4: the task container checked before anything runs) and #0-285 (before 4.6: what a task leaves in `factory`'s reach, before a task holds a credential). Each
 step's record: `migration/stage-4.md`.
 
 ## Stages
