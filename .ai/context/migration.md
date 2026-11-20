@@ -55,8 +55,8 @@ Claude's API key behind a proxy; D5 public `factory`, loaded read-only as a plug
 checks before a push outside the container; D8 started by hand. The plan, step by step: `migration/stage-4.md`.
 Items in order: 4.1 #0-267 (done 2026-11-18: ADR-0060 accepted, `profitbuild/factory` and its baseline, PR #655 and
 `factory` PR #1), then, each created when its turn comes, 4.2 builder-app (split on 2026-11-19: #0-271 the code that mints and
-checks its token, in `factory`, done 2026-11-19 by `factory` PR #9; #0-272 the app, its key on the VM, and two rulesets here that hold it to `factory/**`
-and keep tags to the admin; moved from 4.2 to 4.5, where a PR is first opened: ADR-0052 and ADR-0034 amended for the
+checks its token, in `factory`, done 2026-11-19 by `factory` PR #9; #0-272 the app, its key on the VM, and five rulesets here that hold it to `factory/**` and `factory/**` to it
+and keep tags to the admin, in two pull requests, the rulesets first; #0-274 an egress filter for `dispatcher`; moved from 4.2 to 4.5, where a PR is first opened: ADR-0052 and ADR-0034 amended for the
 app as a PR's author, `audit-data.sh` reading it, and the app's Issues permission), 4.3 the dispatcher's core
 (#0-261), 4.4 the control flow ported with its tests, 4.5 push, PR, trailers and trace (#0-212, #0-204), 4.6 the
 credential proxy and `stream-json` transcripts, 4.7 the adapter, the switch and the three runs of the exit.
@@ -120,7 +120,7 @@ Exit: 3 items taken, claimed and closed.
 
 ### T. Template of a product repository and its bootstrap
 Exit: a new empty repository passes `repository-settings.rb check` and Factory guards.
-- carries: #0-272's two rulesets (the product's builder app held to `factory/**`, tags to the admin), with any app the
+- carries: #0-272's five rulesets (the product's builder app held to `factory/**` and `factory/**` to it, tags to the admin), with any app the
   product uses listed as an `Integration` (a role's bypass covers no app).
 - gap: all of it.
 
@@ -165,7 +165,12 @@ Exit: 9 of 10 PRs as the owner judges them.
      `require_last_push_approval` is stage 5's choice;
   4. "low risk" is decided by GitHub (a ruleset or a required check over the changed paths), never by the dispatcher's
      word; CODEOWNERS still takes the owner for the Owner-only paths;
-  5. builder-app writes only `factory/**`, and tags are the admin's (#0-272's rulesets).
+  5. builder-app writes only `factory/**`, and tags are the admin's (#0-272's rulesets);
+  6. the approval that lets a pull request merge is one no app can give by holding Pull requests write: a code owner's
+     review or a ruleset's required reviewer. An app's approval counts as a required review (#0-272's probe P2), so
+     with one plain approval builder-app could approve the bot's or Renovate's pull requests;
+  7. whoever merges may delete the head branch: GitHub deletes it as the merger (#0-272's probe P1), so a branch
+     under `branches` or `renovate` merged by an actor outside their bypass stays.
 - waits: #0-264, #0-153.
 - before (ADR-0055 "Consequences"): the stages that close #0-236 (4), #0-167 (6a) and #0-225 (2 and 4) have passed
   their exits.

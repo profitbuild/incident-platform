@@ -21,7 +21,8 @@ failures=0
 n=0
 dir=""
 
-# gh stub: `api [--method M] [--input -] <path>` against $GH_STUB_LIVE (rulesets/<id>.json, repo.json, admins.json); every
+# gh stub: `api [--method M] [--input -] <path>` against $GH_STUB_LIVE (rulesets/<id>.json, repo.json, admins.json,
+# writers.json: the collaborators with Write, whom permission=push lists after the admins); every
 # call is logged as "<METHOD> <path>" in its calls file. GH_STUB_HIDE=bypass,repo hides what only an admin
 # sees (setting: one repository setting, from an admin's token too); environments are
 # live/environments/<name>.env.json, .policies.json and .secrets.json, the repository's secrets live/repo-secrets.json; GH_STUB_FAIL=<text> fails a call whose path contains it; GH_STUB_NOT_LIST=1 answers the list with an object.
@@ -56,6 +57,9 @@ when ['GET', 'repos/o/r/rulesets?per_page=100']
   puts JSON.generate(ids.map { |id| r = JSON.parse(File.read(file[id])); { 'id' => id, 'name' => r['name'], 'target' => r['target'] } })
 when ['GET', 'repos/o/r/collaborators?permission=admin&affiliation=all&per_page=100']
   puts File.read(File.join(live, 'admins.json'))
+when ['GET', 'repos/o/r/collaborators?permission=push&affiliation=all&per_page=100']
+  # GitHub's push list holds everyone who may push: the admins too.
+  puts JSON.generate(JSON.parse(File.read(File.join(live, 'admins.json'))) + JSON.parse(File.read(File.join(live, 'writers.json'))))
 when ['GET', 'repos/o/r']
   repo = JSON.parse(File.read(File.join(live, 'repo.json')))
   repo = repo.reject { |k, _| k == 'delete_branch_on_merge' } if hide.include?('setting')
@@ -167,7 +171,7 @@ layout() {
       File.write(".github/repository-settings/rulesets/review.json", JSON.pretty_generate(review))
       File.write(".github/repository-settings/repository.json",
                  JSON.generate("settings" => { "delete_branch_on_merge" => true }, "admins" => ["owner"],
-                               "repository_secrets" => []))
+                               "writers" => ["bot"], "repository_secrets" => []))
       Dir.mkdir(".github/repository-settings/environments") rescue nil
       env = { "name" => "scans", "can_admins_bypass" => false,
               "deployment_branch_policy" => { "protected_branches" => false, "custom_branch_policies" => true },
@@ -192,6 +196,7 @@ layout() {
       File.write("live/repo.json", JSON.generate("full_name" => "o/r", "permissions" => { "admin" => true },
                                                 "delete_branch_on_merge" => true, "allow_auto_merge" => false))
       File.write("live/admins.json", JSON.generate([{ "login" => "owner" }]))
+      File.write("live/writers.json", JSON.generate([{ "login" => "bot" }]))
     '
 }
 
@@ -312,7 +317,36 @@ all_types() { sed -i.bak 's/    branches: \[ main \]/    types: [ opened, synchr
 push_twin() { put .github/workflows/release.yml 'name: Release' 'on: push' 'permissions: read-all' 'jobs:' '  lint:' '    runs-on: ubuntu-latest' '    steps:' '      - run: echo'; }
 other_admin() { rb 'File.write("live/admins.json", JSON.generate([{ "login" => "owner" }, { "login" => "someone" }]))'; }
 other_admin_before() { before; other_admin; }
-extra_key() { put .github/repository-settings/repository.json '{ "settings": { "delete_branch_on_merge": true }, "admins": ["owner"], "teams": [] }'; }
+extra_key() { put .github/repository-settings/repository.json '{ "settings": { "delete_branch_on_merge": true }, "admins": ["owner"], "writers": [], "repository_secrets": [], "teams": [] }'; }
+# The writers (backlog #0-272): who the bypass of the role Write reaches besides the admins.
+other_writer() { rb 'File.write("live/writers.json", JSON.generate([{ "login" => "bot" }, { "login" => "someone" }]))'; }
+other_writer_before() { before; other_writer; }
+no_writer() { rb 'File.write("live/writers.json", JSON.generate([]))'; }
+# A Maintain collaborator passes `branches` through the role Write's bypass too, so permission=push (which lists it) makes
+# it a writer: the script takes every non-admin login of that list, whatever its role_name.
+maintain_writer() { rb 'File.write("live/writers.json", JSON.generate([{ "login" => "bot", "role_name" => "maintain" }]))'; }
+admin_writer() { rb 'f = ".github/repository-settings/repository.json"; r = JSON.parse(File.read(f)); r["writers"] << "owner"; File.write(f, JSON.generate(r))'; }
+no_writers_key() { rb 'f = ".github/repository-settings/repository.json"; r = JSON.parse(File.read(f)); r.delete("writers"); File.write(f, JSON.generate(r))'; }
+# A tag ruleset whose bypass holds an app (an Integration) and a role, in another order than the file's: target and
+# bypass actors are compared as `renovate`'s are (backlog #0-272).
+tag_ruleset() {
+    rb '
+      t = { "name" => "tags", "target" => "tag", "enforcement" => "active",
+            "conditions" => { "ref_name" => { "include" => ["~ALL"], "exclude" => [] } },
+            "bypass_actors" => [{ "actor_id" => 2740, "actor_type" => "Integration", "bypass_mode" => "always" },
+                                { "actor_id" => 4, "actor_type" => "RepositoryRole", "bypass_mode" => "always" }],
+            "rules" => [{ "type" => "deletion" }, { "type" => "update", "parameters" => { "update_allows_fetch_and_merge" => false } }] }
+      File.write(".github/repository-settings/rulesets/tags.json", JSON.pretty_generate(t))
+      live = t.merge("id" => 13, "source_type" => "Repository", "source" => "o/r")
+      live["bypass_actors"] = live["bypass_actors"].reverse
+      File.write("live/rulesets/13.json", JSON.generate(live))
+    '
+}
+tag_app_dropped() { tag_ruleset; live 13 'r["bypass_actors"].reject! { |a| a["actor_type"] == "Integration" }'; }
+tag_target_branch() { tag_ruleset; live 13 'r["target"] = "branch"'; }
+# GitHub stores a rule's parameter at its default as no parameter at all: `apply` of #0-272 created `update` with
+# update_allows_fetch_and_merge false and read it back without it, so a file names only what GitHub keeps.
+update_default_dropped() { tag_ruleset; live 13 'r["rules"].find { |x| x["type"] == "update" }.delete("parameters")'; }
 bad_repository() { put .github/repository-settings/repository.json '{ "delete_branch_on_merge": true }'; }
 # --main: main is the first commit (the layout), the pull request a second one. commit <message> commits the case.
 commit() { git -C "$dir" add -A .; git -C "$dir" -c user.name=t -c user.email=t@example.org commit -qm "$1"; }
@@ -344,9 +378,9 @@ before() {
 before_hidden() { before; hidden; }
 
 echo "repository-settings: check, what passes"
-MSG="2 ruleset\(s\), 1 environment\(s\), 1 setting\(s\), the admins and the secrets match \.github/repository-settings/ on o/r\.$" \
+MSG="2 ruleset\(s\), 1 environment\(s\), 1 setting\(s\), the admins, the writers and the secrets match \.github/repository-settings/ on o/r\.$" \
     case_ pass "GitHub holds the files (its own fields ignored, arrays in another order)" as_is
-MSG="not visible to this token, so not compared: the bypass actors of 'checks', the bypass actors of 'review', the repository setting delete_branch_on_merge, the repository's admins, the secrets of environment 'scans', the repository's secrets" \
+MSG="not visible to this token, so not compared: the bypass actors of 'checks', the bypass actors of 'review', the repository setting delete_branch_on_merge, the repository's admins, the repository's writers, the secrets of environment 'scans', the repository's secrets" \
     case_ pass "a token that is not an admin's: bypass actors and settings named as not compared" hidden
 unset GH_STUB_HIDE
 MSG="not visible to this token, so not compared: the repository setting delete_branch_on_merge\)" \
@@ -387,6 +421,18 @@ MSG="required check 'lint' is the name of a job in \.github/workflows/ci\.yml an
 MSG="repository\.json::the admins of o/r are owner, someone; the file says owner" case_ fail "an admin the file does not name" other_admin
 MSG="repository\.json must be \{\"settings\"" case_ fail "repository.json in another form" bad_repository
 MSG="repository\.json must be \{\"settings\"" case_ fail "repository.json with a key it does not know" extra_key
+MSG="repository\.json::the collaborators of o/r with Write or Maintain are bot, someone; the file says bot: the role Write bypasses" \
+    case_ fail "a writer the file does not name (backlog #0-272)" other_writer
+MSG="repository\.json::the collaborators of o/r with Write or Maintain are none; the file says bot" case_ fail "a writer the file names, gone on GitHub" no_writer
+MSG="2 ruleset\(s\).*the admins, the writers and the secrets match \.github/repository-settings/ on o/r\.$" \
+    case_ pass "a writer with the role Maintain is a writer" maintain_writer
+MSG="repository\.json must be \{\"settings\".*\(none of them an admin\)" case_ fail "an admin listed as a writer" admin_writer
+MSG="repository\.json must be \{\"settings\"" case_ fail "repository.json without writers" no_writers_key
+MSG="3 ruleset\(s\).*match \.github/repository-settings/ on o/r\.$" case_ pass "a tag ruleset with an app and a role as bypass, in another order" tag_ruleset
+MSG="tags\.json::ruleset 'tags' differs from GitHub's: bypass_actors: the file says" case_ fail "the app's bypass removed in the UI" tag_app_dropped
+MSG="tags\.json::ruleset 'tags' differs from GitHub's: target: the file says \"tag\", GitHub \"branch\"" case_ fail "a tag ruleset turned into a branch ruleset" tag_target_branch
+MSG="tags\.json::ruleset 'tags' differs from GitHub's: rules\.update\.update_allows_fetch_and_merge: in the file, not on GitHub" \
+    case_ fail "a rule parameter at its default, which GitHub does not keep (backlog #0-272)" update_default_dropped
 MSG="ruleset 'checks' differs from GitHub's: rules\.required_status_checks\.strict_required_status_checks_policy" case_ fail "without --main, the working tree's files" pr_other
 MSG="ruleset 'checks' differs from GitHub's: rules\.required_status_checks\.strict_required_status_checks_policy" ARGS="--main HEAD^1" \
     case_ fail "--main, a pull request that changes the files: its own" pr_settings
@@ -447,7 +493,7 @@ echo "repository-settings: plan and apply"
 MSG="^would: create ruleset 'checks';would: create ruleset 'review';would: delete ruleset 'Protect main' \(id 7\): no file names it;would: set delete_branch_on_merge=true$" \
     MODE=plan NOCALLS='(^|;)(POST|PUT|PATCH|DELETE) ' case_ pass "plan lists the changes, creates before deletes, and writes nothing" before
 MSG="Nothing to change" MODE=apply NOCALLS='(^|;)(POST|PUT|PATCH|DELETE) ' case_ pass "apply when GitHub holds the files writes nothing" as_is
-MSG="apply: update ruleset 'review' \(id 12\).*2 ruleset\(s\), 1 environment\(s\), 1 setting\(s\), the admins and the secrets match" MODE=apply CALLS='PUT repos/o/r/rulesets/12' \
+MSG="apply: update ruleset 'review' \(id 12\).*2 ruleset\(s\), 1 environment\(s\), 1 setting\(s\), the admins, the writers and the secrets match" MODE=apply CALLS='PUT repos/o/r/rulesets/12' \
     case_ pass "apply updates a ruleset changed in the UI, in place" no_code_owners
 MSG="apply: delete ruleset 'Protect main'.*match \.github/repository-settings/ on o/r\.$" MODE=apply \
     CALLS=';POST repos/o/r/rulesets;POST repos/o/r/rulesets;DELETE repos/o/r/rulesets/7;PATCH repos/o/r;GET ' \
@@ -468,6 +514,8 @@ MSG="by hand: environment 'github-pages' is on GitHub but in no file.*nothing ap
     case_ fail "apply deletes no environment" other_env
 MSG="the admins of o/r are owner, someone; the file says owner: .*; apply does not change that" MODE=apply \
     NOCALLS='(^|;)(POST|PUT|PATCH|DELETE) ' case_ fail "apply with an admin the file does not name changes nothing" other_admin_before
+MSG="Write or Maintain are bot, someone; the file says bot: .*; apply does not change that" MODE=apply \
+    NOCALLS='(^|;)(POST|PUT|PATCH|DELETE) ' case_ fail "apply with a writer the file does not name changes nothing" other_writer_before
 
 if [ "$failures" -gt 0 ]; then
     echo "::error::$failures of $n cases failed (backlog #0-113)"

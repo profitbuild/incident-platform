@@ -13,8 +13,10 @@
 #                          deployment branch policy and the branches it allows, its protection rules, and the
 #                          names of the secrets it holds (never their values: apply writes no secret)
 #   repository.json        `settings`: repository settings (`delete_branch_on_merge`, `allow_auto_merge`);
-#                          `admins`: the logins with the admin role, the only ones the ruleset's bypass (the
-#                          admin role) reaches, so a new admin would bypass it too; `repository_secrets`: the
+#                          `admins`: the logins with the admin role, the only ones the bypass of `main` and
+#                          `tag-creation` (the admin role) reaches, so a new admin would bypass them too;
+#                          `writers`: the logins with Write or Maintain, whom the bypass of `branches` and
+#                          `renovate` (the role Write) also reaches (backlog #0-272); `repository_secrets`: the
 #                          repository-level secrets allowed (none: one of them reaches a run on any branch)
 #
 # and this script is the one way between them and GitHub:
@@ -44,7 +46,7 @@
 #
 # What `check` cannot see with CI's token: a ruleset's `bypass_actors` (GitHub shows them only to an admin,
 # so an actor added in the UI goes unnoticed in CI), the repository settings (not in the read-only
-# repository response), the admins (the collaborators list needs more than read), and which secrets exist,
+# repository response), the admins and the writers (the collaborators list needs more than read), and which secrets exist,
 # in the repository and in each environment. `apply` creates and updates environments but never deletes one
 # (its secrets would go with it), and never writes a secret: those are the owner's, in Settings. It says so in its
 # summary; run by the owner (an admin token), it compares all three, and `plan`/`apply` refuse to run
@@ -242,21 +244,25 @@ def load_environments(ref)
   envs
 end
 
-# {settings: {name => boolean}, admins: [login], repository_secrets: [name]}.
+# {settings: {name => boolean}, admins: [login], writers: [login], repository_secrets: [name]}.
+# writers: the logins with the role Write or Maintain (not admin), the ones a ruleset's bypass for the role Write
+# reaches besides the admins (`branches`, `renovate`; backlog #0-272), so a new one would bypass those too.
 def load_repository(ref)
   file = "#{DIR}/repository.json"
   repo = load_json(file, ref)
-  empty = { 'settings' => {}, 'admins' => [], 'repository_secrets' => [] }
+  empty = { 'settings' => {}, 'admins' => [], 'writers' => [], 'repository_secrets' => [] }
   return empty unless repo
   settings = repo.is_a?(Hash) ? repo['settings'] : nil
   admins = repo.is_a?(Hash) ? repo['admins'] : nil
+  writers = repo.is_a?(Hash) ? repo['writers'] : nil
   secrets = repo.is_a?(Hash) ? repo['repository_secrets'] : nil
-  unless repo.is_a?(Hash) && repo.keys.sort == %w[admins repository_secrets settings] &&
+  unless repo.is_a?(Hash) && repo.keys.sort == %w[admins repository_secrets settings writers] &&
          settings.is_a?(Hash) && !settings.empty? && settings.values.all? { |v| [true, false].include?(v) } &&
          admins.is_a?(Array) && !admins.empty? && admins.all? { |a| a.is_a?(String) && !a.empty? } &&
+         writers.is_a?(Array) && writers.all? { |a| a.is_a?(String) && !a.empty? } && (writers & admins).empty? &&
          secrets.is_a?(Array) && secrets.all? { |n| n.is_a?(String) && !n.empty? }
     fail!("#{file} must be {\"settings\": {<name>: true|false, ...}, \"admins\": [<login>, ...], " \
-          '"repository_secrets": [<name>, ...]}', file: file)
+          '"writers": [<login>, ...] (none of them an admin), "repository_secrets": [<name>, ...]}', file: file)
     return empty
   end
   repo
@@ -532,8 +538,20 @@ def compare(repo, specs, repository)
                         'so who is one is decided in Settings, Collaborators, then written in the file'
       result[:findings] << ["#{DIR}/repository.json", result[:admins]]
     end
+    # permission=push lists everyone who may push, the admins included; the writers are the rest.
+    pushers = one_page("repos/#{repo}/collaborators?permission=push&affiliation=all&per_page=100")
+    writers = (pushers.map { |a| a['login'] } - logins).sort
+    unless writers == repository['writers'].sort
+      result[:writers] = "the collaborators of #{repo} with Write or Maintain are " \
+                         "#{writers.empty? ? 'none' : writers.join(', ')}; the file says " \
+                         "#{repository['writers'].empty? ? 'none' : repository['writers'].sort.join(', ')}: the role " \
+                         'Write bypasses the rulesets branches and renovate (backlog #0-272), so who has it is ' \
+                         'decided in Settings, Collaborators, then written in the file'
+      result[:findings] << ["#{DIR}/repository.json", result[:writers]]
+    end
   else
     result[:hidden] << "the repository's admins"
+    result[:hidden] << "the repository's writers"
   end
   compare_environments(repo, repository, result)
   result
@@ -612,7 +630,7 @@ def check(repo, specs, repository, main: nil, ref: nil)
            else " (this commit's files: it changes them)"
            end
   puts "Repository settings: #{specs.size} ruleset(s), #{repository['environments'].size} environment(s), " \
-       "#{repository['settings'].size} setting(s), the admins and the secrets match #{DIR}/#{source} on #{repo}#{note}."
+       "#{repository['settings'].size} setting(s), the admins, the writers and the secrets match #{DIR}/#{source} on #{repo}#{note}."
 end
 
 def describe(action)
@@ -654,6 +672,7 @@ def plan(repo, specs, repository, apply:)
           'token, or a bypass actor could be changed without being shown')
   end
   stop!("#{result[:admins]}; apply does not change that") if result[:admins]
+  stop!("#{result[:writers]}; apply does not change that") if result[:writers]
   actions = result[:actions]
   result[:manual].each { |m| puts "by hand: #{m}" }
   if actions.empty?

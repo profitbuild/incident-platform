@@ -441,8 +441,20 @@ with `gh api repos/{owner}/{repo}/...` after changing anything in Settings).
   with the files on every PR and push (`repository-settings.rb check`, main's files for a PR that does not
   change them), so a setting changed in the UI turns CI red, and refuses a required check that no job of a
   pull request's workflows reports or that two jobs could. Its limit: CI's token sees neither the bypass
-  actors, nor the repository settings, nor the admins, so those are compared only when the owner runs the
-  check (its summary names what it skipped).
+  actors, nor the repository settings, nor the admins, nor the writers (#0-272), so those are compared only when the
+  owner runs the check (its summary names what it skipped).
+- **Every other branch and every tag is guarded too** (backlog #0-272, ADR-0034 as amended), so that builder-app
+  (stage 4.2b), whose Contents write reaches every ref no ruleset covers, writes no branch or tag but `factory/**`
+  (what else Contents write reaches: "Known gaps of the rulesets" below). Four more rulesets, files next to `main`'s:
+  - **`branches`:** every branch but `main`, `factory/**` and `renovate/**`; creation, update, deletion and force push
+    refused. Its bypass is the role Write, `always`: the owner and the bot account.
+  - **`renovate`:** `renovate/**`, the same rules; the role Write and the Renovate app (`Integration` 2740).
+  - **`tags`:** update, deletion and force push refused, no bypass at all.
+  - **`tag-creation`:** creation, the admin role only.
+
+  A role's bypass covers no app, a probe on `factory` showed (2026-11-19), so an app passes only when named.
+  `repository.json` lists the writers (Write or Maintain) as it lists the admins, and the owner's `check` fails on a
+  collaborator the file does not name: whoever got Write would bypass `branches`.
 - Actions must be pinned to a full-length commit SHA (`sha_pinning_required`, backlog #0-60): a
   workflow with a tag-pinned `uses:` fails to start, so a tag no longer depends on review alone. It
   was turned on once `main` had no tag-pinned `uses:` left and its run was green (2026-09-29);
@@ -758,10 +770,28 @@ changed files at the head, not the rest of `factory` at that head (as `<path>.pr
 instructions or taken for a gate), the gate is the pull request's own CI, which a change under `factory`'s `.github/`
 writes itself (the gate flags it, `ciChanged`), and the copy check (ADR-0061) runs only after the
 merge; every interactive session of the owner holds the owner's token, an admin's, which
-no ruleset binds, so there only the text-matching denies stand; and `factory`'s settings are checked by no
+no ruleset binds, so there only the text-matching denies stand (the rulesets' own gaps are listed below); and `factory`'s settings are checked by no
 `repository-settings` file until stage T; the organisation does not require two-factor authentication yet, while the
 owner's account is the one way to `main` and to the rulesets of both repositories (the owner's to turn on, #0-267;
 planned for 2026-11-19 and postponed by the owner that day).
+
+**Known gaps of the rulesets** (#0-272, ADR-0034 as amended):
+- The bot account (Write) may still create, force-push and delete the owner's branches, which `branches` lets the
+  role Write through, until stage 5's exit.
+- The Renovate app reaches only `renovate/**` and, like every actor with Contents write, `factory/**`, which no
+  ruleset covers until builder-app's own (`factory`, #0-272's second pull request) closes it to everyone but
+  builder-app and the admin.
+- An app in no bypass is refused on every other branch: Dependabot's security updates (off today, #0-74) would need
+  it listed as an `Integration` in `branches`.
+- The rulesets guard branches and tags only, and Contents write reaches more: an app holding it may edit or delete a
+  release and its assets, publish one on a tag that exists (a new tag is the admin's alone) and send a
+  `repository_dispatch`, which no workflow here listens to.
+- GitHub deletes a merged pull request's head branch as the one who merged it, so a branch under `branches` or
+  `renovate` merged by an actor outside their bypass stays (tried on `factory`): what stage 10's auto-merge must
+  allow for.
+- An app's approval counts as a required review (tried there too), which today only the code owner's required review
+  (`* @lukaszplawiak`) keeps from merging anything.
+
 Layers and their limits: docs/ai-factory.md, "What isolates what".
 
 ### Container images

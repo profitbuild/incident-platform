@@ -4151,11 +4151,12 @@ AC5. `stage-4.md` "4.2" describes what was built.
   - Node's `--env-file` applies `NODE_OPTIONS` from the file (an injected `--require` ran before the main module),
     and a variable already set in the environment wins over the file.
 - **Not done here:**
-  - left to #0-272 (AC7, AC8): the env file's modes on the VM, and one source for the permission list;
+  - left to #0-272 (AC8, AC9; AC7 and AC8 until its split of 2026-11-19): the env file's modes on the VM, and one
+    source for the permission list;
   - left to 4.3 (`stage-4.md` "4.3", carried from this review): a trusted clone, refspecs, the product from the
     adapter, and allowlisted children;
   - left to #0-273: moving `dev-token.mjs` onto `checked-token.mjs`;
-  - left to a real app (#0-272's AC1): GitHub's 404 for `factory`, the narrowed token's one repository, and
-    `metadata: read`.
+  - left to a real app (#0-272's AC5, AC1 before its split): GitHub's 404 for `factory`, the narrowed token's one
+    repository, and `metadata: read`.
 - **Kept:** commit `b5569e9` of `factory` is red on its own: a staged rename went in without its imports, and the next
   commit fixes it. The owner kept it rather than force-push, and it is recorded in the PR.
