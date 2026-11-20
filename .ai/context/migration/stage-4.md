@@ -708,6 +708,28 @@ owner 2026-11-20, before its code, and done the same day, `factory` PR #16).**
   cases now); the limits are a snapshot of the install: a change of them reaches the dispatcher when the script runs
   again (stated in it and in docs/ai-factory.md step 6). Not done: a CI test of the clone block and of the refusals
   for a missing `jq` or source (VM-only code, tried on the VM as the other blocks of these scripts are).
+- **Tried on the VM, first attempt (2026-11-20, a VM made from `main` at `f6d73dec`, factory at `c5fe3264`,
+  devcontainer CLI 0.89.0):** `create.sh` and `install-builder-app.sh` passed (`check-app` with `--repository`: the
+  token narrowed to incident-platform, no installation on `factory`). The trial's adapter (C1) was written as
+  `dispatcher`, mode 600, in `/home/dispatcher/state`: `factory`'s fixture with `taskImage` `.devcontainer/task.json`.
+  The first `cli.mjs run` ended BLOCKED in 6 s, "devcontainer up failed (exit 1)", the task container never made, the
+  daemon and `/home/factory/tasks` left empty. The same steps, run by hand with the dispatcher's own code and the same
+  `up` through the sudo rule, showed why: `EACCES` opening the clone's `.devcontainer/devcontainer-lock.json`. The
+  CLI writes its lockfile beside the configuration file it was given, which under `--override-config` is the clone's
+  own `devcontainer.json`; the override names the feature by its digest, unlike the product's lockfile's `:1`, so the
+  CLI rewrites it, in a clone owned by `dev`'s mapped uid, where `factory` only reads. #0-282's trial did not see it:
+  it ran `up` with `--frozen-lockfile`, under which the CLI writes no lockfile.
+  With `--config` in place of `--override-config` the same `up` succeeded, the lockfile written into `<runId>/` and
+  the clone untouched (so the CLI's lockfile is `<runId>/`'s, never the product's `devcontainer-lock.json`: only the
+  dispatcher reads that one, for the feature's digest, which names the feature in the configuration), and `checkContainer`, `checkImageMetadata` (the feature's 1.10.1 label equal to the list's)
+  and `probeTimeout` of `c5fe3264` passed on that container; `cli.mjs sweep` then removed it, both networks and the
+  volume. Changed: ADR-0062 point 4 (`--config`); the fix is `factory`'s, PR #19 (its fake CLI writes the lockfile
+  beside the configuration it is given and fails in the clone, as the real one; a return to `--override-config` caught
+  by 8 tests), merged as `648723d3`, and `FACTORY_COMMIT` moves to `648723d3f0816b79b2777c06bfe45fd9291f493d`, the VM
+  made anew for the trials. Not done: the trials of AC3, AC10, AC12 and AC13, which wait for that move. For 4.4's
+  resume by `runId` (from this change's review): `<runId>/`'s configuration and the CLI's lockfile there are in reach
+  of a task holding `factory`'s socket, as the override file was, so a resumed task's `up` writes the configuration
+  again first and trusts no lockfile it finds there.
 - **Not done:** 4.3c, 4.3d; and, from 4.3a's review, `taskImage` bounded, symlinks under the adapter's paths, a
   reason without GitHub's text, resuming by `runId` or one running task at most, a blocked task counted by the
   breaker, a retried mint's leftover token, a script whose last segment is `.`, the item-id format tied to the

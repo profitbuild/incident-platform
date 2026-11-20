@@ -72,9 +72,13 @@ Two facts the item had not weighed (the `/research` of 2026-11-20):
    `taskImage` names a devcontainer configuration written for the task container (incident-platform's is #0-282),
    not the owner's interactive one, which mounts credentials and carries the bot's environment. The dispatcher reads
    it from the base in its own `FACTORY_REPO_DIR` (`git show <base>:<path>`, as data, with a JSONC reader of its own:
-   built-ins only, ADR-0060 D2), checks it against a closed list, and writes the override that `devcontainer up
-   --override-config` reads (absolute paths into `<runId>/w`) through the same helper's stdin, never a file of its own
-   in a directory of `factory`'s:
+   built-ins only, ADR-0060 D2), checks it against a closed list, and writes the configuration that `devcontainer up
+   --config` reads (absolute paths into `<runId>/w`) through the same helper's stdin, never a file of its own
+   in a directory of `factory`'s. `--config`, not `--override-config` (amended 2026-11-20, #0-277's trial): the CLI
+   writes its lockfile beside the configuration file it was given, and with `--override-config` that file is the
+   clone's `.devcontainer/devcontainer.json`, so it wrote into the clone, which is `dev`'s and not `factory`'s
+   (`EACCES`, every task BLOCKED); with `--config` it writes into `<runId>/`, removed with it, and reads nothing of
+   the clone's own configuration:
    - carried: `build.dockerfile` and `build.context` (both in the configuration's directory or under it; `build.options`,
      `build.args` and `build.target` refused), `remoteUser` (the agents' user), the commands run inside the container
      (`postCreateCommand`, `postStartCommand`); no carried string may hold `${localEnv:...}` or `${localWorkspaceFolder}`
