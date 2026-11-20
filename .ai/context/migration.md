@@ -13,14 +13,27 @@ file is written before its first item.
 **Keep it true.** A PR that creates, freezes or closes an item of a stage, or ends a stage, updates this file and its
 stage's file in the same PR. A session working on the migration reads it first, then ADR-0055 and the items of the current stage.
 
+**Every step keeps a record** (the owner's rule, 2026-11-20): in its stage's file, each step's section ends with a
+**Record** of four parts, kept current by the PR that does, decides or drops part of the step, never after it:
+- **Done:** what was built or settled, with its PRs;
+- **Why:** the reason for each choice made (the owner's, or the analysis behind it);
+- **Not done:** what the step's plan held and was not done, or was moved;
+- **Why not:** for each, why, and where it went (an item, a later step, a stage).
+
+A decision taken with the owner in a conversation goes into the record before the code that follows it lands. A
+choice that changes an ADR's decision (narrows, extends or reverses it) is an amendment of that ADR, and the Record
+names the amendment: the decision's history stays in the ADRs (ADR-0055), the Record says where it is and why.
+
 Legend: **carries** = the item does the stage's work; **superseded** = frozen as `Blocked`, the stage removes what it
 hardens; **before** = wanted done before the stage starts; **waits** = depends on the stage; **gap** = stage work with
 no item yet.
 
 ## Where we are
 
-Stages 0 to 3 are done. **Current: stage 4** (4.1 done on 2026-11-18, with #0-269 on 2026-11-19; 4.2 next;
-#0-268 and #0-270 done on 2026-11-19).
+Stages 0 to 3 are done. **Current: stage 4**: 4.1 done (2026-11-18, with #0-268, #0-269 and #0-270 on 2026-11-19);
+4.2 done (4.2a 2026-11-19, 4.2b 2026-11-20); 4.3 next, split into #0-275..#0-278, 4.3a (#0-275) in progress (its plan agreed with the
+owner, its code being written in `factory`). Each
+step's record: `migration/stage-4.md`.
 
 ## Stages
 
@@ -55,7 +68,7 @@ Claude's API key behind a proxy; D5 public `factory`, loaded read-only as a plug
 checks before a push outside the container; D8 started by hand. The plan, step by step: `migration/stage-4.md`.
 Items in order: 4.1 #0-267 (done 2026-11-18: ADR-0060 accepted, `profitbuild/factory` and its baseline, PR #655 and
 `factory` PR #1), then, each created when its turn comes, 4.2 builder-app (split on 2026-11-19: #0-271 the code that mints and
-checks its token, in `factory`, done 2026-11-19 by `factory` PR #9; #0-272 the app, its key on the VM, and five rulesets here that hold it to `factory/**` and `factory/**` to it
+checks its token, in `factory`, done 2026-11-19 by `factory` PR #9; #0-272 (done 2026-11-20, PRs #663 and #664) the app, its key on the VM, and five rulesets here that hold it to `factory/**` and `factory/**` to it
 and keep tags to the admin, in two pull requests, the rulesets first (the first merged 2026-11-20, PR #663; the app
 created that day; `factory` PR #13 its permissions as a file), and every app of the organization written as a file;
 #0-274 a narrower egress list of `dispatcher`'s own (the VM's chain takes it already, its uid being an ordinary one); moved from 4.2 to 4.5, where a PR is first opened: ADR-0052 and ADR-0034 amended for the
