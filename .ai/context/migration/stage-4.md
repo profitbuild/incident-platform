@@ -312,8 +312,8 @@ Split on 2026-11-20 (the owner's choice A), one `factory` pull request each, in 
 - **4.3b, #0-276:** done 2026-11-20, `factory` PR #16 (merge `3c588db3`). "Carried from #0-271's review" below: the push repository the dispatcher owns, the pinned refspec, the repository from
   the adapter, children from an allowlisted environment; how, decided with the owner on 2026-11-20 (the Record's
   "Decided for 4.3b").
-- **4.3c, #0-277:** "Docker for the dispatcher" (decided with the owner on 2026-11-20, ADR-0062; the Record's "Decided
-  for 4.3c") and the task container; with it #0-282, incident-platform's task configuration for that container (each
+- **4.3c, #0-277:** done 2026-11-21 (the Record's "Tried on the VM, the trials"). "Docker for the dispatcher" (decided
+  with the owner on 2026-11-20, ADR-0062; the Record's "Decided for 4.3c") and the task container; with it #0-282, incident-platform's task configuration for that container (each
   needs the other: #0-282's check is #0-277's, #0-277's trial on the VM runs #0-282's configuration).
 - **4.3d, #0-278:** "Product code from `main` only" and `next-item.sh`'s open pull requests as a file.
 
@@ -371,7 +371,8 @@ Split on 2026-11-20 (the owner's choice A), one `factory` pull request each, in 
   dispatcher passes the open PRs as a file, a change to `next-item.sh`'s arguments).
 
 **Record (4.3, in progress: split 2026-11-20, PR #665; 4.3a done 2026-11-20, `factory` PR #15; 4.3b decided with the
-owner 2026-11-20, before its code, and done the same day, `factory` PR #16).**
+owner 2026-11-20, before its code, and done the same day, `factory` PR #16; 4.3c decided 2026-11-20, ADR-0062, built
+by PRs #671, #672, #673, #674 and `factory` PRs #18, #19, and done 2026-11-21 with its trials on the VM).**
 - **Done:** the split into #0-275..#0-278 (above), in an order where each part is reviewed on its own and the first two
   need neither Docker nor the VM; #0-273 first (dev-token on the shared checks), so 4.3b changes one API with two
   callers rather than leaving a third copy.
@@ -767,7 +768,39 @@ owner 2026-11-20, before its code, and done the same day, `factory` PR #16).**
   resume by `runId` (from this change's review): `<runId>/`'s configuration and the CLI's lockfile there are in reach
   of a task holding `factory`'s socket, as the override file was, so a resumed task's `up` writes the configuration
   again first and trusts no lockfile it finds there.
-- **Not done:** 4.3c, 4.3d; and, from 4.3a's review, `taskImage` bounded, symlinks under the adapter's paths, a
+- **Tried on the VM, the trials (2026-11-21, the VM made anew from `main` at `3f26eab6`, `factory` at `648723d3`, the
+  product's clone at `3f26eab6`, builder-app's key installed and `check-app` passed; the trial's adapter (C1) as in the
+  first attempt; no login entered in any rollback, so no credential was on the daemon):**
+  - **T1, a run to its end (AC3, AC12):** exit 0 in 45 s (the image's layers cached from the first attempt's build);
+    `task.json` holds the base `3f26eab6` and the image's ID; status `running`, as v0 has no phases (4.4's). After it
+    the daemon held only `factory-dispatcher-m2` and `/home/factory/tasks` was empty. A task the first attempt left
+    in the state (its run killed) did not stop the run.
+  - **T2, two kills (AC13, AC10, AC12, AC3):** a dispatcher killed while its `devcontainer up` ran took that `up`
+    with it before any container (the CLI's output pipe closed): left were the task's network, its `claude` volume
+    and its work directory. Planted there: links from the clone to two files of `factory`'s and to
+    `/home/dispatcher/state`, a link beside the clone, and a running unlabelled container. The next run's start swept
+    all of it; the files the links named and every file of the dispatcher's state were unchanged. That run was
+    killed with its task container running. The container: from the image's ID (the CLI names it by a tag of its own;
+    the ID is what the dispatcher checks, and a resumed task runs from it); the work directory on `/workspace`,
+    `/opt/factory` read-only (a write refused), the task's `claude` volume, `factory-dispatcher-m2` and the
+    feature's socket mount, nothing else; no credential among its variables' names; the clone at the base. Its
+    `task.json` had no image ID yet, since the kill fell between `up` and the record.
+  - **T3, the run after a kill (AC13, AC10):** exit 0; its start swept the killed run's running container, network,
+    volume and work directory; the planted links' files and the dispatcher's state unchanged again. Settled with it:
+    under `--config` the CLI takes nothing from the clone's own `.devcontainer/devcontainer.json`: none of its
+    volumes, `containerEnv` or `postStartCommand` reached the container.
+  - **T4, the rollback by time (AC2's dispatcher side, AC13):** with the rollback running, `cli.mjs run` and `sweep`
+    refuse, naming its container, and touch nothing; stopped, `sweep` removes it with its three named volumes, where
+    the logins would be; with a run on, `rollback-start.sh` refuses, naming the run's container and network, and so it does with a running
+    unlabelled container and with one labelled `factory.rollback=1` that `up` did not make; a run
+    started during the rollback's `up` passed both of its checks before the rollback's container existed, and
+    `rollback-start.sh`'s check after `up` found the run's network and volume, removed its own container and refused,
+    before any login (both containers ran for about a second, none holding a credential). Not seen on the VM in that
+    timing: a rollback caught by the run's second check; `factory`'s tests hold it.
+  - **Not changed by the trials:** no code, no ADR. Two remarks: the clone's `origin` names the bundle's path in
+    the helper container, absent in the task container (harmless; 4.4 pushes from the push repository, never the
+    clone's `origin`); the clone is the mapped `dev`'s, so even `factory` writes nothing in it.
+- **Not done:** 4.3d; and, from 4.3a's review, symlinks under the adapter's paths, a
   reason without GitHub's text, resuming by `runId` or one running task at most, a blocked task counted by the
   breaker, a retried mint's leftover token, a script whose last segment is `.`, the item-id format tied to the
   queue's kind, and a check that `gate.schema.json` matches what `run-tests.sh` prints.
@@ -781,8 +814,13 @@ owner 2026-11-20, before its code, and done the same day, `factory` PR #16).**
 - **Why not, from 4.3b's reviews:** the first two matter only for 4.4's long-lived task repository and its caller
   (4.4, "Carried from 4.3b's decisions"); who may write `FACTORY_REPO_DIR` and the adapter's file are 4.3d's (#0-278
   AC7, AC8); the rest is defence in depth behind controls that hold today, an item of its own (#0-281).
-- **Why not:** one item at a time (#0-277 next); `taskImage` is read first by 4.3c (#0-277), the adapter's paths by
-  4.3d (#0-278), the reason, the resume, the breaker's count, the mint's retries and the running of a command by 4.4's
+- **Not done, from #0-277's last reviews:** a check that no `url.<base>.insteadOf` rewrites the URL of the
+  dispatcher's clone of the product (PR #673's round 2, optional). **Why not:** only `dispatcher` and root write that
+  clone's configuration, and `factory` reads nothing of `dispatcher`'s home (`create.sh` checks it), so the check
+  would guard against the uid that runs the dispatcher itself; 4.3d (#0-278) reads that clone and may take it with
+  its own checks.
+- **Why not:** one item at a time (#0-278 next; `taskImage`, from 4.3a's review, was bounded by 4.3c, #0-277 AC5);
+  the adapter's paths by 4.3d (#0-278), the reason, the resume, the breaker's count, the mint's retries and the running of a command by 4.4's
   flow (its section, "Carried from 4.3a's review"); the item id belongs to the `backlog-md` queue, so it moves with
   the queue's kind before a second product or stage 7 (`migration.md`, stage 7's gap); the gate's schema and its
   producer are two repositories, so their check is an item of its own (#0-280).

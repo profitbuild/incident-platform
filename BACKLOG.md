@@ -3913,6 +3913,37 @@ AC11. A call that outlives its timeout leaves no process in the container, the d
 AC12. The work directory is removed whole, dot entries and the directory included, at a task's end and at the next
      run's start after a kill (a test where the code allows; on the VM, recorded).
 
+**Result.** Decided 2026-11-20 (ADR-0062, PR #670), built by incident-platform PRs #671 (#0-282's task
+configuration, merge `62a0f019`), #672 (the VM's part, `6f7107bc`), #673 (`FACTORY_COMMIT` moved, the dispatcher's env
+file, `f6d73dec`) and #674 (`devcontainer up --config`, `3f26eab6`), and `factory` PRs #18 (the dispatcher's part,
+`c5fe3264`) and #19 (`--config`, `648723d3`); tried on the VM made anew from `main` at `3f26eab6` on 2026-11-21
+(`stage-4.md` "4.3" Record, "Tried on the VM, the trials", T1 to T4; the first attempt, which found the lockfile's
+`EACCES`, in "Tried on the VM, first attempt").
+- AC1: ADR-0062, before the code.
+- AC2: `create.sh` passed on the new VM (the rule, the two programs, `--preserve-env` and `-D` refused, `factory`
+  with no sudo and reading nothing of `dispatcher`'s, the checkout root's at `FACTORY_COMMIT`, the helper at its
+  digest); on the VM, `cli.mjs run` and `sweep` refuse while the rollback runs, `sweep` removes a stopped
+  rollback's three named volumes, and `rollback-start.sh` refuses with a run's container, an unlabelled one and one
+  labelled `factory.rollback=1` that `up` did not make (T4; `test-rollback-scripts.sh` offline).
+- AC3: the task container from a fresh clone at the base, `/opt/factory` read-only, no credential among its
+  variables, removed with its volumes and work directory at the run's end (T1) and at the next start after a kill
+  (T2, T3); a BLOCKED end in `factory`'s tests.
+- AC4: README "Infrastructure Hardening", the sudo rule, the rollback by time and their limits (PR #672).
+- AC5, AC6, AC7, AC9, AC11: `factory` PR #18's tests (with PR #19's for `--config`); on the VM, the container ran
+  from the image's ID recorded in `task.json` and nothing of the clone's own `devcontainer.json` reached it (T2, T3).
+- AC8: PR #673 (`check-app --repository`, the whole call in its test).
+- AC10: links planted in a killed run's work directory, to two files of `factory`'s and to the dispatcher's state:
+  after two sweeps every one of those files unchanged (T2, T3); `factory`'s tests for the stdin and stdout ways.
+- AC12: the work directory gone, dot entries and links included, at the end (T1) and at the next start (T2, T3).
+- AC13: a dispatcher killed during `up` and one killed with its task container running, an unlabelled container
+  among the leftovers: the next start swept them and ran (T2, T3); a run started during the rollback's `up`: the
+  rollback refused after its `up` and removed its container, before any login (T4). A rollback caught by the run's
+  own second check did not occur in that timing: `factory`'s tests.
+- Left, with where each went: `rollback-start.sh`'s header and README's "dispatcher and `factory`'s Docker" narrowed
+  to a VM made from PR #673 on (PR #673's round 2; this PR's docs review);
+  the `insteadOf` check of the dispatcher's clone not done, why in `stage-4.md` "4.3"; the end-state checks in
+  #0-284 and #0-285.
+
 ### 0-278. The product's code runs only from `main` (step 4.3d)
 
 **Type:** ci · **Priority:** High · **Status:** Open (migration stage 4, step 4.3d; ADR-0060 D6).

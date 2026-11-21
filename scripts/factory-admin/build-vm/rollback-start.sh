@@ -2,8 +2,9 @@
 # ============================================================
 # Owner-run (scripts/factory-admin/), on the Mac. Starts the rollback's devcontainer on the build VM (backlog #0-277,
 # ADR-0062 point 5): today's /backlog-autopilot, in the VM's devcontainer, while the dispatcher is not running. For a
-# VM made from a provision.sh of #0-277 and on, with a FACTORY_COMMIT that carries #0-277's dispatcher code (its
-# refusal on the label below, and `cli.mjs sweep`).
+# VM made from main at PR #673 and on: the first whose FACTORY_COMMIT (`factory` PR #18 and on) carries #0-277's
+# dispatcher code, its refusal on the label below and `cli.mjs sweep`. A VM made between PR #672 and #673 has this
+# script's provision.sh but not that code, so nothing there refuses a run while the rollback holds the logins.
 #
 #   rollback-start.sh
 #
