@@ -2,8 +2,10 @@
 
 - **Status:** Accepted (2026-11-21, by the owner, after review round 1 of #0-286); amends ADR-0055 (its stages, order, exits, rollbacks and rules of the migration, and two exceptions to its target's "dispatchers keep no state of their own": a seed run's ground truth until it is scored, and, if GraphQL names no actor of a Project field, the dispatcher's own record of who moved a task to `Ready`), ADR-0060 D7
   (one lock for the whole dispatcher, a push never forced, no merge in a branch) and D8 (the item named by the owner
-  until stage 7), and ADR-0062 point 5 (the rollback shares the VM by time)
-- **Backlog:** #0-286 (this replan); the steps' items #0-287 to #0-307 (M2 and M3 split per pull request)
+  until stage 7), and ADR-0062 point 5 (the rollback shares the VM by time); amended for #0-299's plan (the architect's
+  write scope at M2) and for #0-303 (2026-11-21: M2's per-task sweep and caches moved to M3.4, #0-285)
+- **Backlog:** #0-286 (this replan); the steps' items #0-287 to #0-307 (M2 and M3 split per pull request); #0-303's
+  amendment
 - **Date:** 2026-11-21
 - **Author:** human (the owner's decisions D1–D6 and G1–G5 of 2026-11-21, taken in an interactive session on an
   analysis of the migration against its target); written by Claude Code
@@ -62,7 +64,7 @@ agent call yet (`PHASES = []`).
 | Step | What | Exit |
 |---|---|---|
 | M1 (4.3d) | #0-278 as decided, no growth of the `backlog-md` kind; `factory` tag `v0.1.0` | one run to the end of the container |
-| M2 (4.4, narrowed) | the build agents moved into `factory`'s plugin; the build zone's phases only (plan, implement, gate, test fixes, review fixes by finding id); the dispatcher commits with trailers; `stream-json` per call; per-task lock and per-`runId` sweep; #0-280, #0-284, Claude Code pinned | a branch of commits, gate green |
+| M2 (4.4, narrowed) | the build agents moved into `factory`'s plugin; the build zone's phases only (plan, implement, gate, test fixes, review fixes by finding id); the dispatcher commits with trailers; `stream-json` per call; per-task lock (the sweep's per-task scope and the caches with #0-285, M3.4: #0-303's option B); #0-280, #0-284, Claude Code pinned | a branch of commits, gate green |
 | M3 (4.5–4.7) | push, PR, trace; the credential proxy, after #0-285 | one PR by builder-app merged by the owner |
 | M4 (end of 4, part of 5) | the old build path removed (D1); `factory-ops` kept for `/seed-bugs` and `/audit` | VM with no rollback, CI green |
 | M5 (7) | Issues + Project, all open items moved, `BACKLOG.md` frozen; dispatcher v1: claim, lease, Priority, 2 slots, rebase work, timer | 3 tasks taken from the Project and closed; two at once, one rebased after the other's merge |
@@ -143,6 +145,12 @@ The rest of M7's boundary hooks stay where they were, on the old path, until M7.
 quality hooks either (`guard-tests`, `guard-migrations`), and needs none: the required `Factory guards` already holds
 every pull request, the dispatcher's too, for a deleted or weakened test and an edited applied migration (rules 1, 2,
 4), and the dispatcher runs the gate itself (review round 3 of #0-299's plan).
+
+**Amended (2026-11-21, #0-303's `/research`, the owner's option B): M2's per-task part.** M2 builds a lock per task,
+a task's liveness by that lock, a state lock and `FACTORY_SLOTS` (1 until M5), with the whole-daemon sweep only while
+no other task is live. The per-task sweep, the orphans and the Maven cache's layout move to M3.4 with #0-285, which
+chooses the daemon's model (G1-b): on a shared daemon a task's code chooses names and labels, so a label-scoped sweep
+is no boundary, and under a daemon per task most of it would be thrown away. G1's slots in M5 rest on both steps.
 
 ## Alternatives considered
 

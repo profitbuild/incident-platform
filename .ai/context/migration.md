@@ -94,11 +94,12 @@ Legend:
     event as the isolation check);
   - #0-301 (M2.2–M2.3, the agent call and the phases);
   - #0-302 (M2.4, the dispatcher's commits; #0-212 folded in);
-  - #0-303 (M2.5, per task);
+  - #0-303 (M2.5, per task: the task's lock, its liveness, the state lock, `FACTORY_SLOTS`; its sweep's scope and
+    the Maven cache moved to M3.4, #0-285, the owner's option B, 2026-11-21);
   - #0-304 (M2.6, what 4.3a–c left).
 - carries too: #0-280 (the gate's schema against `run-tests.sh`; done, PR #680), #0-284 (decided 2026-11-21, ADR-0062 amended; the container checked before anything
-  runs; code merged in `factory` PR #22, pinned `v0.1.2`, the trial AC8 open; follow-ups #0-308, #0-309, #0-310), #0-249
-  and #0-283 (Claude Code pinned, `dev`'s firewall rule).
+  runs; code merged in `factory` PR #22, pinned `v0.1.2`, the trial AC8 open; follow-ups #0-308 and #0-310,
+  #0-309 moved to M3.4), #0-249 and #0-283 (Claude Code pinned, `dev`'s firewall rule).
 - part: #0-261's per-task baseline and the gate's short summary (in #0-301).
 - superseded at M4 by its removal: #0-213, #0-217, #0-226, #0-228, #0-234, #0-236.
 
@@ -106,7 +107,8 @@ Legend:
 - umbrella: #0-288. Split into one item per pull request (2026-11-21), in order:
   - #0-305 (M3.1–M3.2, the checks before a push, push and PR);
   - #0-306 (M3.3, the trace and `audit-data.sh`; #0-204 folded in);
-  - #0-285 (M3.4, what a task leaves for the next task's credential, before the proxy);
+  - #0-285 (M3.4, what a task leaves for the next task's credential, before the proxy; with it the daemon's model,
+    the orphans' sweep, the Maven cache and #0-309, from #0-303);
   - #0-289 (M3.5, proxy, Console, transcripts);
   - #0-307 (M3.6, the factory pin from one source).
 - the dispatcher's pull requests are held by the required `Factory guards` (rules 1, 2, 4), so the plugin's
