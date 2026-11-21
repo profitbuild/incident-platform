@@ -67,7 +67,7 @@ agent call yet (`PHASES = []`).
 | M4 (end of 4, part of 5) | the old build path removed (D1); `factory-ops` kept for `/seed-bugs` and `/audit` | VM with no rollback, CI green |
 | M5 (7) | Issues + Project, all open items moved, `BACKLOG.md` frozen; dispatcher v1: claim, lease, Priority, 2 slots, rebase work, timer | 3 tasks taken from the Project and closed; two at once, one rebased after the other's merge |
 | M6 (5 + 6a) | review VM, review-app, dispatcher review; `/seed-bugs` and `/audit` off `factory-ops`; lane, trace, human gate, CODEOWNERS, `/human-review` | `/seed-bugs` caught at least as by the old panel; lane agrees with the owner on 3 PRs; two reviews at once |
-| M7 (6c) | boundary hooks removed; `guard-tests`/`guard-migrations` as required CI checks | a seeded series still caught |
+| M7 (6c) | boundary hooks removed; the quality hooks' CI counterparts (`Factory guards` rules 1, 2, 4) recorded with seeded cases (the architect's write scope leaves its hook earlier, at M2: amendment below) | a seeded series still caught |
 | M8 (8) | `bc-app`, `/plan-feature` + `feature-planner`, `FeatureFlags` in `shared` | one Feature done |
 | M9–M12 (9, H, C, 10) | private on Team; holdout; cloud; auto-merge on the low lane | as ADR-0055 |
 | T, N | as ADR-0055 | as ADR-0055 |
@@ -133,6 +133,15 @@ ADR-0055's 6b gates (ArchUnit, Squawk, commitlint, TODO) are ordinary items from
     report's text (review round 3 of #0-286).
   - Between M4 (the old preflight's "audit due" goes) and M6, the owner starts the audits by hand when the count
     is reached.
+
+**Amended (2026-11-21, #0-299's plan, the owner's option (b)): the architect's write scope at M2.** The plugin's
+architect carries no `readonly-bash` or `write-scope` hook (Claude Code ignores a plugin agent's frontmatter hooks,
+and a hook in the container is the branch's to turn off). Its write scope moves to the dispatcher in M2.4 (#0-302):
+each call's changed paths are held, outside the container, to the scope the product's adapter names (`writeScopes`).
+The rest of M7's boundary hooks stay where they were, on the old path, until M7. The plugin carries none of the
+quality hooks either (`guard-tests`, `guard-migrations`), and needs none: the required `Factory guards` already holds
+every pull request, the dispatcher's too, for a deleted or weakened test and an edited applied migration (rules 1, 2,
+4), and the dispatcher runs the gate itself (review round 3 of #0-299's plan).
 
 ## Alternatives considered
 

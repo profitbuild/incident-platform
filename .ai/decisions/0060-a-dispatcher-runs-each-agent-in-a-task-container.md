@@ -61,6 +61,13 @@ and `--plugin-dir` (code.claude.com/docs/en/headless.md, cli-reference.md).
   stage 5. A task loads the factory through a read-only mount of a `factory` checkout at the pinned tag, passed as
   `--plugin-dir`; a run whose `stream-json` init event lists a `plugin_errors` entry stops. The task image built in CI
   (GHCR) is stage C's.
+  **Amended (2026-11-21, #0-299, the owner): the agents in the plugin are product-neutral.** They name no product's
+  paths or rules; product knowledge reaches them through the product's own `CLAUDE.md`, which the agent reads first
+  (with Read, whether or not Claude Code also loads it), and what it points to (an adapter field only when a product needs another entry point), and the task's
+  own files through the task the dispatcher writes. Their hooks are the plugin's `hooks/hooks.json`, since Claude Code
+  ignores a plugin agent's frontmatter `hooks:`; the dispatcher calls them by the plugin's name (`factory:<agent>`),
+  as a clone's `.claude/agents/` would take a bare name first. The product's own three definitions stay for the old
+  path until M4 (ADR-0063). What a stack needs (the `spring-boot` profile) moves into `factory` with M6.1.
   **Amended (2026-11-18, #0-269, the owner): who writes `factory`'s code.** The rulesets bind everyone but an admin,
   and a session that holds the owner's token is an admin: there only the session's deny rules, which match command
   text, keep it from a merge, a ruleset or a tag. So the code of `factory` (4.2 onwards) is to be written by a session that
@@ -90,7 +97,8 @@ and `--plugin-dir` (code.claude.com/docs/en/headless.md, cli-reference.md).
   `main`, mints the hour's token, checking against GitHub that the installation and the token hold exactly the three
   permissions and reach `factory` alone, into a directory the devcontainer mounts read-only. Its limits are named in
   `factory`'s README and #0-269's Result.
-- **D6. The product's adapter is `.factory/adapter.json`**: repository, gate command, changed-paths command, queue
+- **D6. The product's adapter is `.factory/adapter.json`** (its `writeScopes`, each agent's write scope, added by
+  ADR-0063's amendment for #0-299): repository, gate command, changed-paths command, queue
   source (`BACKLOG.md` until stage 7), protected-paths file, `trustedPaths` (the product's scripts the dispatcher runs
   from `main` and a task branch may not change; for incident-platform `scripts/factory/`), task image, profile,
   `factory` version. `factory` holds its

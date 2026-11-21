@@ -106,6 +106,8 @@ Legend:
   - #0-285 (M3.4, what a task leaves for the next task's credential, before the proxy);
   - #0-289 (M3.5, proxy, Console, transcripts);
   - #0-307 (M3.6, the factory pin from one source).
+- the dispatcher's pull requests are held by the required `Factory guards` (rules 1, 2, 4), so the plugin's
+  implementer needs no `guard-tests`/`guard-migrations` hook (`m3.md` "Before").
 - related: #0-256 (the PR description opens with the problem).
 
 ### M4. The old path removed: `migration/m4.md`

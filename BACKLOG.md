@@ -4142,7 +4142,7 @@ AC4. README "Infrastructure Hardening" names the proxy and what a leaked task to
 
 **Type:** ci · **Priority:** Medium · **Status:** Open (ADR-0063, 2026-11-21).
 **Autopilot:** human-only · **Risk:** high · **Complexity:** medium · **Depends on:** #0-288, #0-289, the `/seed-bugs` baseline of P-25..P-27 on the old panel
-**Touches:** .claude/ (workflows/backlog-autopilot.js, agents shipper and picker, skills/backlog-autopilot), scripts/factory/ (next-item.sh, start-item.sh, resume-item.sh and what only they use), .github/scripts/test-autopilot-workflow.mjs (the autopilot's tests; the dimension-list comparison), .ai/rules/protected-paths.md's runtime list, scripts/factory-admin/build-vm/ (rollback-*.sh): all owner-only; the repository `profitbuild/factory` (daemon.mjs, environment.mjs); decisions (ADR-0052, ADR-0034 amended, ADR-0053 superseded); .github/repository-settings/ (the bot's access); root (README "Infrastructure Hardening")
+**Touches:** .claude/ (workflows/backlog-autopilot.js, agents shipper, picker, architect, implementer and implementer-light, skills/backlog-autopilot), scripts/factory/ (next-item.sh, start-item.sh, resume-item.sh and what only they use), .github/scripts/test-autopilot-workflow.mjs (the autopilot's tests; the dimension-list comparison), .ai/rules/protected-paths.md's runtime list, scripts/factory-admin/build-vm/ (rollback-*.sh): all owner-only; the repository `profitbuild/factory` (daemon.mjs, environment.mjs); decisions (ADR-0052, ADR-0034 amended, ADR-0053 superseded); .github/repository-settings/ (the bot's access); root (README "Infrastructure Hardening")
 
 **Problem.** After M3 the factory has two paths: `/backlog-autopilot` with the bot's PAT, shipper and factory-ops,
 and the dispatcher. The old one is kept runnable by the rollback that shares the VM by time (ADR-0062 point 5), and the
@@ -4288,12 +4288,14 @@ AC4. The lane agrees with the owner on 3 PRs (recorded in `m6.md`).
 commands; the boundary hooks (`readonly-bash.sh`, `guard-protected-bash.sh`, `write-scope.sh`, …) guard nothing the
 zones do not, and are kept in step with three copies of the protected list.
 
-**Work.** `migration/m7.md`: `guard-tests` and `guard-migrations` first become required CI jobs with their seeded
-cases; then the boundary hooks and their allow rules go; the protected list's copies reduce to CODEOWNERS and the
+**Work.** `migration/m7.md`: the quality hooks' CI counterparts exist and are required (`Factory guards` rules 1, 2
+for a deleted or weakened test, rule 4 for an edited applied migration; `guard-tests.sh` guards skipped verification,
+which the dispatcher's own gate makes moot), recorded with a seeded case each (M7.1); then the boundary hooks and their allow rules go; the protected list's copies reduce to CODEOWNERS and the
 dispatcher's check. Closes #0-210, #0-211 and #0-214.
 
 **Acceptance criteria.**
-AC1. A weakened test and an edited applied migration each fail a required CI job (seeded cases).
+AC1. A pull request of the dispatcher's that deletes or weakens a test, or edits an applied migration, fails `Factory
+     guards` (seeded cases, recorded).
 AC2. No factory session settings name a removed hook, and `check-protected-paths.sh` checks the copies that remain.
 AC3. A seeded series (weakened test, edited migration, protected path) is still caught (recorded in `m7.md`).
 
@@ -4338,20 +4340,37 @@ AC2. Auto-merge is not switched on until the eight conditions of `migration.md` 
 
 **Type:** ci · **Priority:** High · **Status:** Open (ADR-0063, 2026-11-21).
 **Autopilot:** human-only · **Risk:** high · **Complexity:** medium · **Depends on:** #0-278
-**Touches:** the repository `profitbuild/factory` (agents/, settings/, .claude-plugin/), factory (.claude/agents/architect.md, implementer.md, implementer-light.md and the rules they read: owner-only)
+**Touches:** the repository `profitbuild/factory` (.claude-plugin/, agents/, hooks/, a test, CI), factory (CLAUDE.md, owner-only: what the factory's agents need of this product)
 
 **Problem.** ADR-0060 D5 loads the factory into a task container as a read-only plugin from `/opt/factory`, but
 `factory` holds no agent definition (only `.claude/settings.json`, checked 2026-11-21). The build agents exist only in
-incident-platform, so M2's first agent call has nothing to run, and moving them later would leave two copies.
+incident-platform, and their text names this product's paths and rules (`.ai/rules/implementation.md`, `.ai/work/`,
+`BACKLOG.md`, `scripts/factory/run-tests.sh`), which `factory` may not (ADR-0055). Claude Code ignores a plugin
+agent's frontmatter `hooks:`, so `foreground-bash` (the turn budget, #0-206) would be lost in a plain move.
 
-**Work.** `migration/m2.md` M2.0: `architect`, `implementer`, `implementer-light`, the factory part of the rules they
-read, and the settings the dispatcher passes (`settings/autopilot.json`) move into `factory`'s plugin. The copies
-here are removed in the same change. The old path, still running until M4, loads them from the plugin too.
+**Decided with the owner (2026-11-21, `/research` of #0-299):** option C, product-neutral agents in `factory`'s plugin,
+and way (a) for product knowledge: the agent's text starts by reading the product's `CLAUDE.md` (with Read, whether
+or not it loads by itself) and reads what it points to; no adapter field until a product needs another entry point.
+The architect's boundary hooks are not ported: its write scope becomes the dispatcher's check in #0-302 (review round 1
+of this plan, the owner's option (b)). The old path's three definitions stay here until M4
+(#0-290). The plan was corrected in `migration/m2.md` M2.0 before any code.
+
+**Work.** `migration/m2.md` M2.0: in `factory`, the plugin with the three product-neutral agents (no commit: M2.4),
+`hooks/hooks.json` with `foreground-bash`, and a test of product neutrality; here, `CLAUDE.md`'s part for the
+factory's agents. The `spring-boot` profile stays in the product's rules until M6.1 (#0-294).
 
 **Acceptance criteria.**
-AC1. Each of the three definitions exists in `factory` and nowhere in incident-platform (`git grep` in both).
-AC2. `factory`'s plugin manifest lists them, and a `claude --plugin-dir` session's init event shows them (recorded).
-AC3. One `/backlog-autopilot` run on the old path still reaches its implementer from the plugin (recorded in `m2.md`).
+AC1. `factory`'s `agents/` names no path, module or rule of incident-platform, and no agent holds a frontmatter `hooks:`
+     (a test in `factory`, with refused patterns that include this product's).
+AC2. A `claude --plugin-dir` session's init event lists `factory:architect`, `factory:implementer` and
+     `factory:implementer-light`, and the plugin's `foreground-bash` refuses a Bash call in the background (recorded in
+     `m2.md`).
+AC3. `CLAUDE.md` names, for the factory's agents, where this product keeps a plan, an ADR and the rule files a task
+     reads, so the product-neutral agents find them by way (a); its "AI factory" line no longer sends them only to
+     `.claude/agents/`, the old path's copies.
+AC4. The old path is untouched: `.claude/agents/architect.md`, `implementer.md`, `implementer-light.md` and their
+     tests (`test-autopilot-workflow.mjs`, `check-hook-entries.rb`, `check-agent-commands.rb`) are unchanged and pass;
+     #0-290 (M4) removes them.
 
 ### 0-300. How a plugin's agent runs as `claude -p`'s main thread is not known (migration step M2.1)
 
@@ -4370,12 +4389,15 @@ agent, tools and `plugin_errors`.
 **Acceptance criteria.**
 AC1. `m2.md`'s Record holds the chosen form of the call, whether hooks run, and the init event of one recorded call.
 AC2. The successor of ADR-0058's probe is decided, as an amendment of ADR-0058 or a new ADR.
+AC3. From #0-299's research: whether `-p --agent factory:implementer` runs the plugin's agent, and the flags that keep
+     the clone's `.claude/settings.json` and hooks out of the session while its `CLAUDE.md` still loads, are recorded in
+     `m2.md` with the init event that shows them.
 
 ### 0-301. The dispatcher runs no phase of a task (migration steps M2.2–M2.3)
 
 **Type:** ci · **Priority:** High · **Status:** Open (ADR-0063, 2026-11-21).
 **Autopilot:** human-only · **Risk:** high · **Complexity:** high · **Depends on:** #0-300, #0-280, #0-284
-**Touches:** the repository `profitbuild/factory` (dispatcher/src/flow/, its tests and fixtures)
+**Touches:** the repository `profitbuild/factory` (dispatcher/src/flow/, settings/autopilot.json, its tests and fixtures)
 
 **Problem.** After the spike the dispatcher still has no agent call and no phases, and `backlog-autopilot.js`'s
 control flow lives only in incident-platform.
@@ -4386,7 +4408,9 @@ control flow lives only in incident-platform.
 - the build zone's phases only: plan, implement (by Complexity), the path gate, the test gate with up to two fix
   calls, and review fixes by finding id;
 - `stopItem`, the limits and the breaker, as `backlog-autopilot.js` has them;
-- not ported: pick, review rounds, verify, acceptance, ship (ADR-0063 D3).
+- not ported: pick, review rounds, verify, acceptance, ship (ADR-0063 D3);
+- `factory`'s `settings/autopilot.json`, which the call passes, written from what #0-300 found (permission mode,
+  allow rules, the flags that keep the clone's settings out): no earlier item writes it.
 
 **Acceptance criteria.**
 AC1. A call with no `structured_output`, or an init event with `plugin_errors` or not the expected agent and tools, stops the task (tests with recorded `stream-json` fixtures).
@@ -4397,7 +4421,7 @@ AC3. `MAX_TEST_FIXES`, `MAX_ROUNDS` and `MAX_AGENT_CALLS` each stop a run that e
 
 **Type:** ci · **Priority:** High · **Status:** Open (ADR-0063, 2026-11-21).
 **Autopilot:** human-only · **Risk:** high · **Complexity:** medium · **Depends on:** #0-301
-**Touches:** the repository `profitbuild/factory` (dispatcher/src/flow/, git/, the task's own repository under the state directory)
+**Touches:** the repository `profitbuild/factory` (dispatcher/src/flow/, git/, schemas/adapter.schema.json, the task's own repository under the state directory), factory (.factory/adapter.json: owner-only)
 
 **Problem.** Today the agents commit with git inside the clone they write, so the trace of who added what is their
 word, and git's writing commands stay within an agent's reach (#0-236). #0-212's trailers have no writer yet.
@@ -4406,11 +4430,20 @@ word, and git's writing commands stay within an agent's reach (#0-236). #0-212's
 container with its own git flags (`git add -A`, a message from the answer, `Factory-Run` and `Factory-Agent`). It
 reads the commit back as a bundle into the task's own repository (alternates onto `FACTORY_REPO_DIR`, config held as
 the push repository's) and checks that it is one commit with the recorded head as its only parent. Folds in #0-212.
+Each call's changed paths (`--no-renames`) are held to its agent's write scope through the one path matcher
+`checkChangedPaths`, which M3.1 extends too; the product names the scope in a new adapter field, `writeScopes`, keyed
+by the agent's bare name (incident-platform: the architect to `.ai/decisions/` and `.ai/work/`, the implementers
+`["*"]`); an agent with no entry is not called (fail closed). It replaces the architect's `write-scope.sh`, which the
+plugin does not carry (#0-299, ADR-0063 as amended).
 
 **Acceptance criteria.**
 AC1. Every commit the dispatcher makes carries both trailers, and its author is the dispatcher's (tests).
 AC2. A planted merge, a second commit or a missing trailer in what the container returns is refused (tests).
 AC3. The task's repository's config equals the reference one, as the push repository's does (test).
+AC4. An architect's commit that changes a path outside its `writeScopes` entry stops the task, one inside passes, and a
+     move from outside into the scope is seen with both paths; an agent with no entry is not called, and `["*"]` is no
+     limit (tests); the schema accepts `writeScopes` and this repository's adapter
+     names the architect's scope (CI's adapter step).
 
 ### 0-303. The dispatcher's lock, sweep and caches assume one task at a time (migration step M2.5)
 
