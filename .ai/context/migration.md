@@ -90,7 +90,8 @@ Legend:
 ### M2. The build zone's flow in the dispatcher (4.4, narrowed): `migration/m2.md`, CURRENT
 - umbrella: #0-287. Split into one item per pull request (2026-11-21), in order:
   - #0-299 (M2.0, the build agents in `factory`'s plugin);
-  - #0-300 (M2.1, the spike);
+  - #0-300 (M2.1, the spike; decided 2026-11-21, ADR-0064: managed settings, `--restricted` by measurement, the init
+    event as the isolation check);
   - #0-301 (M2.2–M2.3, the agent call and the phases);
   - #0-302 (M2.4, the dispatcher's commits; #0-212 folded in);
   - #0-303 (M2.5, per task);

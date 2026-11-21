@@ -1,6 +1,7 @@
 # ADR-0058: The autopilot's isolation check reads the agent type Claude Code gives a probe, not the model's answer
 
-- **Status:** Accepted
+- **Status:** Accepted; superseded for the dispatcher's path by ADR-0064 (2026-11-21, #0-300): there the call's
+  `stream-json` init event is the isolation check. This ADR holds for the old path until M4 (#0-290) removes it
 - **Backlog:** #0-252
 - **Date:** 2026-11-16
 - **Author:** human (owner's decision on the options of the session of 2026-11-16, drafted in an interactive session)

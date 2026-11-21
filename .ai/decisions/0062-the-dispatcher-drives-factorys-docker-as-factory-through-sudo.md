@@ -9,7 +9,8 @@
   Consequences on the task image (point 6); point 5 (the rollback shares the VM by time) reversed by ADR-0063
   (2026-11-21): the rollback goes at M4 (#0-290); points 4 and 6 amended by #0-284 (2026-11-21, before its code): the
   image built and its label checked before any container, the container's `HostConfig` held whole, no refusal holding
-  a value the daemon gave, a call's stderr kept from every caller
+  a value the daemon gave, a call's stderr kept from every caller; point 4 amended by ADR-0064 (2026-11-21, #0-300):
+  the dispatcher's mounts gain the factory's managed settings read-only on `/etc/claude-code`
 - **Backlog:** #0-277; point 4 amended on #0-282's review and on the review of `factory` PR #18; points 1, 2, 5, 8 and
   the Consequences on the review of #0-277's VM part; their end-state follow-ups #0-284, #0-285
 - **Date:** 2026-11-20
