@@ -6,7 +6,9 @@
   #0-204 moves to stage 4); amended by ADR-0060 (2026-11-17, stage 4's design: until stage 7 the dispatcher keeps its
   tasks' state on the VM, until stage C the task image is built there, the per-call summary from `stream-json`);
   its identities are to gain `profitbuild-factory-dev`, an app on `factory` alone that writes the factory's code and
-  is no builder (ADR-0060 D5 as amended by #0-269, 2026-11-18)
+  is no builder (ADR-0060 D5 as amended by #0-269, 2026-11-18); its stages, their order, exits and rollbacks and its
+  "Rules of the migration" amended by ADR-0063 (2026-11-21, #0-286: steps M1–M12, one path, the queue before the
+  review zone, no shadow, one item per exit); the target below is unchanged but for two exceptions to its target's "dispatchers keep no state of their own": a seed run's ground truth until it is scored, and, if GraphQL names no actor of a Project field, the dispatcher's own record of who moved a task to `Ready` (ADR-0063 G5, M5.1)
 - **Backlog:** stage 0 of this migration (the freeze below); each later stage gets its own item when its turn comes
   (stage 1: #0-237)
 - **Date:** 2026-11-13

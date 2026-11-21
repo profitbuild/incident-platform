@@ -866,6 +866,11 @@ by PRs #671, #672, #673, #674 and `factory` PRs #18, #19, and done 2026-11-21 wi
 
 ## 4.4 The control flow, ported
 
+> **Replaced on 2026-11-21 by ADR-0063:** 4.4 to 4.7 below are no longer the plan. Their work, narrowed, is
+> [M2](m2.md) (the build zone's phases only, no review panel, picker or shipper ported) and [M3](m3.md) (push, PR,
+> trace, the proxy; one PR exits); the switch between two paths is dropped and the old path is removed at [M4](m4.md).
+> The text stays as the record of what was planned and is the source M2/M3 took their parts from.
+
 - **From `backlog-autopilot.js` into `dispatcher/src/flow/`:** the phases (preflight, pick (in v0 the owner's `--item` and the dispatcher's lock check, ADR-0060 D8 as amended by
   #0-278: no pick of its own until stage 7), plan, implement, review
   rounds with the path gate and the test gate, verify, acceptance, ship), the JSON schemas of each answer, `as()`

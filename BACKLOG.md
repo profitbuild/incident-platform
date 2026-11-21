@@ -177,6 +177,27 @@ Code, Javadoc, config comments and commits reference items as `backlog #N`.
 | [0-283](#0-283-the-devcontainer-image-lets-dev-widen-its-firewall-and-installs-claude-code-unpinned) | The devcontainer image lets `dev` widen its firewall and installs Claude Code unpinned | ci | Medium | Open |
 | [0-284](#0-284-the-task-container-is-checked-before-anything-runs-in-it-and-its-refusals-hold-none-of-the-agent-sides-text) | The task container is checked before anything runs in it, and its refusals hold none of the agent side's text | ci | Medium | Open |
 | [0-285](#0-285-what-a-task-leaves-in-factorys-reach-outside-the-daemon-is-decided-before-a-task-holds-a-credential) | What a task leaves in `factory`'s reach outside the daemon is decided before a task holds a credential | ci | High | Open |
+| [0-287](#0-287-the-dispatcher-calls-no-agent-yet-migration-step-m2) | The dispatcher calls no agent yet (migration step M2) | ci | High | Open |
+| [0-288](#0-288-the-dispatcher-opens-no-pull-request-and-leaves-no-trace-of-its-agent-calls-migration-step-m3) | The dispatcher opens no pull request and leaves no trace of its agent calls (migration step M3) | ci | High | Open |
+| [0-289](#0-289-claudes-credential-would-sit-in-the-task-container-and-the-cost-of-a-run-is-unknown-migration-step-m3) | Claude's credential would sit in the task container, and the cost of a run is unknown (migration step M3) | security | High | Open |
+| [0-290](#0-290-the-old-autopilot-path-and-the-rollback-that-shares-the-vm-stay-after-the-dispatcher-takes-over-migration-step-m4) | The old autopilot path and the rollback that shares the VM stay after the dispatcher takes over (migration step M4) | ci | Medium | Open |
+| [0-291](#0-291-the-queue-has-no-schema-in-github-and-no-rule-for-whose-text-a-dispatcher-reads-migration-step-m5) | The queue has no schema in GitHub and no rule for whose text a dispatcher reads (migration step M5) | design | High | Open |
+| [0-292](#0-292-the-open-items-live-only-in-backlogmd-which-two-writers-change-migration-step-m5) | The open items live only in `BACKLOG.md`, which two writers change (migration step M5) | ci | High | Open |
+| [0-293](#0-293-the-dispatcher-does-not-pick-its-own-work-and-runs-one-task-at-a-time-migration-step-m5) | The dispatcher does not pick its own work and runs one task at a time (migration step M5) | ci | High | Open |
+| [0-294](#0-294-review-runs-in-the-zone-where-agent-code-runs-and-a-reviewer-can-run-commands-migration-step-m6) | Review runs in the zone where agent code runs, and a reviewer can run commands (migration step M6) | security | High | Open |
+| [0-295](#0-295-the-risk-lane-is-not-decided-by-github-and-a-high-risk-pr-has-no-review-aid-for-the-owner-migration-step-m6) | The risk lane is not decided by GitHub, and a high-risk PR has no review aid for the owner (migration step M6) | ci | High | Open |
+| [0-296](#0-296-the-factorys-sessions-still-depend-on-hooks-that-match-the-text-of-an-agents-commands-migration-step-m7) | The factory's sessions still depend on hooks that match the text of an agent's commands (migration step M7) | ci | Medium | Open |
+| [0-297](#0-297-a-feature-cannot-be-planned-with-the-owner-cut-into-tasks-and-traced-across-its-prs-migration-step-m8) | A feature cannot be planned with the owner, cut into tasks and traced across its PRs (migration step M8) | design | Medium | Open |
+| [0-298](#0-298-the-private-repository-holdout-cloud-and-auto-merge-steps-have-no-items-migration-steps-m9m12) | The private repository, holdout, cloud and auto-merge steps have no items (migration steps M9–M12) | design | Low | Open |
+| [0-299](#0-299-the-build-agents-definitions-are-not-in-factorys-plugin-migration-step-m20) | The build agents' definitions are not in `factory`'s plugin (migration step M2.0) | ci | High | Open |
+| [0-300](#0-300-how-a-plugins-agent-runs-as-claude--ps-main-thread-is-not-known-migration-step-m21) | How a plugin's agent runs as `claude -p`'s main thread is not known (migration step M2.1) | ci | High | Open |
+| [0-301](#0-301-the-dispatcher-runs-no-phase-of-a-task-migration-steps-m22m23) | The dispatcher runs no phase of a task (migration steps M2.2–M2.3) | ci | High | Open |
+| [0-302](#0-302-agents-would-commit-their-own-work-with-no-trailer-of-run-or-agent-migration-step-m24) | Agents would commit their own work, with no trailer of run or agent (migration step M2.4) | ci | High | Open |
+| [0-303](#0-303-the-dispatchers-lock-sweep-and-caches-assume-one-task-at-a-time-migration-step-m25) | The dispatcher's lock, sweep and caches assume one task at a time (migration step M2.5) | ci | Medium | Open |
+| [0-304](#0-304-what-the-reviews-of-43ac-left-for-the-control-flow-is-not-built-migration-step-m26) | What the reviews of 4.3a–c left for the control flow is not built (migration step M2.6) | ci | Medium | Open |
+| [0-305](#0-305-the-dispatcher-pushes-nothing-and-opens-no-pull-request-migration-steps-m31m32) | The dispatcher pushes nothing and opens no pull request (migration steps M3.1–M3.2) | ci | High | Open |
+| [0-306](#0-306-a-dispatcher-pr-carries-no-trace-of-its-agent-calls-and-the-audits-do-not-read-it-migration-step-m33) | A dispatcher PR carries no trace of its agent calls, and the audits do not read it (migration step M3.3) | ci | Medium | Open |
+| [0-307](#0-307-the-factory-version-is-pinned-in-two-places-and-the-copy-check-compares-with-factorymain-migration-step-m36) | The factory version is pinned in two places, and the copy check compares with `factory@main` (migration step M3.6) | ci | Low | Open |
 | [0-133](#0-133-incidentresolvedevent-carries-no-openedat) | `IncidentResolvedEvent` carries no `openedAt` | tech-debt | Low | Open |
 | [0-134](#0-134-diff-cover-is-installed-by-version-without-hashes) | `diff-cover` is installed by version, without hashes | ci | Low | Open |
 | [0-135](#0-135-kubectl-in-ci-is-downloaded-unverified) | kubectl in CI is downloaded unverified | ci | Low | Open |
@@ -2125,6 +2146,8 @@ with `check-pinned-tools.sh` green on that pull request. (open)
 **Type:** design · **Priority:** Medium · **Status:** Open (carried out by migration stage 6a, ADR-0055); noted 2026-10-16 (PR #499) in #0-113, moved here from it and widened by its security review (2026-10-18); a precondition of phase 3 (auto-merge, `docs/ai-factory.md`)
 **Autopilot:** human-only · **Risk:** high · **Complexity:** low · **Depends on:** —
 
+**Migration (ADR-0063, 2026-11-21):** step M6, with #0-295.
+
 **Problem.** Since #0-113 (ADR-0034) the code owner review of `.github/CODEOWNERS` is enforced, so what it does not
 name is what a PR can change on green checks alone, and with auto-merge without anyone reading it. Three points are
 known.
@@ -2608,6 +2631,8 @@ preflight, and the cost of a second Maven/Docker cache.
 **Touches:** ci (.claude/workflows/backlog-autopilot.js, scripts/factory/state.sh, .github/scripts/test-autopilot-workflow.mjs,
 .github/scripts/test-factory-state.sh, .claude/agents/shipper.md, .claude/skills/ship-record/), docs (docs/ai-factory.md)
 
+**Migration (ADR-0063, 2026-11-21):** step M3.3; built by #0-306 (the trace per agent call) and closed with it.
+
 **Problem.** The workflow counts the work agents' calls (`calls`, `backlog-autopilot.js:62,77`) and returns them in
 the run's result (`agentCalls`, `:262,700,711`), but `state.sh record` keeps only `t`, `item`, `outcome`, `pr` and
 `stage` (`state.sh`, the `record` filters): no run id, no call count, no time per stage, and nothing that ties a commit
@@ -2734,6 +2759,8 @@ AC2. A check (Factory guard or `test-hooks.sh`) derives the list from the deny r
 #0-203 shipped the attribution trailer and the architect's commit form).
 **Autopilot:** human-only · **Risk:** medium · **Complexity:** medium · **Depends on:** #0-204 (the run id in the record)
 **Touches:** ci (the commit guard of each committing agent and its twin in both settings files, `.claude/hooks/test-hooks.sh`, `.github/scripts/check-hook-entries.rb` if the guard is new, a Factory guards check of the trailers on a factory PR's commits), docs (docs/ai-factory.md).
+
+**Migration (ADR-0063, 2026-11-21):** step M2.4; built by #0-302 (the dispatcher's commits carry the trailers) and closed with it.
 
 **Problem.** Every commit of a run is authored by
 `lukaszplawiakbot`, whichever of picker, architect, implementer (first round, fix-tests, fix-review), self-check or
@@ -3269,6 +3296,8 @@ decide a gate; the item that moves the state names whether one is needed.
 **Touches:** factory (scripts/factory-admin/build-vm/, .github/scripts/ a new test and its CI step, both owner-only
 paths), docs (docs/ai-factory.md "Build VM")
 
+**Migration (ADR-0063, 2026-11-21):** deferred to step M11 (the cloud) by D6: without it a leaked builder-app key still yields no more than a PR that waits; re-checked there, and again before M12's auto-merge, where D6's premise (a PR the owner reads) ends.
+
 **Problem.** `scripts/factory-admin/build-vm/` (#0-238, ADR-0056) holds the behaviour the build VM's isolation rests
 on, and nothing tests it but the runs recorded in ADR-0056: `create.sh` refusing an existing instance and a Node pin
 that differs from `.node-version`, filling `@PROVISION_SH@`, and deleting the VM when Lima reports a mount, agent
@@ -3308,6 +3337,8 @@ AC5. CI fails a PR on which `provision.sh`'s `NODE_VERSION` and `.node-version` 
 **Touches:** factory (scripts/factory-admin/build-vm/provision.sh and create.sh, owner-only), root (.ai/decisions/
 ADR-0057 amended), docs (docs/ai-factory.md "Build VM")
 
+**Migration (ADR-0063, 2026-11-21):** deferred to step M11 (the cloud) by D6: without it a leaked builder-app key still yields no more than a PR that waits; re-checked there, and again before M12's auto-merge, where D6's premise (a PR the owner reads) ends.
+
 **Problem.** `FACTORY-EGRESS` (ADR-0057) lets every uid from 1000 up reach the VM's own address on the ephemeral
 ports, meant for the ports rootless Docker publishes there. `create.sh` refuses a VM where any other process listens
 in that range on a non-loopback address, but it checks only when the VM is created and after its one reboot. A root
@@ -3331,6 +3362,8 @@ AC2. The behaviour and its availability cost are in ADR-0057 and `docs/ai-factor
 **Touches:** ci (.github/scripts/check-web-access.sh and its test, owner-only), factory
 (scripts/factory-admin/build-vm/check-allowlists.sh and its test, owner-only)
 
+**Migration (ADR-0063, 2026-11-21):** deferred to step M11 (the cloud) by D6: without it a leaked builder-app key still yields no more than a PR that waits; re-checked there, and again before M12's auto-merge, where D6's premise (a PR the owner reads) ends.
+
 **Problem.** `.devcontainer/init-firewall.sh`'s `ALLOWED_DOMAINS` is read by `.github/scripts/check-web-access.sh`
 (a list from column 0, no comment stripping, ended by a line starting with `)`) and by
 `scripts/factory-admin/build-vm/check-allowlists.sh` (indent allowed, `#` comments stripped, a one-line list read).
@@ -3349,6 +3382,8 @@ AC2. A test covers the grammar's cases, and both checks still pass on the reposi
 **Type:** security · **Priority:** Low · **Status:** Open. From review round 4 of #0-116 (security, rule gap; owner, 2026-11-14).
 **Autopilot:** human-only · **Risk:** low · **Complexity:** low · **Depends on:** #0-116
 **Touches:** factory (.ai/rules/review/factory.md, a human-owned path)
+
+**Migration (ADR-0063, 2026-11-21):** deferred to step M11 (the cloud) by D6: without it a leaked builder-app key still yields no more than a PR that waits; re-checked there, and again before M12's auto-merge, where D6's premise (a PR the owner reads) ends.
 
 **Problem.** FAC-S02 (`.ai/rules/review/factory.md`) has the reviewers check each host opened in `init-firewall.sh`
 and the WebFetch allow-list for shared front ends and services that accept data. The build VM has a second egress
@@ -3421,6 +3456,8 @@ change over time, and point to the criterion in `.ai/context/architecture.md` (#
 **Touches:** factory (.devcontainer/Dockerfile, owner-only), the repository `profitbuild/factory` (.devcontainer/Dockerfile,
 which installs Claude Code the same way since #0-269), docs (docs/ai-factory.md "Pinned versions"), root
 (.ai/decisions/ ADR-0039 amended, if the floor 2.1.295 becomes a pin)
+
+**Migration (ADR-0063, 2026-11-21):** step M2, with #0-283.
 
 **Problem.** `.devcontainer/Dockerfile` installs Claude Code with `curl -fsSL https://claude.ai/install.sh | bash`, the
 newest release at the moment the image is built; `DISABLE_AUTOUPDATER` only stops it from moving afterwards. So two
@@ -3627,6 +3664,8 @@ AC3. `docs/ai-factory.md` says when to run it.
 **Touches:** factory (scripts/factory/local-review.sh, .claude/skills/seed-bugs/, .ai/audit/benchmark/:
 owner-only), docs (docs/ai-factory.md)
 
+**Migration (ADR-0063, 2026-11-21):** step M6 (the review zone), with #0-294.
+
 **Problem.** The panel's reviewers and the implementer are one family of models, so their misses are correlated: what
 one does not see, the others do not either. The benchmark that measures the panel is correlated too, as the
 defect-seeder that plants its defects is the same family. `local-review.sh` already gives a second opinion of
@@ -3652,6 +3691,8 @@ AC3. The owner's decision (blocking, advisory, removed) and its thresholds are r
 **Touches:** factory (.ai/rules/review/_common.md, .claude/agents/implementer.md, .claude/skills/ship-record/SKILL.md,
 scripts/factory/notify.sh: owner-only)
 
+**Migration (ADR-0063, 2026-11-21):** step M6 (the review zone), with #0-294.
+
 **Problem.** The implementer may mark a finding `disputed` with any reason; the reviewer upholds or resolves it, and
 an upheld dispute stops the item for the owner, who then reads raw verdict JSON to decide. The PR shows the rounds
 as JSON blocks, with no table of what each finding became.
@@ -3675,6 +3716,8 @@ the state that survives a restart and the retries, #0-275 (4.3a); the per-task b
 writes nothing" and the gate's `summary` kept short, 4.4 (the flow, where passes and the gate's answer are read); the
 GraphQL rate limit, stage 7 (v0 uses REST). AC1 is met when the last of them is written with its test; AC2 by 4.7's runs
 **Touches:** docs (the brief of ADR-0055 stage 4, in the `factory` repository)
+
+**Migration (ADR-0063, 2026-11-21):** the per-task baseline and the gate's summary in step M2 (#0-301); the GraphQL rate limit in step M5 (#0-293).
 
 **Problem.** The dispatcher (ADR-0055 stage 4) will run from a timer around the clock and poll GitHub, Projects v2
 only through GraphQL (stage 7). Today's autopilot already showed the failures it must not repeat: a lock that turns
@@ -3787,6 +3830,8 @@ problem restated by the analysis of its second pull request, 2026-11-20).
 **Touches:** factory (scripts/factory-admin/build-vm/provision.sh and its checks: owner-only), root (README.md
 "Infrastructure Hardening", .ai/context/migration/stage-4.md)
 
+**Migration (ADR-0063, 2026-11-21):** deferred to step M11 by D6 (a leaked builder key yields no more without it), unless #0-289's proxy needs a rule of its own; re-checked before M12's auto-merge.
+
 **Problem.** As first written, this item said the VM's egress filter (`factory-egress.sh` and `factory-dns.sh` in
 `provision.sh`) matched `factory`'s uid alone, so `dispatcher` would reach any host. It does not: it matches every uid
 from 1000 up (`FILTERED=1000-4294967294`, `-m owner --uid-owner`), any user added later included. #0-272 therefore
@@ -3819,6 +3864,8 @@ checks of `FACTORY_REPO_DIR` (AC7), `bin/check-app.mjs` (AC8), tests; its first 
 (the adapter validated), `scripts/factory-admin/build-vm/` (`create.sh` or `verify-pins.sh`: the tag at
 `FACTORY_COMMIT`; `install-builder-app.sh` if AC8 drops `--repository`): owner-only), decisions (ADR-0060 D6, D7, D8
 amended, this item's decisions PR), root (`stage-4.md` "4.3" and "4.7", README "Infrastructure Hardening")
+
+**Migration (ADR-0063, 2026-11-21):** this is step M1. The `backlog-md` queue kind is not grown beyond what these decisions need: it goes at M5.
 
 **Problem.** The dispatcher will run the product's own scripts (for incident-platform `run-tests.sh` and
 `changed-paths.sh`) and read the product's adapter. Read from a task's branch, a task could rewrite the scripts that
@@ -3908,6 +3955,8 @@ AC11. The dispatcher's lock check and its `protectedPaths` parser are tested aga
 ADR-0061, as #0-272's), the repository `profitbuild/factory` (`dispatcher/bin/dev-token.mjs`, perhaps a permissions
 file like builder-app's)
 
+**Migration (ADR-0063, 2026-11-21):** deferred to step M11 (the cloud) by D6: without it a leaked builder-app key still yields no more than a PR that waits; re-checked there, and again before M12's auto-merge, where D6's premise (a PR the owner reads) ends.
+
 **Problem.** `dev-token.mjs` holds the dev app's `APP_ID`, `INSTALLATION_ID` and `EXPECTED_PERMISSIONS`;
 `.github/repository-settings/apps/profitbuild-factory-dev.json` here holds what GitHub's installation must be.
 `check-factory-copies.rb`'s check 5 holds builder-app's permissions equal both ways, not the dev app's, so the two can
@@ -3934,6 +3983,8 @@ AC1. `check-factory-copies.rb` fails a pull request here that changes the dev ap
 .github/scripts/test-run-tests.sh, the Lint Workflows step that clones `factory@main`: owner-only), decisions (an
 amendment of ADR-0061: a contract held in `factory` whose producer is here)
 
+**Migration (ADR-0063, 2026-11-21):** step M2, before #0-301 reads a gate's answer.
+
 **Problem.** `factory`'s `schemas/gate.schema.json` is the contract of `run-tests.sh`'s answer (status, exitCode,
 modules, log, head, artifact, summary), with `additionalProperties: false`. A field added to `run-tests.sh` here, or
 one renamed, would make every gate answer refused once 4.4's flow reads them, and nothing in either repository checks
@@ -3958,6 +4009,8 @@ AC1. A field added to or removed from `run-tests.sh`'s answer, without the schem
 `dispatcher/src/github/checked-token.mjs`, `dispatcher/testing/test-only-options-scan.mjs`, `.github/workflows/ci.yml`:
 owner-only, their tests), factory (scripts/factory-admin/build-vm/verify-pins.sh, .github/scripts/check-factory-copies.rb
 and .github/scripts/test-check-factory-copies.sh: owner-only), decisions (ADR-0061 amended: a new compared value)
+
+**Migration (ADR-0063, 2026-11-21):** deferred to step M11 (the cloud) by D6: without it a leaked builder-app key still yields no more than a PR that waits; re-checked there, and again before M12's auto-merge, where D6's premise (a PR the owner reads) ends.
 
 **Problem.** #0-276 holds every credential's destination to GitHub's origin (`pinnedOrLoopback`) at the CLI's options,
 the mint and `gitPushCommand`. Behind them, what the reviews left as defence in depth:
@@ -4049,6 +4102,8 @@ Removed after the trial: the container, the volume and the directory; nothing le
 **Touches:** factory (.devcontainer/Dockerfile, .devcontainer/init-firewall.sh, their checks: owner-only), README
 "Infrastructure Hardening"
 
+**Migration (ADR-0063, 2026-11-21):** step M2, with #0-249.
+
 **Problem.** The image `.devcontainer/Dockerfile` builds is the owner's container and, since #0-282, every task
 container. Two things in it predate that and now reach every task:
 - the sudoers line lets `dev` run `/usr/local/bin/init-firewall.sh` with any arguments, and the script adds each host
@@ -4072,6 +4127,8 @@ for migration stage 4, step 4.4).
 **Autopilot:** human-only · **Risk:** medium · **Complexity:** medium · **Depends on:** #0-277
 **Touches:** the repository `profitbuild/factory` (the dispatcher's task container, its refusals and its starter, and their tests, and its README), decisions
 (ADR-0062 point 4, if the order changes what it says), root (README "Infrastructure Hardening")
+
+**Migration (ADR-0063, 2026-11-21):** step M2 (was 4.4), before #0-301's first agent call.
 
 **Problem.** The dispatcher checks the image's `devcontainer.metadata` label and the container's mounts, privilege and
 capabilities only after `devcontainer up` has built the image, created and started the container and run the
@@ -4115,6 +4172,8 @@ AC7. The refusal of a feature's label entry names the keys that differ from the 
 Consequences, or a new ADR), the repository `profitbuild/factory` (the dispatcher's sweep), root (README
 "Infrastructure Hardening")
 
+**Migration (ADR-0063, 2026-11-21):** step M3, before #0-289's proxy. Its way is chosen knowing ADR-0063 G1-b phase 2: Sysbox's daemon inside the task container would also isolate concurrent tasks (`migration/m3.md` M3.4).
+
 **Problem.** A task's code holds the Docker socket (docker-outside-of-docker, ADR-0057), so it can write, as
 `factory`, everything `factory` can reach: its home (`~/.docker` with CLI plugins and credential helpers the docker
 and devcontainer CLIs run on the VM itself, outside any container, `~/.config/docker/daemon.json`, systemd user
@@ -4137,3 +4196,444 @@ AC2. What a task planted in `factory`'s Docker configuration, the daemon's unit,
      shared `factory-dispatcher-m2` volume does not reach the next task's credential, each by the way AC1 chose (a
      test or a VM trial, recorded).
 AC3. README "Infrastructure Hardening" names what still persists across tasks.
+
+### 0-287. The dispatcher calls no agent yet (migration step M2)
+
+**Type:** ci · **Priority:** High · **Status:** Open (ADR-0063, 2026-11-21).
+**Autopilot:** human-only · **Risk:** high · **Complexity:** high · **Depends on:** #0-299, #0-300, #0-301, #0-302, #0-303, #0-304, #0-284, #0-249, #0-283
+**Touches:** the items below; nothing of its own
+
+**Problem.** After 4.3c the dispatcher starts a task container and stops (`PHASES = []`): no agent runs, nothing is
+committed, and its lock and sweep are for one task at a time, which M5's two slots cannot use.
+
+**Work.** The umbrella of step M2 (`migration/m2.md`). Split into one item per pull request on 2026-11-21 (the owner's choice: M2 and M3 now, later steps when each comes). Its parts, in order:
+- #0-299 (M2.0): the build agents in `factory`'s plugin;
+- #0-300 (M2.1): the spike;
+- #0-301 (M2.2–M2.3): one agent call and the build zone's phases;
+- #0-302 (M2.4): the dispatcher's commits;
+- #0-303 (M2.5): per task, not per dispatcher;
+- #0-304 (M2.6): what 4.3a–c left for this step.
+
+With them: #0-284, #0-249 and #0-283. Closed when they are, and the exit holds.
+
+**Acceptance criteria.**
+AC1. One item named by the owner ends on the VM with a branch of the dispatcher's commits and a green gate, every call's `stream-json` recorded (recorded in `m2.md`).
+
+### 0-288. The dispatcher opens no pull request and leaves no trace of its agent calls (migration step M3)
+
+**Type:** ci · **Priority:** High · **Status:** Open (ADR-0063, 2026-11-21).
+**Autopilot:** human-only · **Risk:** high · **Complexity:** medium · **Depends on:** #0-305, #0-306, #0-307, #0-285, #0-289
+**Touches:** the items below; nothing of its own
+
+**Problem.** M2 leaves the work in the task's repository on the VM. Nothing pushes it, opens a PR, records which
+agent added which commit (#0-204), or reads the PR's fields for the audits.
+
+**Work.** The umbrella of step M3 (`migration/m3.md`). Split into one item per pull request on 2026-11-21 (the owner's choice: M2 and M3 now, later steps when each comes). Its parts, in order:
+- #0-305 (M3.1–M3.2): the checks before a push, push and PR;
+- #0-306 (M3.3): the trace and `audit-data.sh`;
+- #0-285 (M3.4): what a task leaves for the next;
+- #0-289 (M3.5): the credential proxy;
+- #0-307 (M3.6): the factory pin from one source.
+
+Closed when they are, and the exit holds.
+
+**Acceptance criteria.**
+AC1. One PR opened by builder-app from a dispatcher run, through the proxy, with its trace, is reviewed by the owner and merged (recorded in `m3.md`).
+
+### 0-289. Claude's credential would sit in the task container, and the cost of a run is unknown (migration step M3)
+
+**Type:** security · **Priority:** High · **Status:** Open (ADR-0063, 2026-11-21).
+**Autopilot:** human-only · **Risk:** high · **Complexity:** medium · **Depends on:** #0-287, #0-285
+**Touches:** the repository `profitbuild/factory` (dispatcher/src/proxy/), factory (scripts/factory-admin/build-vm/provision.sh, .devcontainer/ allow-list: owner-only), root (README "Infrastructure Hardening")
+
+**Problem.** A task's agents need Claude. Today the login lives in the devcontainer's volumes; a token inside the task
+container is readable by every test it runs, and nothing counts what a run costs.
+
+**Work.** `migration/m3.md` part M3.5: a Console workspace with a monthly spend limit (owner); a `node:http` proxy on
+the containers' host-gateway address that accepts only the running task's random token, swaps in the key and
+streams to `api.anthropic.com`, counting usage per task; other Anthropic hosts removed from the task allow-list;
+#0-274 if the proxy needs a rule of its own. Spike first: no login is needed with `ANTHROPIC_BASE_URL` and
+`ANTHROPIC_AUTH_TOKEN`.
+
+**Acceptance criteria.**
+AC1. A request without the task's token, with another task's, or after the task ended is refused (tests).
+AC2. The key never appears in a response, a log line or a task's files (tests, and a VM trial recorded).
+AC3. Streaming passes through unchanged against a fake upstream, and usage is summed per task (tests).
+AC4. README "Infrastructure Hardening" names the proxy and what a leaked task token yields, including that on M5's shared daemon another task can read it (`docker inspect`), so per-task usage is accounting, not a boundary, until ADR-0063 G1-b phase 2.
+
+### 0-290. The old autopilot path and the rollback that shares the VM stay after the dispatcher takes over (migration step M4)
+
+**Type:** ci · **Priority:** Medium · **Status:** Open (ADR-0063, 2026-11-21).
+**Autopilot:** human-only · **Risk:** high · **Complexity:** medium · **Depends on:** #0-288, #0-289, the `/seed-bugs` baseline of P-25..P-27 on the old panel
+**Touches:** .claude/ (workflows/backlog-autopilot.js, agents shipper and picker, skills/backlog-autopilot), scripts/factory/ (next-item.sh, start-item.sh, resume-item.sh and what only they use), .github/scripts/test-autopilot-workflow.mjs (the autopilot's tests; the dimension-list comparison), .ai/rules/protected-paths.md's runtime list, scripts/factory-admin/build-vm/ (rollback-*.sh): all owner-only; the repository `profitbuild/factory` (daemon.mjs, environment.mjs); decisions (ADR-0052, ADR-0034 amended, ADR-0053 superseded); .github/repository-settings/ (the bot's access); root (README "Infrastructure Hardening")
+
+**Problem.** After M3 the factory has two paths: `/backlog-autopilot` with the bot's PAT, shipper and factory-ops,
+and the dispatcher. The old one is kept runnable by the rollback that shares the VM by time (ADR-0062 point 5), and the
+dispatcher carries refusals and sweeps for it. ADR-0063 D1 removes it once one PR of the dispatcher has merged.
+
+**Work.** `migration/m4.md`, parts M4.1–M4.3. `/plan-backlog` and `.ai/plan/queue.md` stay until M5. `factory-ops`,
+its hook and what `/seed-bugs` and `/audit` run through it stay until M6 ports them (#0-294): M6 exits on `/seed-bugs`
+(review round 1 of #0-286). The preflight's "audit due" stop goes with the old path; until M6 the
+owner starts the audits by hand at the count (`m4.md` M4.1b). Three ties of `seed-bugs.js`/`audit.js` to the removed
+workflow are rewritten, not cut (M4.1).
+
+**Acceptance criteria.**
+AC1. No file references a removed workflow, agent, skill or script (`git grep`, and Factory guards and `check-protected-paths.sh` green), and one `/seed-bugs` run and one `/audit` run still complete.
+AC2. The dispatcher has no code for a `factory.rollback` container or the rollback's volumes, and its tests pass without them; the bot's `gh` login and Claude Code's login on the VM are logged out or revoked and their volumes deleted in this item (recorded).
+AC3. The bot's write access is gone from `.github/repository-settings/` and `repository-settings.rb check` agrees; ADR-0052 and ADR-0034 are amended, ADR-0053 says it is superseded by ADR-0060.
+AC4. #0-213, #0-217, #0-225, #0-226, #0-228, #0-234, #0-236, #0-251, #0-253 and #0-254 are closed, each with the reason; one more item runs through the dispatcher after the removal (recorded in `m4.md`).
+
+### 0-291. The queue has no schema in GitHub and no rule for whose text a dispatcher reads (migration step M5)
+
+**Type:** design · **Priority:** High · **Status:** Open (ADR-0063, 2026-11-21).
+**Autopilot:** human-only · **Risk:** high · **Complexity:** medium · **Depends on:** #0-290
+**Touches:** GitHub (organisation issue types, the Project "Factory" and its fields, the interaction limit: owner), the repository `profitbuild/factory` (schemas/task.schema.json), decisions (a new ADR), .github/ISSUE_TEMPLATE/ (owner-only), root (README "Infrastructure Hardening": the trust rule)
+
+**Problem.** ADR-0055 moves the queue to GitHub Issues + one Project but fixes no types, fields, body format or rule
+for which text a dispatcher may act on; the repository is public, so anyone can open an issue or comment.
+
+**Work.** `migration/m5.md` part M5.1: issue types `Feature`, `Task`, `Bug`, `Audit` (ADR-0063 G5); the Project's fields (Status, Priority
+P0–P2, Risk, Complexity, Lease until, Attempts, Run) and views; a Task's body with its `factory` block and its JSON
+Schema; native blocked-by; the trust rule, its fields split into the owner's inputs (body, title, Priority,
+position, the owner's labels, blocked-by, parent, `Draft`→`Ready`, a blocker's close), trusted only when last set
+by the owner or `bc-app` (a close only by a merged PR's `Closes` or the owner), and the dispatchers' state (In
+progress, Lease, Attempts, Run, Blocked, `needs-owner`); builder-app's `Ready` accepted only as the return of a
+lease it recorded, any other app's refused; "changes requested" derived from `factory/review` or the owner's
+`CHANGES_REQUESTED` review on the head, not from a Project field; outsiders' comments never read, after a spike on what GraphQL names as the last actor of a Project field; the interaction
+limit, renewed, since it lasts a chosen time; what stays in the repository (ADRs, audit markers).
+
+**Acceptance criteria.**
+AC1. An ADR records the schema and the trust rule, the owner's choice.
+AC2. `task.schema.json` accepts the template's block and refuses a block without `spec`, `touches` or `risk` (tests in `factory`).
+AC3. A dispatcher's reader refuses an issue whose owner's inputs (body, title, Priority, position, labels, blocked-by, parent, the move to Ready) were last set by anyone but the owner or `bc-app`; counts a blocker closed only by a merged PR or the owner; accepts builder-app's Ready only as the return of a lease it recorded and refuses any other app's; takes "changes requested" only from review-app's `factory/review` or the owner's `CHANGES_REQUESTED` review on the head, never from a Project field; and reads no outsider's comment (tests against a fake GraphQL).
+AC4. The spike's answer (which last actors GraphQL names for Project fields and position, and the fallback where it names none) is recorded in the ADR.
+AC5. The ADR states the fallback record of who moved a task to Ready, if the spike needs it, as an exception to ADR-0055's "dispatchers keep no state" (ADR-0063).
+
+### 0-292. The open items live only in `BACKLOG.md`, which two writers change (migration step M5)
+
+**Type:** ci · **Priority:** High · **Status:** Open (ADR-0063, 2026-11-21).
+**Autopilot:** human-only · **Risk:** medium · **Complexity:** medium · **Depends on:** #0-291
+**Touches:** scripts/factory-admin/ (a new backlog-to-issues script and its test), .claude/ (skills ready and plan-backlog, agents ready-checker and planner), .ai/plan/, scripts/factory/check-queue.sh: owner-only; BACKLOG.md, BACKLOG-DONE.md, CLAUDE.md, .ai/context/migration.md
+
+**Problem.** `BACKLOG.md` (over 400 KB) is the queue, written by `/ready`, the planner and every item's PR; with two
+build slots and a Project it would be a second source of the queue.
+
+**Work.** `migration/m5.md` part M5.2: one script turns every open section into an issue (`[0-N] <title>`, label
+`legacy`, fields from the section, `Depends on` as blocked-by, the `factory` block appended), a dry run into a test
+repository first, then all at once; both files frozen with a header; `/ready` writes to an issue; `queue.md`,
+`check-queue.sh` and `/plan-backlog` removed (ADR-0063 G2, G3). Closes #0-201.
+
+**Acceptance criteria.**
+AC1. The script's test turns three sample sections, one with a dependency, into the expected issues and fields.
+AC2. Every open item of `BACKLOG.md` has its issue, and both files carry the frozen header.
+AC3. `/ready` writes its draft to an issue, and no file references `queue.md`, `check-queue.sh` or `/plan-backlog`.
+
+### 0-293. The dispatcher does not pick its own work and runs one task at a time (migration step M5)
+
+**Type:** ci · **Priority:** High · **Status:** Open (ADR-0063, 2026-11-21).
+**Autopilot:** human-only · **Risk:** high · **Complexity:** high · **Depends on:** #0-291, #0-292
+**Touches:** the repository `profitbuild/factory` (dispatcher: queue reader, claim, lease, sweeper, slots, rebase work), factory (scripts/factory-admin/build-vm/: the timer and the VM's memory; .github/repository-settings/: strict checks and builder-app's Projects and Issues permissions: owner-only), decisions (ADR-0060 D8 amended), root (README "Infrastructure Hardening": `--force-with-lease` to `factory/**`, two tasks on one daemon)
+
+**Problem.** The owner names each item (ADR-0060 D8) and the dispatcher runs one task; a PR whose base moved after
+another's merge is neither tested on the new base nor rebased.
+
+**Work.** `migration/m5.md` part M5.3: the order (fixes, rebase, P0, Ready by Priority then card order) with blocked-by,
+disjoint `touches`, WIP 2 and a free slot; claim and lease with a re-read, the sweeper, `Blocked` after two failures;
+two slots on `factory`'s daemon (ADR-0063 G1-b phase 1); rebase work with `--force-with-lease` to `factory/**`; strict
+required checks (#0-264's first half); `Task:`/`Feature:` trailers, `Closes #n`; a systemd timer; #0-261's GraphQL
+rate limit; #0-265; the audit pause (ADR-0063 G5 (a): an `Audit` issue at every 10 merged builder-app PRs, no
+new task while it is open).
+
+**Acceptance criteria.**
+AC1. Whole runs against a fake GitHub take work in the stated order and never two tasks with overlapping `touches` (tests).
+AC2. An expired lease returns the task to Ready with Attempts+1, and two failures set Blocked with `needs-owner` (tests).
+AC3. A PR whose base moved is rebased and pushed with `--force-with-lease` only to its `factory/**` branch (tests).
+AC4. At `FACTORY_AUDIT_EVERY` merged builder-app PRs the dispatcher opens an `Audit` issue and takes no new task until the owner's login closes it (a close by another app neither ends the pause nor resets the count, which runs from the last `Audit` issue the owner closed), while fixes and rebases go on (tests).
+AC5. Three tasks taken by the timer from the Project are closed by `Closes`; two ran at once and one was rebased after the other's merge (recorded in `m5.md`).
+
+### 0-294. Review runs in the zone where agent code runs, and a reviewer can run commands (migration step M6)
+
+**Type:** security · **Priority:** High · **Status:** Open (ADR-0063, 2026-11-21).
+**Autopilot:** human-only · **Risk:** high · **Complexity:** high · **Depends on:** #0-293, #0-171, #0-190, #0-218, #0-219, #0-178
+**Touches:** .ai/rules/review/, .claude/agents/review-*.md, verifier.md, acceptance-reviewer.md, factory-ops.md, .claude/skills/review-procedure/, .claude/workflows/seed-bugs.js, audit.js, docs-audit.js, .claude/agents/audit-*.md, defect-seeder.md, .claude/skills/apply-audit/, .claude/hooks/factory-ops-bash.sh, .claude/settings.autopilot.json: owner-only; decisions (ADR-0053's mechanism removed); the repository `profitbuild/factory` (the review rules' core and `spring-boot` profile, the agents, the dispatcher's review mode, the review VM's provisioning); GitHub (review-app with Checks, Pull requests, Issues and Projects write and Contents read; the ruleset; owner); the `seed` label; root (README "Infrastructure Hardening")
+
+**Problem.** The panel, verifier and acceptance run in the build zone, next to code an agent wrote, and with Bash;
+an instruction planted in a diff can run commands, and two reviews as one user could change each other's workspace.
+No review result is bound to its app or to the SHA it reviewed.
+
+**Work.** `migration/m6.md` parts M6.1–M6.5 and M6.7: the rules split (core, `spring-boot`, the product's own); the
+reviewers without Bash on a workspace the dispatcher prepares (ADR-0063 G4); the review VM without Docker or Maven and
+review-app; the dispatcher's review mode (one review per PR, the head read again before publishing, two slots, a
+global call limit, a verdict carried only by an identical `git patch-id --verbatim` of the whole `merge-base..head`
+diff, never the owner's approval or the human gate, a different one reviewed by `git range-diff`, a red CI never
+reviewed); audits as task kinds (M6.4b, ADR-0063 G5: `/audit` and `/docs-audit` in the review zone, their report through an
+`Audit` issue that `/apply-audit` records in `.ai/audit/` with every decision, as today; `/seed-bugs` across both zones, the seed
+run a draft PR labelled `seed` so CI runs as on any PR, its findings back through a review-app check run), and then
+`factory-ops` goes; `factory/review` required and bound by `integration_id`; #0-262;
+#0-259, #0-260. Closes #0-183.
+
+**Acceptance criteria.**
+AC1. No review agent lists a tool that runs commands, and an instruction planted in a seeded diff reaches none (the init event's tools, a seeded run).
+AC2. A review whose head moved publishes a comment and no status; an identical `--verbatim` patch id of the whole diff carries the verdict to the new SHA without a model, a whitespace-only change does not, the human gate is never carried, and a different id is reviewed by `range-diff` (tests).
+AC3. `factory/review` is required on `main`, bound to review-app, and `repository-settings.rb check` agrees.
+AC4. One `/audit`, one `/docs-audit` and one `/seed-bugs` run complete as task kinds without `factory-ops`: the audit's report reaches `.ai/audit/<date>-<target>.md` and every decision `decisions.md` through `/apply-audit`'s PR, which refuses a body last edited by another actor; the seed run's draft PR gets CI, never gets `factory/review`, and is closed with its branch deleted, its findings come back only as review-app's check run, and the ground truth never reaches the review zone; nothing references `factory-ops`.
+AC5. A `/seed-bugs` series of P-25..P-27 on the new path is caught at least as on the old panel (its baseline run before M4), two PRs were reviewed at once, and one verdict was carried after a rebase (recorded in `m6.md`).
+
+### 0-295. The risk lane is not decided by GitHub, and a high-risk PR has no review aid for the owner (migration step M6)
+
+**Type:** ci · **Priority:** High · **Status:** Open (ADR-0063, 2026-11-21).
+**Autopilot:** human-only · **Risk:** high · **Complexity:** medium · **Depends on:** #0-294, #0-153
+**Touches:** .github/workflows/, .github/CODEOWNERS, .github/repository-settings/, .claude/skills/ (human-review): owner-only; the repository `profitbuild/factory` (the lane's and trace's core); root (README "Infrastructure Hardening")
+
+**Problem.** Which PR needs the owner is decided by the owner approving all of them; nothing in GitHub computes a
+lane from the task's risk and the changed paths, checks that a PR's trailers match its task, or holds a high-risk PR
+for the owner's approval of its current SHA.
+
+**Work.** `migration/m6.md` part M6.6: `factory/lane`, `factory-trace` and `factory/human-gate` as Actions jobs;
+CODEOWNERS on the high-risk paths (#0-153), the catch-all kept until M12; `/human-review <pr>` in a fresh read-only
+clone on the Mac. Closes #0-167 and #0-227.
+
+**Acceptance criteria.**
+AC1. `factory/lane` computes high from either the task's `risk: high` or a high-risk path, low otherwise (its test).
+AC2. `factory-trace` fails a builder PR without `Closes #T` or with trailers that do not match T (its test).
+AC3. `factory/human-gate` passes a low lane and holds a high one until the owner's approval on the current SHA (its test).
+AC4. The lane agrees with the owner on 3 PRs (recorded in `m6.md`).
+
+### 0-296. The factory's sessions still depend on hooks that match the text of an agent's commands (migration step M7)
+
+**Type:** ci · **Priority:** Medium · **Status:** Open (ADR-0063, 2026-11-21).
+**Autopilot:** human-only · **Risk:** high · **Complexity:** medium · **Depends on:** #0-295
+**Touches:** .claude/hooks/, .claude/settings.autopilot.json, .github/workflows/, .ai/rules/protected-paths.md: owner-only; decisions (ADR-0054, ADR-0050 amended); root (README "Infrastructure Hardening")
+
+**Problem.** After M6 the build zone's boundary is the task container and the review zone has no tool that runs
+commands; the boundary hooks (`readonly-bash.sh`, `guard-protected-bash.sh`, `write-scope.sh`, …) guard nothing the
+zones do not, and are kept in step with three copies of the protected list.
+
+**Work.** `migration/m7.md`: `guard-tests` and `guard-migrations` first become required CI jobs with their seeded
+cases; then the boundary hooks and their allow rules go; the protected list's copies reduce to CODEOWNERS and the
+dispatcher's check. Closes #0-210, #0-211 and #0-214.
+
+**Acceptance criteria.**
+AC1. A weakened test and an edited applied migration each fail a required CI job (seeded cases).
+AC2. No factory session settings name a removed hook, and `check-protected-paths.sh` checks the copies that remain.
+AC3. A seeded series (weakened test, edited migration, protected path) is still caught (recorded in `m7.md`).
+
+### 0-297. A feature cannot be planned with the owner, cut into tasks and traced across its PRs (migration step M8)
+
+**Type:** design · **Priority:** Medium · **Status:** Open (ADR-0063, 2026-11-21).
+**Autopilot:** human-only · **Risk:** high · **Complexity:** high · **Depends on:** #0-293, #0-295
+**Touches:** GitHub (bc-app: owner), .github/repository-settings/apps/, .github/workflows/ (the trace's feature check): owner-only; the repository `profitbuild/factory` (the skill `/plan-feature`, the agent `feature-planner`, the writer script); shared (a `FeatureFlags` interface and its tests: all 7 services); root (README "Infrastructure Hardening": bc-app)
+
+**Problem.** An item is written one at a time by `/ready`; nothing turns the owner's request for a feature into a
+brief and a set of tasks with dependencies, keeps unfinished work unreachable on `main`, or gives a feature's history.
+
+**Work.** `migration/m8.md`: `bc-app`; `/plan-feature` (the conversation and its mandatory questions), `feature-planner`
+(a JSON answer: vertical slices, the first the flag and a walking skeleton, the last the flag's removal, the API
+contract first in a `backend/` + `frontend/` repository) and a script that writes the Feature and its sub-issues in
+Draft, `Ready` only on the owner's "ok" (ADR-0063 G3); `FeatureFlags` in `shared`; the `Feature:` trailer in
+`factory-trace`.
+
+**Acceptance criteria.**
+AC1. `feature-planner`'s answer is checked against its schema, and the writer creates the Feature, sub-issues, blocked-by and fields as `bc-app`, in Draft (tests against a fake GitHub).
+AC2. A disabled feature's endpoint returns 404 and an enabled one serves; the interface has its tests in `shared`.
+AC3. `factory-trace` fails a PR whose `Feature:` trailer does not name the task's parent (its test).
+AC4. One technical feature planned with `/plan-feature` is Done through the factory (recorded in `m8.md`).
+
+### 0-298. The private repository, holdout, cloud and auto-merge steps have no items (migration steps M9–M12)
+
+**Type:** design · **Priority:** Low · **Status:** Open (ADR-0063, 2026-11-21).
+**Autopilot:** human-only · **Risk:** high · **Complexity:** high · **Depends on:** #0-297
+**Touches:** context (.ai/context/migration/m9-m12.md, migration.md), BACKLOG.md (or the Project, after M5)
+
+**Problem.** ADR-0063 orders M9 (private on Team), M10 (holdout), M11 (cloud), the isolation of tasks from each
+other (G1-b phase 2) and M12 (auto-merge), but outlines them only (`migration/m9-m12.md`).
+
+**Work.** When each step comes, write its full section in `m9-m12.md` (or a file of its own) and its items, from the
+outline; the isolation before M12 starts with a Sysbox spike unless #0-285's way already covers it.
+
+**Acceptance criteria.**
+AC1. Each of M9, M10, M11, the isolation and M12 has its full plan and its items before its first item starts.
+AC2. Auto-merge is not switched on until the eight conditions of `migration.md` hold, each recorded.
+
+### 0-299. The build agents' definitions are not in `factory`'s plugin (migration step M2.0)
+
+**Type:** ci · **Priority:** High · **Status:** Open (ADR-0063, 2026-11-21).
+**Autopilot:** human-only · **Risk:** high · **Complexity:** medium · **Depends on:** #0-278
+**Touches:** the repository `profitbuild/factory` (agents/, settings/, .claude-plugin/), factory (.claude/agents/architect.md, implementer.md, implementer-light.md and the rules they read: owner-only)
+
+**Problem.** ADR-0060 D5 loads the factory into a task container as a read-only plugin from `/opt/factory`, but
+`factory` holds no agent definition (only `.claude/settings.json`, checked 2026-11-21). The build agents exist only in
+incident-platform, so M2's first agent call has nothing to run, and moving them later would leave two copies.
+
+**Work.** `migration/m2.md` M2.0: `architect`, `implementer`, `implementer-light`, the factory part of the rules they
+read, and the settings the dispatcher passes (`settings/autopilot.json`) move into `factory`'s plugin. The copies
+here are removed in the same change. The old path, still running until M4, loads them from the plugin too.
+
+**Acceptance criteria.**
+AC1. Each of the three definitions exists in `factory` and nowhere in incident-platform (`git grep` in both).
+AC2. `factory`'s plugin manifest lists them, and a `claude --plugin-dir` session's init event shows them (recorded).
+AC3. One `/backlog-autopilot` run on the old path still reaches its implementer from the plugin (recorded in `m2.md`).
+
+### 0-300. How a plugin's agent runs as `claude -p`'s main thread is not known (migration step M2.1)
+
+**Type:** ci · **Priority:** High · **Status:** Open (ADR-0063, 2026-11-21).
+**Autopilot:** human-only · **Risk:** medium · **Complexity:** low · **Depends on:** #0-299
+**Touches:** the repository `profitbuild/factory` (a spike script under dispatcher/testing/), context (.ai/context/migration/m2.md's Record), decisions (ADR-0058's successor, if the probe changes)
+
+**Problem.** M2's agent call needs the plugin's `implementer` as the main thread of `claude -p` in a task container.
+Three things are not known: whether `--agent <name>` works for this, or whether the definition's body has to be
+passed as a system prompt with its tools and model; whether the plugin's hooks run in that mode; and what replaces
+ADR-0058's isolation probe.
+
+**Work.** `migration/m2.md` M2.1, one trial task on the VM. Proposal for the probe: the `stream-json` init event's
+agent, tools and `plugin_errors`.
+
+**Acceptance criteria.**
+AC1. `m2.md`'s Record holds the chosen form of the call, whether hooks run, and the init event of one recorded call.
+AC2. The successor of ADR-0058's probe is decided, as an amendment of ADR-0058 or a new ADR.
+
+### 0-301. The dispatcher runs no phase of a task (migration steps M2.2–M2.3)
+
+**Type:** ci · **Priority:** High · **Status:** Open (ADR-0063, 2026-11-21).
+**Autopilot:** human-only · **Risk:** high · **Complexity:** high · **Depends on:** #0-300, #0-280, #0-284
+**Touches:** the repository `profitbuild/factory` (dispatcher/src/flow/, its tests and fixtures)
+
+**Problem.** After the spike the dispatcher still has no agent call and no phases, and `backlog-autopilot.js`'s
+control flow lives only in incident-platform.
+
+**Work.** `migration/m2.md` M2.2–M2.3:
+- one agent call (`docker exec … claude -p … --output-format stream-json --json-schema …`), with stdout saved per
+  call, the answer in `structured_output` and a stop on no answer or an unexpected init event;
+- the build zone's phases only: plan, implement (by Complexity), the path gate, the test gate with up to two fix
+  calls, and review fixes by finding id;
+- `stopItem`, the limits and the breaker, as `backlog-autopilot.js` has them;
+- not ported: pick, review rounds, verify, acceptance, ship (ADR-0063 D3).
+
+**Acceptance criteria.**
+AC1. A call with no `structured_output`, or an init event with `plugin_errors` or not the expected agent and tools, stops the task (tests with recorded `stream-json` fixtures).
+AC2. Whole runs against a fake agent reach each stop through `stopItem` with its stage (`node:test`, ported from `test-autopilot-workflow.mjs`).
+AC3. `MAX_TEST_FIXES`, `MAX_ROUNDS` and `MAX_AGENT_CALLS` each stop a run that exceeds them (tests).
+
+### 0-302. Agents would commit their own work, with no trailer of run or agent (migration step M2.4)
+
+**Type:** ci · **Priority:** High · **Status:** Open (ADR-0063, 2026-11-21).
+**Autopilot:** human-only · **Risk:** high · **Complexity:** medium · **Depends on:** #0-301
+**Touches:** the repository `profitbuild/factory` (dispatcher/src/flow/, git/, the task's own repository under the state directory)
+
+**Problem.** Today the agents commit with git inside the clone they write, so the trace of who added what is their
+word, and git's writing commands stay within an agent's reach (#0-236). #0-212's trailers have no writer yet.
+
+**Work.** `migration/m2.md` M2.4. After each call that changed the tree, the dispatcher commits in the task's
+container with its own git flags (`git add -A`, a message from the answer, `Factory-Run` and `Factory-Agent`). It
+reads the commit back as a bundle into the task's own repository (alternates onto `FACTORY_REPO_DIR`, config held as
+the push repository's) and checks that it is one commit with the recorded head as its only parent. Folds in #0-212.
+
+**Acceptance criteria.**
+AC1. Every commit the dispatcher makes carries both trailers, and its author is the dispatcher's (tests).
+AC2. A planted merge, a second commit or a missing trailer in what the container returns is refused (tests).
+AC3. The task's repository's config equals the reference one, as the push repository's does (test).
+
+### 0-303. The dispatcher's lock, sweep and caches assume one task at a time (migration step M2.5)
+
+**Type:** ci · **Priority:** Medium · **Status:** Open (ADR-0063, 2026-11-21).
+**Autopilot:** human-only · **Risk:** medium · **Complexity:** medium · **Depends on:** #0-278
+**Touches:** the repository `profitbuild/factory` (dispatcher/src/state/, container/), decisions (ADR-0060 D7, as amended by ADR-0063)
+
+**Problem.** One `flock` guards the whole dispatcher. Both ends of a run sweep every container, network, volume and
+work directory. One Maven cache volume is shared by all tasks. M5's two slots (ADR-0063 G1) cannot run on that.
+
+**Work.** `migration/m2.md` M2.5:
+- a lock per task;
+- a sweep of only what carries the run's label, plus a sweep of orphans (no live lease);
+- a Maven cache per slot (`factory-dispatcher-m2-<slot>`), or a shared read-only cache with a per-task layer;
+- `state.json` written atomically under a short state lock;
+- `FACTORY_SLOTS` (1 until M5).
+
+**Acceptance criteria.**
+AC1. Two fake tasks in one process remove none of each other's containers, networks, volumes or directories (tests).
+AC2. The breaker counts the blocks of both, and a concurrent write to `state.json` loses neither (tests).
+AC3. An orphan with no live lease is swept, and a running task's resources are not (tests).
+
+### 0-304. What the reviews of 4.3a–c left for the control flow is not built (migration step M2.6)
+
+**Type:** ci · **Priority:** Medium · **Status:** Open (ADR-0063, 2026-11-21).
+**Autopilot:** human-only · **Risk:** medium · **Complexity:** low · **Depends on:** #0-301
+**Touches:** the repository `profitbuild/factory` (dispatcher/src/flow/, github/, state/)
+
+**Problem.** The reviews of `factory` PRs #15, #16 and #18 left points for the step that runs the phases
+(`stage-4.md` 4.4, "Carried from …"). #0-284, #0-249 and #0-283 are items of their own. The rest have none:
+- a BLOCKED reason carrying GitHub's text into a PR;
+- a task killed before its branch was recorded, which can be resumed by neither the item nor the `runId`;
+- `blockTask` not counted by the breaker;
+- a mint retried after a timeout that may leave a token unrevoked;
+- `pushTask`'s first production caller.
+
+**Work.** `migration/m2.md` M2.6. Build each, as `stage-4.md` 4.4's "Carried from 4.3b's decisions" and "Carried
+from 4.3a's review" state.
+
+**Acceptance criteria.**
+AC1. A BLOCKED reason never holds text from GitHub's response (test).
+AC2. A task is resumed by its `runId`, and a new task is refused while one is `running` on the same item (tests).
+AC3. A block counts toward the breaker, and a retried mint revokes the token it can find (tests).
+AC4. `pushTask`'s production caller binds `repoDir` to the adapter's repository and passes no test-only option (test).
+
+### 0-305. The dispatcher pushes nothing and opens no pull request (migration steps M3.1–M3.2)
+
+**Type:** ci · **Priority:** High · **Status:** Open (ADR-0063, 2026-11-21).
+**Autopilot:** human-only · **Risk:** high · **Complexity:** medium · **Depends on:** #0-287
+**Touches:** the repository `profitbuild/factory` (dispatcher/src/github/, flow/), factory (.github/repository-settings/apps/profitbuild-builder.json: owner-only), root (README "Infrastructure Hardening": builder-app's Issues permission, `--force-with-lease` to `factory/**`)
+
+**Problem.** M2's branch stays in the task's repository on the VM. ADR-0060 D7's checks before a push are not built,
+and nothing opens a PR.
+
+**Work.** `migration/m3.md` M3.1–M3.2:
+- the checks in the push repository: the recorded chain, no merges, `changed-paths` from `main`, `trustedPaths`
+  unchanged, the trailers;
+- the rebase path (base = current `main`, `--force-with-lease` to `factory/**` only), written here and used from M5;
+- push and PR as builder-app: an existing PR reused, a conventional title, labels via the Issues API (the app's Issues
+  permission added), a draft for a BLOCKED task, a body written by the dispatcher (problem first, #0-256);
+- no required status set.
+
+**Acceptance criteria.**
+AC1. Each check refuses its planted case: a merge, an Owner-only path, a changed `trustedPaths` entry, a missing trailer, and a rebase whose base is not `main` (tests).
+AC2. An existing PR is reused, not duplicated; a BLOCKED task opens a draft (tests against a fake GitHub).
+AC3. builder-app's Issues permission is in `apps/profitbuild-builder.json`, and `repository-settings.rb check` agrees.
+
+### 0-306. A dispatcher PR carries no trace of its agent calls, and the audits do not read it (migration step M3.3)
+
+**Type:** ci · **Priority:** Medium · **Status:** Open (ADR-0063, 2026-11-21).
+**Autopilot:** human-only · **Risk:** medium · **Complexity:** medium · **Depends on:** #0-305
+**Touches:** the repository `profitbuild/factory` (dispatcher/src/flow/, a per-call summary), factory (scripts/factory/audit-data.sh and its test: owner-only)
+
+**Problem.** Nothing records which agent call added which commit, how long it took or what it cost (#0-204), and
+`audit-data.sh` counts PRs by the bot's login only.
+
+**Work.** `migration/m3.md` M3.3:
+- one row per agent call in a `<details>` block of the PR body (agent, phase, round, duration, tokens, commits
+  added), from the `stream-json` records;
+- a summary per call, the successor of `run-summary.sh`;
+- `audit-data.sh` reads PRs by `app/profitbuild-builder`.
+
+Folds in #0-204.
+
+**Acceptance criteria.**
+AC1. The trace has one row per recorded call, and its tokens and commits match the records (tests with fixtures).
+AC2. The body carries `Rounds:`, `Scope:` and the gate's summary, the fields `audit-data.sh` reads (test).
+AC3. `audit-data.sh` counts a PR by `app/profitbuild-builder` (its test).
+
+### 0-307. The factory version is pinned in two places, and the copy check compares with `factory@main` (migration step M3.6)
+
+**Type:** ci · **Priority:** Low · **Status:** Open (ADR-0063, 2026-11-21).
+**Autopilot:** human-only · **Risk:** medium · **Complexity:** low · **Depends on:** #0-278
+**Touches:** factory (scripts/factory-admin/build-vm/provision.sh, .github/scripts/check-factory-copies.rb and its test: owner-only), .factory/adapter.json
+
+**Problem.** `FACTORY_COMMIT` in `provision.sh` and the adapter's `factoryVersion` are held equal by hand, and
+`check-factory-copies.rb` (#0-268, ADR-0061) compares the copies with `factory@main`, not with the version this
+repository runs.
+
+**Work.** `migration/m3.md` M3.6: the adapter's pinned tag is the one source; the provision reads it, and the copy
+check compares with that tag.
+
+**Acceptance criteria.**
+AC1. `provision.sh` takes the factory's version from `.factory/adapter.json` and holds no pin of its own (test or check).
+AC2. `check-factory-copies.rb` compares with the pinned tag, and fails on a copy that differs from that tag (its test).

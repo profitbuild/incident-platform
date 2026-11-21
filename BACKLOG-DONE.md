@@ -165,6 +165,7 @@ resolvable.
 | 0-275 | the dispatcher's foundation: CLI, settings through one mechanism, the state and its lock, the retries, the adapter's and the gate's schemas (step 4.3a); details in [the section](#0-275-the-dispatchers-foundation-cli-configuration-state-lock-retries-and-the-adapters-schema-step-43a) | factory PR #15; PR #667 |
 | 0-276 | builder-app's push only from a push repository the dispatcher made, the commits as a bundle, one host rule for every credential (step 4.3b); details in [the section](#0-276-builder-apps-push-only-from-a-push-repository-the-dispatcher-owns-to-the-tasks-own-branch-step-43b) | factory PR #16; PR #669 |
 | 0-277 | the dispatcher drives `factory`'s Docker through one sudo rule, the task container from a fresh clone, the rollback by time, tried on the VM (step 4.3c); details in [the section](#0-277-the-dispatcher-drives-factorys-docker-and-a-task-container-step-43c) | factory PRs #18, #19; PRs #670-#674, #675 |
+| 0-286 | the migration replanned as steps M1–M12 straight to ADR-0055's target (ADR-0063), every remaining step planned in `.ai/context/migration/`, its items #0-287 to #0-307; details in [the section](#0-286-the-migrations-plan-describes-only-the-current-stage-and-goes-through-states-it-later-removes) | PR #677 |
 
 Items completed before `BACKLOG.md` existed are not listed.
 
@@ -4671,3 +4672,26 @@ file, `f6d73dec`) and #674 (`devcontainer up --config`, `3f26eab6`), and `factor
   to a VM made from PR #673 on (PR #673's round 2; this PR's docs review);
   the `insteadOf` check of the dispatcher's clone not done, why in `stage-4.md` "4.3"; the end-state checks in
   #0-284 and #0-285.
+
+### 0-286. The migration's plan describes only the current stage and goes through states it later removes
+
+**Type:** docs · **Priority:** High · **Status:** Done, PR #677 (2026-11-21) (ADR-0063).
+**Autopilot:** human-only · **Risk:** low · **Complexity:** low · **Depends on:** —
+**Touches:** decisions (ADR-0063, status lines of ADR-0055, ADR-0060, ADR-0062, the ADR index), context (.ai/context/migration.md, .ai/context/migration/m2.md … m9-m12.md, stage-4.md's note), .ai/README.md, CLAUDE.md ("AI factory"), docs/ai-factory.md, BACKLOG.md
+
+**Problem.** ADR-0055 names the stages, but a stage's plan is written only when it starts: stages 5–10 have one line
+each in `migration.md` ("gap: all of it"), so what is built, where and in which order cannot be read anywhere. The
+plan also builds work that a later stage removes: the rollback that shares the VM by time (ADR-0062 point 5), a
+`backlog-md` queue kind in the dispatcher, the review panel ported into the build VM (4.4) and moved again (stage 5)
+after a shadow run, and 2–3 items per factory change. The owner's aim (2026-11-21) is the end state, quickly; the
+intermediate states may be skipped where that does not harm the migration.
+
+**Work.** The owner's decisions of 2026-11-21 (D1–D6, G1–G4), taken in an interactive session on an analysis of
+stages 0–4 against ADR-0055's target, recorded as ADR-0063; `migration.md` rewritten as steps M1–M12; a plan file for
+every remaining step; items #0-287 to #0-307 for the steps (M2 and M3 one per pull request); existing items moved to
+their steps.
+
+**Acceptance criteria.**
+AC1. ADR-0063 records D1–D6 and G1–G4 and amends ADR-0055 (stages, rules), ADR-0060 D7/D8 and ADR-0062 point 5; each amended ADR's status line names it, and the ADR index has its row.
+AC2. `.ai/context/migration.md` maps steps M1–M12 to their items, and every remaining step has its plan file under `.ai/context/migration/` (M2–M8 in parts, M9–M12 as an outline), each part saying what, where and its check, each file its exit.
+AC3. Items #0-287 to #0-307 exist: M2 and M3 one per pull request under their umbrellas, M4–M8 one per step, M9–M12 one umbrella; the existing items ADR-0063 moves name their step or deferral.
