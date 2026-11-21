@@ -773,7 +773,9 @@ security boundary, so every rule that matters is also enforced outside the model
   allowed to create, force-move and delete its own; and, holding no Workflows permission, it moves no ref, its own
   included, across a change of `.github/workflows/` (GitHub answers 403).
 - **dispatcher and `factory`'s Docker** (backlog #0-277, ADR-0062; on a VM made from a `provision.sh` of #0-277 and
-  on; the dispatcher's own side, its refusals and its sweep, from the `FACTORY_COMMIT` that carries #0-277's code):
+  on; the dispatcher's own side, its refusals and its sweep, from the `FACTORY_COMMIT` that carries #0-277's code,
+  so on a VM made from `main` at PR #673 and on: one made between PRs #672 and #673 has the rollback scripts but
+  nothing that refuses a run while the rollback holds the logins; tried on the VM on 2026-11-21, `stage-4.md` "4.3"):
   `dispatcher` runs `docker` and the devcontainer CLI as `factory` through one sudo rule
   (`/etc/sudoers.d/factory-dispatcher`, root's, 0440, checked by `visudo`): those two programs by full path, sudo's
   reset environment with root's `secure_path`, `runcwd=/` and `DOCKER_HOST` (from `/etc/factory-dispatcher.env`, so
