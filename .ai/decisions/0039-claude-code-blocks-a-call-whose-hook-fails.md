@@ -1,6 +1,7 @@
 # ADR-0039: Claude Code blocks a call whose hook fails: every hook entry says `onFailure: "block"`, and the autopilot needs Claude Code 2.1.295 or newer (backlog #0-162)
 
-- **Status:** Accepted (2026-10-25)
+- **Status:** Accepted (2026-10-25); point 3 amended by ADR-0065 (2026-11-21, #0-249): the preflight refuses any
+  version but `.devcontainer/claude-code.pin`'s, and 2.1.295 is the floor of that pin
 - **Backlog:** #0-162
 - **Date:** 2026-10-25
 - **Author:** human (owner chose option C of the research in two PRs, and for PR 2 a Ruby check, the running binary's version, a spike of an older version; written up by Claude Code in the owner's session)
