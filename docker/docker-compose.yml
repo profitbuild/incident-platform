@@ -71,7 +71,7 @@ services:
   # Apache Kafka (KRaft mode - no ZooKeeper)
   # ----------------------------------------------------------
   kafka:
-    image: apache/kafka:3.9.2
+    image: apache/kafka:4.4.0
     container_name: incident-kafka
     logging: *default-logging
     restart: unless-stopped
