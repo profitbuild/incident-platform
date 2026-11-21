@@ -3449,6 +3449,10 @@ change over time, and point to the criterion in `.ai/context/architecture.md` (#
 ### 0-249. Claude Code in the devcontainer image is whatever version was current at build time
 
 **Type:** ci · **Priority:** Medium · **Status:** Open. Found with #0-248 (owner, 2026-11-14).
+**Option to weigh (ADR-0064 point 5, 2026-11-21):** Claude Code run by absolute path from a read-only, root-owned
+mount the factory provides, at the pinned version, rather than installed by the product's image into the agent
+user's `~/.local/bin`. It would close the binary's part of ADR-0064's residual. It would also amend ADR-0062 point 4
+again (a new mount) and tie a factory-supplied binary to the image's userland.
 **Autopilot:** human-only · **Risk:** medium · **Complexity:** low · **Depends on:** —
 **Touches:** factory (.devcontainer/Dockerfile, owner-only), the repository `profitbuild/factory` (.devcontainer/Dockerfile,
 which installs Claude Code the same way since #0-269), docs (docs/ai-factory.md "Pinned versions"), root
@@ -3974,6 +3978,8 @@ Removed after the trial: the container, the volume and the directory; nothing le
 ### 0-283. The devcontainer image lets `dev` widen its firewall and installs Claude Code unpinned
 
 **Type:** ci · **Priority:** Medium · **Status:** Open (found by the review of #0-282, 2026-11-20).
+**Option to weigh:** Claude Code from a factory-provided read-only mount instead of the image's install (ADR-0064
+point 5, #0-249's note).
 **Autopilot:** human-only · **Risk:** medium · **Complexity:** low · **Depends on:** —
 **Touches:** factory (.devcontainer/Dockerfile, .devcontainer/init-firewall.sh, their checks: owner-only), README
 "Infrastructure Hardening"
@@ -4375,36 +4381,95 @@ AC2. Auto-merge is not switched on until the eight conditions of `migration.md` 
 
 **Type:** ci · **Priority:** High · **Status:** Open (ADR-0063, 2026-11-21).
 **Autopilot:** human-only · **Risk:** medium · **Complexity:** low · **Depends on:** #0-299
-**Touches:** the repository `profitbuild/factory` (a spike script under dispatcher/testing/), context (.ai/context/migration/m2.md's Record), decisions (ADR-0058's successor, if the probe changes)
+**Touches:** the repository `profitbuild/factory` (a spike script under dispatcher/testing/), context (.ai/context/migration/m2.md's Record), decisions (ADR-0064, amended with the spike's result)
 
-**Problem.** M2's agent call needs the plugin's `implementer` as the main thread of `claude -p` in a task container.
-Three things are not known: whether `--agent <name>` works for this, or whether the definition's body has to be
-passed as a system prompt with its tools and model; whether the plugin's hooks run in that mode; and what replaces
-ADR-0058's isolation probe.
+**Problem.** M2's agent call needs the plugin's `implementer` as the main thread of `claude -p` in a task container,
+with no setting of the clone's taking effect while its `CLAUDE.md` still loads. Each call is a new session, and it
+reads two places the previous call of the same task can write:
+- the clone's `/workspace/.claude/` (Claude Code's "project" and "local" sources);
+- the run's volume `/home/<user>/.claude`, mounted by `dispatcherMounts` (the "user" source).
 
-**Answered already (2026-11-21, #0-299's measurements, `m2.md` Record):** `-p --agent factory:implementer` runs the
-plugin's agent, its init event lists the agents, tools and no `plugin_errors`, and the plugin's hook runs in it. Left:
-keeping the clone's `.claude/settings.json` and hooks out while `CLAUDE.md` is still read (`--restricted` is a
-candidate: measured with `--plugin-dir`, `--agent factory:<name>`, the plugin's hook, Bash only through `--tools`, and
-the permissions channel it still reads), the probe's successor, and the same on the VM in a task container, with the
-init event's `tools` on the VM's Claude Code (not pinned until #0-249/#0-283) for an agent with and without Bash (with
-Bash, Claude Code drops Grep and Glob).
+From there a branch could set `disableAllHooks: true` and drop `foreground-bash` (#0-206's turn budget), add hooks,
+allow rules or an agent, or change `model`. And Claude Code ties the clone's `CLAUDE.md` to the same "project"
+source as its settings and agents, so `--setting-sources user` drops it.
 
-**Work.** `migration/m2.md` M2.1, one trial task on the VM. Proposal for the probe: the `stream-json` init event's
-agent, tools and `plugin_errors`.
+**Answered already** (2026-11-21, #0-299's measurements, `m2.md` Record): `-p --agent factory:implementer` runs the
+plugin's agent, its init event lists the agents, tools and no `plugin_errors`, and the plugin's hook runs in it.
+
+**Decided with the owner** (2026-11-21, `/research` of #0-300; ADR-0064):
+- **Managed settings.** The factory's managed settings are mounted read-only on the task container's whole
+  `/etc/claude-code`, which also covers a `managed-settings.d/` an image could carry. They hold:
+  - `allowManagedPermissionRulesOnly: true`, so the call's permission rules live there only;
+  - `strictPluginOnlyCustomization` for hooks, agents, skills and MCP;
+  - `disableAllHooks: false`;
+  - never `allowManagedHooksOnly` (it blocks plugin hooks) or `disableSideloadFlags` (it rejects `--plugin-dir`).
+- **The call's environment closed:** `docker exec … env -i` with a list of the variables the call needs, as
+  `factory`'s `childEnv` does, so the image's `ENV` (`CLAUDE_CONFIG_DIR`, a `CLAUDE_CODE_*` variable) cannot move a
+  source of configuration around the managed settings (review round 1 of these decisions).
+- The managed settings' mount amends ADR-0062 point 4's list of mounts. They also hold `strictKnownMarketplaces: []`,
+  and the init event's `plugins` must be exactly the factory's.
+- The call's environment list also carries the accepted `containerEnv` and `DISABLE_AUTOUPDATER=1` as literals.
+  `timeout` and `env -i` are run by absolute path.
+- What it protects against: configuration left in files, not code a previous call of the same run ran in the container
+  (`claude` in the agent user's `~/.local/bin`, root through the socket).
+  - A run is one `cli.mjs run` invocation. Its container dies with it, a resume makes a new one, and review fixes
+    are a new run.
+  - Across runs that code still reaches through `~/.m2` and the daemon's image store and build cache, which
+    ADR-0062 accepted (#0-285).
+  - The boundaries against it are outside the container: the dispatcher's commit check, the PR's CI, the review and
+    the push. The gates inside the container count only against honest code.
+  - The `env -i` literals are not secret.
+  - Claude Code from a read-only mount is the direction for #0-249/#0-283.
+- **`--restricted` on top**, only if the spike shows it keeps the clone's `CLAUDE.md`, `--plugin-dir`,
+  `--agent factory:<name>` and the plugin's hook, with Bash named in `--tools`. Otherwise the call runs on the managed
+  settings alone, and ADR-0064's amendment lists the keys they pin.
+- **The probe's successor.** The call's `stream-json` init event, checked whole before the answer, is ADR-0058's
+  successor on the dispatcher's path:
+  - `agents`, `plugins`, no `plugin_errors`;
+  - `tools`, `model` and `permissionMode`;
+  - `claude_code_version`.
+
+  The plugin's hooks are measured at each pinned Claude Code version, not probed per call.
+- **Not taken:**
+  - the clone's `CLAUDE.md` as `--append-system-prompt-file`, a copy that loses subdirectories, imports and rules;
+  - hiding `/workspace/.claude` under a mount, which shows as deletions in the clone;
+  - `allowManagedHooksOnly` with the hook moved into managed settings;
+  - a `SessionStart` liveness hook.
+
+**Work.** `migration/m2.md` M2.1: the spike in `factory`'s container (after #0-284's code leaves it), then the same
+on the VM in a task container, in one session with #0-284's AC8. What it measures, with a planted clone:
+- its `.claude/settings.json` and `~/.claude/settings.json` each hold `disableAllHooks: true`, a hook of their own,
+  an `implementer.md`, an `env` block (`CLAUDE_CONFIG_DIR`, a `CLAUDE_CODE_*` variable), and a second plugin through
+  `extraKnownMarketplaces` and `enabledPlugins`;
+- `~/.claude/CLAUDE.md`, `~/.claude/rules/`, an output style and `~/.claude.json` are planted;
+- its `CLAUDE.md` holds a marker.
+
+The steps:
+1. under the managed file alone: the marker repeated, the planted hook and agent with no effect, the plugin's hook
+   refusing `run_in_background`;
+2. the same with `--restricted` and `--tools` naming each tool of the agent's frontmatter;
+3. the init event of each, with the agent with and without Bash.
+
+ADR-0064 is then amended with the chosen form. #0-301 writes the managed file, its mount, the flags and the check.
 
 **Acceptance criteria.**
-AC1. `m2.md`'s Record holds the chosen form of the call, whether hooks run, and the init event of one recorded call.
-AC2. The successor of ADR-0058's probe is decided, as an amendment of ADR-0058 or a new ADR.
-AC3. From #0-299's research: whether `-p --agent factory:implementer` runs the plugin's agent, and the flags that keep
-     the clone's `.claude/settings.json` and hooks out of the session while its `CLAUDE.md` still loads, are recorded in
-     `m2.md` with the init event that shows them.
+AC1. `m2.md`'s Record holds the chosen form of the call (with or without `--restricted`, by ADR-0064 point 2's rule)
+     and the init event of one recorded call.
+AC2. The successor of ADR-0058's probe is decided (ADR-0064, done in this item's decisions) and the spike records the
+     init event's fields it checks, on the VM's Claude Code.
+AC3. The spike records, for each form measured, on `factory`'s container's Claude Code and on the VM's:
+     - whether the clone's `CLAUDE.md` loads;
+     - whether any of the planted set takes effect;
+     - whether `--plugin-dir` loads under `strictKnownMarketplaces: []`;
+     - whether the plugin's hook still refuses `run_in_background`.
+AC4. ADR-0064 is amended with the result: the form chosen, and without `--restricted` the settings keys the managed
+     file pins.
 
 ### 0-301. The dispatcher runs no phase of a task (migration steps M2.2–M2.3)
 
 **Type:** ci · **Priority:** High · **Status:** Open (ADR-0063, 2026-11-21).
 **Autopilot:** human-only · **Risk:** high · **Complexity:** high · **Depends on:** #0-300, #0-280, #0-284, #0-249, #0-283
-**Touches:** the repository `profitbuild/factory` (dispatcher/src/flow/, settings/autopilot.json, its tests and fixtures)
+**Touches:** the repository `profitbuild/factory` (dispatcher/src/flow/, dispatcher/src/container/ for the managed settings' mount, the managed settings file, its tests and fixtures)
 
 **Problem.** After the spike the dispatcher still has no agent call and no phases, and `backlog-autopilot.js`'s
 control flow lives only in incident-platform.
@@ -4416,8 +4481,15 @@ control flow lives only in incident-platform.
   calls, and review fixes by finding id;
 - `stopItem`, the limits and the breaker, as `backlog-autopilot.js` has them;
 - not ported: pick, review rounds, verify, acceptance, ship (ADR-0063 D3);
-- `factory`'s `settings/autopilot.json`, which the call passes, written from what #0-300 found (permission mode,
-  allow rules, the flags that keep the clone's settings out): no earlier item writes it.
+- the factory's managed settings, mounted read-only on the task container's `/etc/claude-code` (ADR-0064: they
+  replace a `settings/autopilot.json` passed by `--settings`, whose permission rules `allowManagedPermissionRulesOnly`
+  would ignore), with the mount in the exact mount comparison and #0-284's `HostConfig` table (ADR-0064 amends
+  ADR-0062 point 4); `strictKnownMarketplaces: []` and `plugins` checked as exactly the factory's; the call's
+  environment closed by `/usr/bin/env -i` after `/usr/bin/timeout`, with a list that carries the accepted
+  `containerEnv` and `DISABLE_AUTOUPDATER=1` (ADR-0064 point 5); a container kept one run, review fixes a new run
+  (ADR-0064's Consequences); the call's flags as
+  #0-300's spike decided; and the init event checked whole before the answer (ADR-0064 point 3). No earlier item
+  writes them.
 
 **Acceptance criteria.**
 AC1. A call with no `structured_output`, or an init event with `plugin_errors` or not the expected agent and tools, stops the task (tests with recorded `stream-json` fixtures); the expected tools are the pinned Claude Code's for that agent (with Bash it holds no Grep or Glob, `m2.md` M2.2).
