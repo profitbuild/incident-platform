@@ -142,9 +142,26 @@ workflow in `.claude/workflows/`), in the order of the approved queue `.ai/plan/
 - The factory is migrating to ADR-0055's target one step at a time (ADR-0063's M1–M12): `.ai/context/migration.md` maps
   each step to its backlog items and its plan file (`.ai/context/migration/m<N>.md`). Read it before any migration work;
   a PR that changes a step's items updates it and the step's file.
-- The "Working style" below is for interactive sessions with the owner. An autopilot agent cannot ask:
-  it follows its own definition in `.claude/agents/` (decide and record a reversible choice in an ADR,
-  stop the item as BLOCKED on an irreversible or ambiguous one).
+- The "Working style" below is for interactive sessions with the owner. An agent of the factory cannot ask:
+  it follows its own definition (decide and record a reversible choice in an ADR, stop the item as BLOCKED on an
+  irreversible or ambiguous one). That definition is the old path's in `.claude/agents/` until M4 (#0-290), or
+  `factory`'s plugin's (`factory:<agent>`, ADR-0060 D5) on the dispatcher's path, which reads this product as below.
+
+### This product, for the factory's agents (`factory:*`)
+
+The plugin's agents name no product (backlog #0-299); they read this file first, then the files below, at their
+source. This part says where things are, not what they say. The task names the item and its own files.
+- **The item:** its section in `BACKLOG.md` (until the queue moves to GitHub Issues, M5).
+- **A task's record:** `.ai/work/<item>/`, each file from its template in `.ai/work/_template/`.
+- **An ADR:** the procedure of `.claude/skills/write-adr/SKILL.md`, read as a document and followed step by step (a
+  plugin agent does not load it as a skill).
+- **The rules your role reads:** `.ai/README.md` "Step 4", the row of your role (architect, implementer); for
+  planning also `.ai/context/project.md` and the ADRs of the areas touched.
+- **What stops an item, and what no agent writes:** `.ai/rules/ready.md` (point 3), `.ai/rules/implementation.md`
+  and `.ai/rules/protected-paths.md`.
+- **Commands:** the "Commands" block of this file. **The gate:** the `gate` of `.factory/adapter.json`.
+- **Commits:** on the dispatcher's path the dispatcher commits, from your answer's `commitMessage` (M2.4); you do not
+  commit, whatever a rule file written for the old path says.
 
 ## Conventions
 
@@ -157,8 +174,8 @@ workflow in `.claude/workflows/`), in the order of the approved queue `.ai/plan/
 
 ## Working style (read before implementing anything)
 
-> Applies to interactive sessions with the owner. Autopilot agents follow `.claude/agents/<name>.md`
-> and `.ai/rules/` instead (see "AI factory" above).
+> Applies to interactive sessions with the owner. The factory's agents follow their own definitions (the old path's
+> `.claude/agents/<name>.md`, or `factory`'s plugin's `factory:<name>`) and `.ai/rules/` instead (see "AI factory" above).
 
 - **Analysis before code.** For anything beyond a trivial one-line fix:
     1. Describe the current state and its impact on the rest of the system.

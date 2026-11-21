@@ -41,7 +41,8 @@ Legend:
 
 - Stages 0 to 3 are done, and stage 4's 4.1, 4.2 and 4.3a–d (records in `stage-1.md` … `stage-4.md`).
 - **M1 done** (4.3d, #0-278, 2026-11-21): `factory` PR #20, PR #678 and its trial on the VM (`stage-4.md` "4.3").
-- **Current: M2** (`migration/m2.md`), its first item #0-299.
+- **Current: M2** (`migration/m2.md`): M2.0 (#0-299) done 2026-11-21, `factory` PR #21; next #0-300 (the spike, part
+  answered by M2.0's measurements).
 - The old path (`/backlog-autopilot` in the VM's devcontainer, the rollback that shares the VM by time) still runs
   until M4.
 

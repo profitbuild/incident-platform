@@ -92,7 +92,8 @@ ADR-0055's 6b gates (ArchUnit, Squawk, commitlint, TODO) are ordinary items from
   with `feature-planner` comes in M8. An autonomous planner gets no step. Its entry condition is "build slots
   idle for lack of Ready tasks".
 - **G4: reviewers without Bash.** `review-*`, `acceptance-reviewer` and `verifier` hold `Read`, `Grep`, `Glob`
-  (the verifier also `WebFetch` to its allow-list). The dispatcher prepares the review's workspace (diff, base
+  (the verifier also `WebFetch` to its allow-list), never Bash as well: with Bash in its tools Claude Code drops Grep
+  and Glob (tools reference; measured in M2.0, `m2.md`). The dispatcher prepares the review's workspace (diff, base
   and head files, issue, brief, CI artifacts).
   - Two review slots, one review per PR at a time, `factory/review` set on the SHA reviewed.
   - The head is read again before publishing; a moved head gets a comment, no status.

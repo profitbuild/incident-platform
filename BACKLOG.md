@@ -187,7 +187,6 @@ Code, Javadoc, config comments and commits reference items as `backlog #N`.
 | [0-296](#0-296-the-factorys-sessions-still-depend-on-hooks-that-match-the-text-of-an-agents-commands-migration-step-m7) | The factory's sessions still depend on hooks that match the text of an agent's commands (migration step M7) | ci | Medium | Open |
 | [0-297](#0-297-a-feature-cannot-be-planned-with-the-owner-cut-into-tasks-and-traced-across-its-prs-migration-step-m8) | A feature cannot be planned with the owner, cut into tasks and traced across its PRs (migration step M8) | design | Medium | Open |
 | [0-298](#0-298-the-private-repository-holdout-cloud-and-auto-merge-steps-have-no-items-migration-steps-m9m12) | The private repository, holdout, cloud and auto-merge steps have no items (migration steps M9–M12) | design | Low | Open |
-| [0-299](#0-299-the-build-agents-definitions-are-not-in-factorys-plugin-migration-step-m20) | The build agents' definitions are not in `factory`'s plugin (migration step M2.0) | ci | High | Open |
 | [0-300](#0-300-how-a-plugins-agent-runs-as-claude--ps-main-thread-is-not-known-migration-step-m21) | How a plugin's agent runs as `claude -p`'s main thread is not known (migration step M2.1) | ci | High | Open |
 | [0-301](#0-301-the-dispatcher-runs-no-phase-of-a-task-migration-steps-m22m23) | The dispatcher runs no phase of a task (migration steps M2.2–M2.3) | ci | High | Open |
 | [0-302](#0-302-agents-would-commit-their-own-work-with-no-trailer-of-run-or-agent-migration-step-m24) | Agents would commit their own work, with no trailer of run or agent (migration step M2.4) | ci | High | Open |
@@ -4372,42 +4371,6 @@ outline; the isolation before M12 starts with a Sysbox spike unless #0-285's way
 AC1. Each of M9, M10, M11, the isolation and M12 has its full plan and its items before its first item starts.
 AC2. Auto-merge is not switched on until the eight conditions of `migration.md` hold, each recorded.
 
-### 0-299. The build agents' definitions are not in `factory`'s plugin (migration step M2.0)
-
-**Type:** ci · **Priority:** High · **Status:** Open (ADR-0063, 2026-11-21).
-**Autopilot:** human-only · **Risk:** high · **Complexity:** medium · **Depends on:** #0-278
-**Touches:** the repository `profitbuild/factory` (.claude-plugin/, agents/, hooks/, a test, CI), factory (CLAUDE.md, owner-only: what the factory's agents need of this product)
-
-**Problem.** ADR-0060 D5 loads the factory into a task container as a read-only plugin from `/opt/factory`, but
-`factory` holds no agent definition (only `.claude/settings.json`, checked 2026-11-21). The build agents exist only in
-incident-platform, and their text names this product's paths and rules (`.ai/rules/implementation.md`, `.ai/work/`,
-`BACKLOG.md`, `scripts/factory/run-tests.sh`), which `factory` may not (ADR-0055). Claude Code ignores a plugin
-agent's frontmatter `hooks:`, so `foreground-bash` (the turn budget, #0-206) would be lost in a plain move.
-
-**Decided with the owner (2026-11-21, `/research` of #0-299):** option C, product-neutral agents in `factory`'s plugin,
-and way (a) for product knowledge: the agent's text starts by reading the product's `CLAUDE.md` (with Read, whether
-or not it loads by itself) and reads what it points to; no adapter field until a product needs another entry point.
-The architect's boundary hooks are not ported: its write scope becomes the dispatcher's check in #0-302 (review round 1
-of this plan, the owner's option (b)). The old path's three definitions stay here until M4
-(#0-290). The plan was corrected in `migration/m2.md` M2.0 before any code.
-
-**Work.** `migration/m2.md` M2.0: in `factory`, the plugin with the three product-neutral agents (no commit: M2.4),
-`hooks/hooks.json` with `foreground-bash`, and a test of product neutrality; here, `CLAUDE.md`'s part for the
-factory's agents. The `spring-boot` profile stays in the product's rules until M6.1 (#0-294).
-
-**Acceptance criteria.**
-AC1. `factory`'s `agents/` names no path, module or rule of incident-platform, and no agent holds a frontmatter `hooks:`
-     (a test in `factory`, with refused patterns that include this product's).
-AC2. A `claude --plugin-dir` session's init event lists `factory:architect`, `factory:implementer` and
-     `factory:implementer-light`, and the plugin's `foreground-bash` refuses a Bash call in the background (recorded in
-     `m2.md`).
-AC3. `CLAUDE.md` names, for the factory's agents, where this product keeps a plan, an ADR and the rule files a task
-     reads, so the product-neutral agents find them by way (a); its "AI factory" line no longer sends them only to
-     `.claude/agents/`, the old path's copies.
-AC4. The old path is untouched: `.claude/agents/architect.md`, `implementer.md`, `implementer-light.md` and their
-     tests (`test-autopilot-workflow.mjs`, `check-hook-entries.rb`, `check-agent-commands.rb`) are unchanged and pass;
-     #0-290 (M4) removes them.
-
 ### 0-300. How a plugin's agent runs as `claude -p`'s main thread is not known (migration step M2.1)
 
 **Type:** ci · **Priority:** High · **Status:** Open (ADR-0063, 2026-11-21).
@@ -4418,6 +4381,14 @@ AC4. The old path is untouched: `.claude/agents/architect.md`, `implementer.md`,
 Three things are not known: whether `--agent <name>` works for this, or whether the definition's body has to be
 passed as a system prompt with its tools and model; whether the plugin's hooks run in that mode; and what replaces
 ADR-0058's isolation probe.
+
+**Answered already (2026-11-21, #0-299's measurements, `m2.md` Record):** `-p --agent factory:implementer` runs the
+plugin's agent, its init event lists the agents, tools and no `plugin_errors`, and the plugin's hook runs in it. Left:
+keeping the clone's `.claude/settings.json` and hooks out while `CLAUDE.md` is still read (`--restricted` is a
+candidate: measured with `--plugin-dir`, `--agent factory:<name>`, the plugin's hook, Bash only through `--tools`, and
+the permissions channel it still reads), the probe's successor, and the same on the VM in a task container, with the
+init event's `tools` on the VM's Claude Code (not pinned until #0-249/#0-283) for an agent with and without Bash (with
+Bash, Claude Code drops Grep and Glob).
 
 **Work.** `migration/m2.md` M2.1, one trial task on the VM. Proposal for the probe: the `stream-json` init event's
 agent, tools and `plugin_errors`.
@@ -4432,7 +4403,7 @@ AC3. From #0-299's research: whether `-p --agent factory:implementer` runs the p
 ### 0-301. The dispatcher runs no phase of a task (migration steps M2.2–M2.3)
 
 **Type:** ci · **Priority:** High · **Status:** Open (ADR-0063, 2026-11-21).
-**Autopilot:** human-only · **Risk:** high · **Complexity:** high · **Depends on:** #0-300, #0-280, #0-284
+**Autopilot:** human-only · **Risk:** high · **Complexity:** high · **Depends on:** #0-300, #0-280, #0-284, #0-249, #0-283
 **Touches:** the repository `profitbuild/factory` (dispatcher/src/flow/, settings/autopilot.json, its tests and fixtures)
 
 **Problem.** After the spike the dispatcher still has no agent call and no phases, and `backlog-autopilot.js`'s
@@ -4449,7 +4420,7 @@ control flow lives only in incident-platform.
   allow rules, the flags that keep the clone's settings out): no earlier item writes it.
 
 **Acceptance criteria.**
-AC1. A call with no `structured_output`, or an init event with `plugin_errors` or not the expected agent and tools, stops the task (tests with recorded `stream-json` fixtures).
+AC1. A call with no `structured_output`, or an init event with `plugin_errors` or not the expected agent and tools, stops the task (tests with recorded `stream-json` fixtures); the expected tools are the pinned Claude Code's for that agent (with Bash it holds no Grep or Glob, `m2.md` M2.2).
 AC2. Whole runs against a fake agent reach each stop through `stopItem` with its stage (`node:test`, ported from `test-autopilot-workflow.mjs`).
 AC3. `MAX_TEST_FIXES`, `MAX_ROUNDS` and `MAX_AGENT_CALLS` each stop a run that exceeds them (tests).
 
@@ -4457,7 +4428,7 @@ AC3. `MAX_TEST_FIXES`, `MAX_ROUNDS` and `MAX_AGENT_CALLS` each stop a run that e
 
 **Type:** ci · **Priority:** High · **Status:** Open (ADR-0063, 2026-11-21).
 **Autopilot:** human-only · **Risk:** high · **Complexity:** medium · **Depends on:** #0-301
-**Touches:** the repository `profitbuild/factory` (dispatcher/src/flow/, git/, schemas/adapter.schema.json, the task's own repository under the state directory), factory (.factory/adapter.json: owner-only)
+**Touches:** the repository `profitbuild/factory` (dispatcher/src/flow/, git/, schemas/adapter.schema.json, the task's own repository under the state directory), factory (.factory/adapter.json, .ai/rules/implementation.md's commit line: owner-only)
 
 **Problem.** Today the agents commit with git inside the clone they write, so the trace of who added what is their
 word, and git's writing commands stay within an agent's reach (#0-236). #0-212's trailers have no writer yet.
@@ -4471,6 +4442,9 @@ Each call's changed paths (`--no-renames`) are held to its agent's write scope t
 by the agent's bare name (incident-platform: the architect to `.ai/decisions/` and `.ai/work/`, the implementers
 `["*"]`); an agent with no entry is not called (fail closed). It replaces the architect's `write-scope.sh`, which the
 plugin does not carry (#0-299, ADR-0063 as amended).
+The old path's commit lines go out of the rules the plugin's agents read: `.ai/rules/implementation.md`'s "Commit locally
+on the item's branch" is scoped to the old path here (owner-only), since `CLAUDE.md` tells the plugin's agents not to
+commit (#0-299's review); with it, `CLAUDE.md`'s "whatever a rule file written for the old path says" goes (owner).
 
 **Acceptance criteria.**
 AC1. Every commit the dispatcher makes carries both trailers, and its author is the dispatcher's (tests).

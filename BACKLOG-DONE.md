@@ -168,6 +168,7 @@ resolvable.
 | 0-286 | the migration replanned as steps M1–M12 straight to ADR-0055's target (ADR-0063), every remaining step planned in `.ai/context/migration/`, its items #0-287 to #0-307; details in [the section](#0-286-the-migrations-plan-describes-only-the-current-stage-and-goes-through-states-it-later-removes) | PR #677 |
 | 0-278 | the product's code from `main` only, never as `dispatcher` (step 4.3d, M1): the adapter `.factory/adapter.json` read from the base, the commands in the task container, the `trustedPaths` refusal, the item lock's cases shared, the adapter checked against its version's tag at `FACTORY_COMMIT`, tried on the VM; details in [the section](#0-278-the-products-code-runs-only-from-main-step-43d) | `factory` PR #20; PRs #678, #679 |
 | 0-280 | the test gate's answers held to `factory`'s own `checkGateAnswer` at the adapter's pinned tag, every path of `run-tests.sh` in Lint Workflows (M2's precondition); details in [the section](#0-280-the-gates-schema-in-factory-and-run-testssh-here-are-checked-against-each-other-by-nothing) | PR #680 |
+| 0-299 | the build agents (`factory:architect`, `factory:implementer`, `factory:implementer-light`) product-neutral in `factory`'s plugin with its foreground-Bash hook (factory PR #21), and `CLAUDE.md`'s pointers for them; M2.0's measurements recorded (with Bash an agent loses Grep and Glob); details in [the section](#0-299-the-build-agents-definitions-are-not-in-factorys-plugin-migration-step-m20) | PR #683 |
 
 Items completed before `BACKLOG.md` existed are not listed.
 
@@ -4845,3 +4846,39 @@ AC2. The check cannot pass by not checking: a checker that takes a canary answer
 AC3. The checker is `factory`'s at the adapter's `factoryVersion`, from #0-278's checkout, whose tag is `FACTORY_COMMIT`
      (#0-278's step compares the two before it checks the tree out, so a mismatch leaves no code to run); the step runs
      after every step that holds a token, and fails without that checkout.
+
+### 0-299. The build agents' definitions are not in `factory`'s plugin (migration step M2.0)
+
+**Type:** ci · **Priority:** High · **Status:** Done, PR #683 (2026-11-21).
+**Autopilot:** human-only · **Risk:** high · **Complexity:** medium · **Depends on:** #0-278
+**Touches:** the repository `profitbuild/factory` (.claude-plugin/, agents/, hooks/, a test, CI), factory (CLAUDE.md, owner-only: what the factory's agents need of this product)
+
+**Problem.** ADR-0060 D5 loads the factory into a task container as a read-only plugin from `/opt/factory`, but
+`factory` holds no agent definition (only `.claude/settings.json`, checked 2026-11-21). The build agents exist only in
+incident-platform, and their text names this product's paths and rules (`.ai/rules/implementation.md`, `.ai/work/`,
+`BACKLOG.md`, `scripts/factory/run-tests.sh`), which `factory` may not (ADR-0055). Claude Code ignores a plugin
+agent's frontmatter `hooks:`, so `foreground-bash` (the turn budget, #0-206) would be lost in a plain move.
+
+**Decided with the owner (2026-11-21, `/research` of #0-299):** option C, product-neutral agents in `factory`'s plugin,
+and way (a) for product knowledge: the agent's text starts by reading the product's `CLAUDE.md` (with Read, whether
+or not it loads by itself) and reads what it points to; no adapter field until a product needs another entry point.
+The architect's boundary hooks are not ported: its write scope becomes the dispatcher's check in #0-302 (review round 1
+of this plan, the owner's option (b)). The old path's three definitions stay here until M4
+(#0-290). The plan was corrected in `migration/m2.md` M2.0 before any code.
+
+**Work.** `migration/m2.md` M2.0: in `factory`, the plugin with the three product-neutral agents (no commit: M2.4),
+`hooks/hooks.json` with `foreground-bash`, and a test of product neutrality; here, `CLAUDE.md`'s part for the
+factory's agents. The `spring-boot` profile stays in the product's rules until M6.1 (#0-294).
+
+**Acceptance criteria.**
+AC1. `factory`'s `agents/` names no path, module or rule of incident-platform, and no agent holds a frontmatter `hooks:`
+     (a test in `factory`, with refused patterns that include this product's).
+AC2. A `claude --plugin-dir` session's init event lists `factory:architect`, `factory:implementer` and
+     `factory:implementer-light`, and the plugin's `foreground-bash` refuses a Bash call in the background (recorded in
+     `m2.md`).
+AC3. `CLAUDE.md` names, for the factory's agents, where this product keeps a plan, an ADR and the rule files a task
+     reads, so the product-neutral agents find them by way (a); its "AI factory" line no longer sends them only to
+     `.claude/agents/`, the old path's copies.
+AC4. The old path is untouched: `.claude/agents/architect.md`, `implementer.md`, `implementer-light.md` and their
+     tests (`test-autopilot-workflow.mjs`, `check-hook-entries.rb`, `check-agent-commands.rb`) are unchanged and pass;
+     #0-290 (M4) removes them.
