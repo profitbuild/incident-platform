@@ -47,6 +47,7 @@ prov=$here/provision.sh
 
 fail() { echo "verify-pins.sh: $*" >&2; exit 1; }
 command -v docker >/dev/null || fail "docker not found"
+command -v jq >/dev/null || fail "jq not found (it reads .factory/adapter.json's factoryVersion, backlog #0-278)"
 # One value per pattern, or the script refuses: a second image or a moved line must not pass unchecked.
 one() {
   local value

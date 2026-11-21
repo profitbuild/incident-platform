@@ -46,6 +46,7 @@ root=$(cd "$here/../../.." && pwd)
 
 fail() { echo "create.sh: $*" >&2; exit 1; }
 command -v limactl >/dev/null || fail "limactl not found (brew install lima)"
+command -v jq >/dev/null || fail "jq not found (it reads .factory/adapter.json's factoryVersion, backlog #0-278)"
 
 # The list into a variable first: `limactl list | grep -q` under pipefail can fail when grep exits before limactl
 # has written everything (SIGPIPE), and a failure here would read as "no such instance" (review round 1).

@@ -4641,7 +4641,8 @@ AC3. `audit-data.sh` counts a PR by `app/profitbuild-builder` (its test).
 repository runs.
 
 **Work.** `migration/m3.md` M3.6: the adapter's pinned tag is the one source; the provision reads it, and the copy
-check compares with that tag.
+check compares with that tag. The checks that hold the two pins equal go with the second pin: the `factoryVersion` pattern
+is copied in three places (`ci.yml`'s adapter step, `create.sh`, `verify-pins.sh`, #0-278), removed together.
 
 **Acceptance criteria.**
 AC1. `provision.sh` takes the factory's version from `.factory/adapter.json` and holds no pin of its own (test or check).

@@ -81,8 +81,8 @@ Legend:
   - the adapter validated in CI against its version, the tag checked at `FACTORY_COMMIT`;
   - `FACTORY_COMMIT` at `b5e29d83`;
   - `maven-settings.xml` read beside `_common.sh`.
-- Left, for the trial's PR that closes #0-278: `factory`'s tag `v0.1.0` at `b5e29d83` (the owner's, before this
-  side's CI can pass), the VM recreated, one trial run.
+- `factory`'s tag `v0.1.0` at `b5e29d83`: created by the owner on 2026-11-21, `verify-pins.sh` passed.
+- Left, for the trial's PR that closes #0-278: the VM recreated, one trial run.
 - Exit: one run to the end of the task container from `main`'s base.
 - Plan: `stage-4.md` "4.3", the decisions for 4.3d.
 

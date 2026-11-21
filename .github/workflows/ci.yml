@@ -847,8 +847,9 @@ jobs:
       # repository settings, nor the admins, nor the writers (#0-272), so
       # those are compared only when the owner runs it (the summary names
       # them). Last but one in the job (the adapter's step, which runs
-      # factory's code, follows every step that holds a token), so a
-      # GitHub outage or a changed setting hides no lint finding above. Its
+      # factory's code, follows every step that holds a token, and runs
+      # even when this one is red), so a GitHub outage or a changed
+      # setting hides no lint finding. Its
       # cases run first, in the step above.
       - name: The repository settings match .github/repository-settings/
         env:
@@ -862,16 +863,21 @@ jobs:
             ruby .github/scripts/repository-settings.rb check
           fi
 
-      # Backlog #0-278 AC10, ADR-0061 (amended 2026-11-21): .factory/adapter.json keeps the schema of the factory version
-      # it names, checked by that version's own code (dispatcher/src/adapter.mjs, checkAdapter), the code the dispatcher
-      # reads it with; and that version's tag is at provision.sh's FACTORY_COMMIT, the code the build VM runs (two pins of
-      # one version, until #0-307 makes the adapter's the only one). `factory` at the tag, cloned without a token (public);
-      # a tag is the admin's alone and cannot move (factory's rulesets). The schema checks spelling only: the paths
-      # against the base's tree are the dispatcher's check at run time. A refusal names where the adapter breaks the
-      # schema, never a value (SEC-31). Last in the job, after every step that holds a token: the step runs `factory`'s
-      # code, so nothing it writes to GITHUB_ENV or GITHUB_PATH reaches a later step (review round 2 of #0-278; the
-      # token is this job's read-only one either way, which a job of its own would also give its post steps).
+      # Backlog #0-278 AC10, ADR-0061 (amended 2026-11-21): .factory/adapter.json keeps the schema of
+      # the factory version it names, checked by that version's own code (dispatcher/src/adapter.mjs,
+      # checkAdapter), the code the dispatcher reads it with; and that version's tag is at provision.sh's
+      # FACTORY_COMMIT, the code the build VM runs (two pins of one version, until #0-307 makes the
+      # adapter's the only one). `factory` at the tag, fetched without a token (public); a tag is the
+      # admin's alone and cannot move (factory's rulesets). The schema checks spelling only: the paths
+      # against the base's tree are the dispatcher's check at run time. A refusal names where the adapter
+      # breaks the schema, never a value (SEC-31). Last in the job, after every step that holds a token:
+      # the step runs `factory`'s code, so nothing it writes to GITHUB_ENV or GITHUB_PATH reaches a later
+      # step (review round 2 of #0-278; the token is this job's read-only one either way, which a job of
+      # its own would also give its post steps). It runs even when a step above failed (`!cancelled()`):
+      # the settings step is red by design until the owner applies a settings change, and a pull request
+      # merged past that red must still have had its adapter checked (review round 3 of #0-278).
       - name: The adapter keeps its factory version's schema
+        if: ${{ !cancelled() }}
         run: |
           set -euo pipefail
           version=$(jq -er '.factoryVersion | select(test("\\Av[0-9]+\\.[0-9]+\\.[0-9]+\\z"))' .factory/adapter.json) \
