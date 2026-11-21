@@ -4002,8 +4002,9 @@ AC3. Claude Code's install is pinned by version and checksum, and the pin is che
 **Type:** ci · **Priority:** Medium · **Status:** Open (found by the review of `factory` PR #18, #0-277, 2026-11-20;
 for migration stage 4, step 4.4).
 **Autopilot:** human-only · **Risk:** medium · **Complexity:** medium · **Depends on:** #0-277
-**Touches:** the repository `profitbuild/factory` (the dispatcher's task container, its refusals and its starter, and their tests, and its README), decisions
-(ADR-0062 point 4, if the order changes what it says), root (README "Infrastructure Hardening")
+**Touches:** the repository `profitbuild/factory` (the dispatcher's task container, `daemon.mjs`'s refusals, its
+starter, and their tests, and its README), decisions (ADR-0062 points 4 and 6, amended before the code), root (README
+"Infrastructure Hardening", the pin and the tag once `factory` holds the code, `.ai/context/migration/m2.md`)
 
 **Migration (ADR-0063, 2026-11-21):** step M2 (was 4.4), before #0-301's first agent call.
 
@@ -4021,24 +4022,59 @@ unnoticed, and `factory`'s README says a static test holds it, which checks only
 the owner sees only a failed call's command and exit code on the VM. And the refusal of a feature's label entry names
 its id and digest, not the differing keys ADR-0062 point 4 says.
 
-**Work.** `devcontainer build`, the label checked, then `up` from the recorded image ID, so a new task and a resumed one
-take one path and nothing of the product's runs before the check; the container's `HostConfig` checked whole against
-what the dispatcher set; refusals naming a position (an index, "an unexpected mount") or a hash, never a value the
-daemon gave; a static guard that nothing but the starter reads a call's stderr (or the starter keeping it to itself);
-a bounded copy of a failed call's stderr in a file only the owner reads (mode 600 under the run's state directory),
-its path, never its content, in the refusal; the feature entry's refusal naming the differing keys.
+**Decided with the owner (2026-11-21, `/research` of #0-284, option A with A1; ADR-0062 points 4 and 6 amended):**
+- `devcontainer build` with an `--image-name` unique per `runId`, the image's ID read once from it, then everything by
+  the ID: the label held to the closed list, the ID recorded, `devcontainer up` from a configuration holding only
+  `{ image: <ID> }` (no `build`, no `features`, which would build another image on the checked one), and after it the
+  container's `Image` equal to the ID. Nothing of the label or the configuration runs before the check, and a new task
+  and a resumed one take one path. A retag of the name between the build and the read is, from M5, part of the shared
+  daemon's risk ADR-0063 G1-b accepts (review round 1 of these decisions). Not the dispatcher making the container itself (`docker create`,
+  then the lifecycle by `docker exec`), which would rewrite the devcontainer spec's merging, the feature's entrypoint and
+  the hooks, and reverse ADR-0062's `devcontainer` without the end state needing it (stage C pulls the image by digest,
+  and `up` from it stays).
+- `HostConfig` held whole by a closed table of its fields (the dispatcher's value or Docker's default, `Runtime` `runc`
+  among them; a field off the table with a value other than its default refuses), not by a difference against a
+  reference container, which would carry `factory`'s `daemon.json` into the reference and hide it.
+- The daemon's own options read before `up`: `docker info`'s `SecurityOptions` hold `seccomp` with `profile=builtin`,
+  `rootless` and `cgroupns`, and its default runtime is `runc` (probed on the build VM, Docker 29.9.3), so a `daemon.json`
+  the agent's side wrote refuses the task before any container.
+- Refusals name a position, a count or an ID the daemon assigns, never a name, key, path or capability it returned;
+  the sweep's refusals in `daemon.mjs` name containers, networks and volumes by ID. The rollback's refusal is left as it
+  is: it goes with the rollback at M4 (#0-290), and the intermediate state gets no work it does not need.
+- The starter keeps a call's stderr from every caller: bounded, in a mode-600 file under the run's state directory, its
+  path in the refusal of a failed call.
+- A feature's differing entry is refused naming the keys of the factory's list whose values differ and the count of
+  keys off the list (those are the daemon's text, not named), so AC7 and AC4 do not contradict each other.
+- Not reached here, kept for #0-285: a daemon default that neither `HostConfig` nor `docker info` shows.
+
+**Work.** In `factory`: `devcontainer build` under `--config` (where its lockfile goes, tried on the VM as #0-277's
+`up` was), the label checked, the image's ID recorded in `task.json`, then `up` from it; `checkContainer` holding
+`HostConfig` by the table; every refusal of `task-container.mjs`, `task-config.mjs`'s `checkImageMetadata` and
+`daemon.mjs` reworded to positions, counts and IDs; the starter returning no stderr, only the path of its bounded copy;
+`factory`'s README naming what holds it. Here, once `factory` holds the code: `factoryVersion` and `FACTORY_COMMIT` moved
+together, README "Infrastructure Hardening", a trial on the VM.
 
 **Acceptance criteria.**
-AC1. No lifecycle command of a task configuration runs before the image's label passed the closed list (a test).
-AC2. A new task and a resumed one start their container the same way, from the image ID (a test).
-AC3. The container's `HostConfig` fields beyond the dispatcher's are refused (each a test).
-AC4. No refusal, `task.json` reason or line of the dispatcher's stderr holds a label key, a mount destination or an
-     object name the daemon gave (tests with a planted secret-shaped value in each).
-AC5. A module of `src/` other than the starter that reads a call's stderr fails a static test; `factory`'s README
-     names what that test holds.
+AC1. No lifecycle command of a task configuration, and no entry of the image's label, takes effect before the label
+     passed the closed list: the build is a call of its own, under an image name unique per `runId`, and a label the
+     list refuses ends the task before any container exists (a test).
+AC2. A new task and a resumed one start their container the same way, from the image ID: `up`'s configuration holds
+     `image` and no `build` or `features`, and a container whose `Image` is not the recorded ID is refused (tests).
+AC3. The container's `HostConfig` is held by a closed table: each field the dispatcher's value or Docker's default
+     (`Runtime` among them), a field the table does not hold refused unless it has its default (each a test, one with a
+     field the table lacks); and before `up`, a daemon whose `docker info` security options or default runtime are not
+     the expected ones refuses the task (tests with each changed).
+AC4. No refusal, `task.json` reason or line of the dispatcher's stderr holds a label key, a mount destination, a
+     capability or an object name the daemon gave, the sweep's refusals in `daemon.mjs` included, the rollback's not
+     (it goes at M4) (tests with a planted secret-shaped value in each).
+AC5. No module of `src/` but the starter can read a call's stderr: the starter returns none (a test of its result's
+     shape), and `factory`'s README says so.
 AC6. A failed call's stderr is kept, bounded, in a mode-600 file of the run's state directory, which the refusal names
      by path (a test).
-AC7. The refusal of a feature's label entry names the keys that differ from the list's (a test).
+AC7. The refusal of a feature's label entry names the keys of the factory's list that differ and counts the keys off
+     the list, naming none of them (a test).
+AC8. A trial on the VM starts a task's container through the new order, from the factory version that holds it
+     (recorded in `m2.md`).
 
 ### 0-285. What a task leaves in `factory`'s reach outside the daemon is decided before a task holds a credential
 

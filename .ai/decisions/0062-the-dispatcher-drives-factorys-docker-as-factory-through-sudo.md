@@ -7,7 +7,9 @@
   start on an empty daemon and what it cannot see, the directories made as `dispatcher`; point 4 amended on the review
   of `factory` PR #18: the dispatcher's mounts given as `runArgs`); amends ADR-0060's
   Consequences on the task image (point 6); point 5 (the rollback shares the VM by time) reversed by ADR-0063
-  (2026-11-21): the rollback goes at M4 (#0-290)
+  (2026-11-21): the rollback goes at M4 (#0-290); points 4 and 6 amended by #0-284 (2026-11-21, before its code): the
+  image built and its label checked before any container, the container's `HostConfig` held whole, no refusal holding
+  a value the daemon gave, a call's stderr kept from every caller
 - **Backlog:** #0-277; point 4 amended on #0-282's review and on the review of `factory` PR #18; points 1, 2, 5, 8 and
   the Consequences on the review of #0-277's VM part; their end-state follow-ups #0-284, #0-285
 - **Date:** 2026-11-20
@@ -112,7 +114,42 @@ Two facts the item had not weighed (the `/research` of 2026-11-20):
      and a setting); the list holds the current ones. A feature's new version (`devcontainer upgrade` moving the
      lockfile) is refused until the list holds its entry: the owner moves the factory's list and `FACTORY_COMMIT`
      first, the product's lockfile after (it is shared with the owner's container), and the refusal names the id, the
-     digest and the differing keys.
+     digest and the differing keys (which keys, amended below by #0-284).
+   - **Amended (2026-11-21, #0-284, the owner, before its code): nothing of the label or the configuration takes
+     effect before it is checked.**
+     - **The order:** `devcontainer build` (the override's Dockerfile and features, under `--config`, with an
+       `--image-name` of the run's own, unique per `runId`), then the image's ID read once from that name, then
+       everything by the ID: its `devcontainer.metadata` label held to the list as above, the ID recorded in
+       `task.json`, and `devcontainer up` from it. The configuration `up` is given holds `{ image: <ID> }` and no `build`
+       and no `features` (either would make the CLI build another image on the checked one, whose label no one read),
+       the way a resumed task already starts; after `up`, the container's `Image` must equal the recorded ID. So no
+       lifecycle command and no entry of the label runs before the check, and a new task and a resumed one start the
+       same way. The name is read once, right after the build, on a daemon the agent's side can write: until M5 one
+       task runs at a time, and from M5 the retag of that name by another task's code is part of the shared daemon's
+       risk ADR-0063 G1-b accepts.
+     - **The container's `HostConfig` is held whole, by a closed table of its fields:** each field has the value the
+       dispatcher set (`CapAdd` within the configuration's, the mounts of the list, `SecurityOpt` the listed
+       feature's, the `runArgs` the override passes, `Runtime` the daemon's `runc`, which `HostConfig` records) or
+       Docker's default; a field the table does not hold with a value
+       other than its default refuses the task, so a new Docker version's field fails loudly until the table holds
+       it. Not a difference against a reference container made on the same daemon, which would carry the daemon's own
+       defaults (its `daemon.json`, the agent's side) into the reference and hide them.
+     - **No refusal, `task.json` reason or line of the dispatcher's stderr holds a value the daemon gave:** a label's
+       key, a mount's destination, a capability's name, a container's, network's or volume's name. A refusal names a
+       position (an index, "an unexpected mount", a count) or an ID the daemon assigns (hex, never chosen by the
+       task), as the rollback's and the sweep's refusals then do with containers, networks and volumes.
+     - **A call's stderr reaches no caller:** the starter keeps it, bounded, in a file of mode 600 under the run's
+       state directory and returns its path, never its text; the refusal of a failed call names that path, which
+       only the owner reads. A module that would quote stderr has none to quote.
+     - **A feature's entry that differs** is refused naming the keys of the factory's list whose values differ, and
+       how many keys the entry holds that the list does not: those keys are the daemon's text, so not named.
+     - **The daemon's own options are read before `up`:** `docker info`'s `SecurityOptions` must hold
+       `seccomp` with `profile=builtin`, `rootless` and `cgroupns`, and its default runtime `runc`, so a `daemon.json`
+       the agent's side wrote (an unconfined or custom seccomp profile, another runtime) refuses the task before any
+       container (probed on the build VM, Docker 29.9.3: `["name=seccomp,profile=builtin","name=rootless",
+       "name=cgroupns"]`).
+     - **What this does not reach:** a default of `factory`'s daemon that neither `HostConfig` nor `docker info` shows
+       is the image store's and daemon's residual already accepted below and kept for #0-285.
 5. **No credential lives on `factory`'s daemon while the dispatcher runs; the rollback shares the VM by time.** A
    test with the Docker socket (`docker-outside-of-docker`, for Testcontainers) can mount any volume of that daemon
    itself, whatever the dispatcher mounts. So the rollback (today's `/backlog-autopilot` in the VM's devcontainer)
@@ -134,7 +171,8 @@ Two facts the item had not weighed (the `/research` of 2026-11-20):
      before it creates the task container: with each side visible before it looks at the other, a rollback still
      building its image when the run starts is seen by one of the two checks;
    - a refusal on either side names the containers it found and the command that clears them (`cli.mjs sweep`, the
-     dispatcher's sweep alone, for what a killed run left);
+     dispatcher's sweep alone, for what a killed run left); the sweep's refusals name them by ID from #0-284 on (point 4,
+     amended), and the rollback's go with the rollback at M4;
    - otherwise its start-of-run sweep (point 7) removes everything of the daemon but its own cache volume
      `factory-dispatcher-m2`: a killed run's task container and what its tests left running (Testcontainers' and Ryuk's,
      unlabelled), a rollback's stopped container and the compose stack it started, every network, and every volume, the
@@ -146,7 +184,8 @@ Two facts the item had not weighed (the `/research` of 2026-11-20):
    Mac's loopback through `host.docker.internal`; #0-116: Docker Desktop's daemon).
 6. **The task image in v0 is built on the VM from the product's task configuration** (ADR-0055: "until stage C
    the task image is built there"): `taskImage` is that configuration's path in the product (relative, never a value
-   starting with `-`, never leaving the clone); `devcontainer up` builds it as `factory`; the dispatcher records the
+   starting with `-`, never leaving the clone); `devcontainer build` builds it as `factory` (until #0-284's code is
+   in `factory`, `devcontainer up` does, the build and the container's start in one call); the dispatcher records the
    image's ID (`sha256:<64 hex>`) in `task.json` and runs every container of the task from that ID. A registry digest
    (`<name>@sha256:<64 hex>`) comes with the image built in CI and pulled from GHCR (stage C, or the stage that moves
    the images to CI first); a tag is never taken. The image must hold `timeout` (coreutils), which point 7 runs.
@@ -240,4 +279,8 @@ Two facts the item had not weighed (the `/research` of 2026-11-20):
   mounted into a container; a factory checkout `factory` can write; a mount, run argument or host command the product's
   configuration chose beyond the listed feature's; a field or value off the task configuration's list carried; a
   credential on `factory`'s daemon while the dispatcher runs; an image by tag, or one other than the ID recorded for
-  the task; a call's process left running past its timeout.
+  the task; a call's process left running past its timeout; from #0-284: a container made before the image's label
+  passed the list, a configuration given to `up` that holds `build` or `features`, a container whose `Image` is not the
+  recorded ID, a `HostConfig` field the closed table does not hold, a daemon whose `docker info` security options are
+  not the expected ones, a refusal or `task.json` reason holding a value the daemon gave, and a starter that hands a
+  call's stderr to its caller.
