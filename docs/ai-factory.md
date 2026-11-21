@@ -231,7 +231,7 @@ read these files) and `verify-pins.sh` must print seven `verified:` lines in the
 - Docker's apt key: `DOCKER_KEY_FPR`, which changes only when Docker rotates its key, confirmed in three places first;
 - Docker CE: `DOCKER_VERSION` and `CONTAINERD_VERSION`, versions of Docker's noble repository
   (`apt-cache madison docker-ce` in the VM lists them);
-- the dispatcher's code: `FACTORY_COMMIT`, a commit on `profitbuild/factory`'s `main` (#0-272), until 4.7's tag;
+- the dispatcher's code: `FACTORY_COMMIT`, a commit on `profitbuild/factory`'s `main` (#0-272), until M3's tag pin (`.ai/context/migration/m3.md`, M3.6);
 - the helper image of the tasks' work directories: `HELPER_IMAGE` (`buildpack-deps:noble-scm` by its index digest,
   #0-277), an index Docker Hub serves with an amd64 and an arm64 image.
 **Stopping it** (12 GiB of RAM while it runs): `limactl stop factory-build`; `limactl start factory-build` brings it

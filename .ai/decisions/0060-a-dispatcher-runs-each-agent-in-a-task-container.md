@@ -7,7 +7,9 @@
   ADR-0052 are amended); D7 amended on 2026-11-20 by #0-275 (v0's one lock for the whole dispatcher) and by #0-276
   (the commits cross as a bundle into a fresh push repository); its Consequences amended on 2026-11-20 by #0-276
   (new sources of `factory`'s CI); D6, D7 and D8 amended on 2026-11-21 by #0-278 (no product code runs as
-  `dispatcher`; the path checks are its own code; the owner names the item until stage 7)
+  `dispatcher`; the path checks are its own code; the owner names the item until stage 7); D7 and D8 amended on
+  2026-11-21 by ADR-0063 (a lock per task, `--force-with-lease` to `factory/**` for a rebase, the base checked as
+  current `main`; the owner names the item until M5, the queue's step); its 4.4–4.7 plan replaced by ADR-0063's M2/M3
 - **Backlog:** #0-267 (stage 4.1); stage 4's later items are created as their turn comes, each from its step of the
   plan `.ai/context/migration/stage-4.md`
 - **Date:** 2026-11-17

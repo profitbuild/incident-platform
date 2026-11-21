@@ -136,9 +136,9 @@ workflow in `.claude/workflows/`), in the order of the approved queue `.ai/plan/
   proposes, in a PR). Changes to them, to `.claude/` and to `.github/` go through the owner
   (CODEOWNERS; `/apply-audit` for audit recommendations). The full list of paths no agent writes is
   `.ai/rules/protected-paths.md`; an item whose `**Touches:**` names one never reaches the autopilot.
-- The factory is migrating to ADR-0055's target one stage at a time: `.ai/context/migration.md` maps each stage to
-  its backlog items and names the work that has no item yet. Read it before any migration work; a PR that changes a
-  stage's items updates it.
+- The factory is migrating to ADR-0055's target one step at a time (ADR-0063's M1–M12): `.ai/context/migration.md` maps
+  each step to its backlog items and its plan file (`.ai/context/migration/m<N>.md`). Read it before any migration work;
+  a PR that changes a step's items updates it and the step's file.
 - The "Working style" below is for interactive sessions with the owner. An autopilot agent cannot ask:
   it follows its own definition in `.claude/agents/` (decide and record a reversible choice in an ADR,
   stop the item as BLOCKED on an irreversible or ambiguous one).

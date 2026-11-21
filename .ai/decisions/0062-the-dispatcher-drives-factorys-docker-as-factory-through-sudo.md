@@ -6,7 +6,8 @@
   review of #0-277's VM part, the same day: the rule's own environment, where the helper's pin lives, the rollback's
   start on an empty daemon and what it cannot see, the directories made as `dispatcher`; point 4 amended on the review
   of `factory` PR #18: the dispatcher's mounts given as `runArgs`); amends ADR-0060's
-  Consequences on the task image (point 6)
+  Consequences on the task image (point 6); point 5 (the rollback shares the VM by time) reversed by ADR-0063
+  (2026-11-21): the rollback goes at M4 (#0-290)
 - **Backlog:** #0-277; point 4 amended on #0-282's review and on the review of `factory` PR #18; points 1, 2, 5, 8 and
   the Consequences on the review of #0-277's VM part; their end-state follow-ups #0-284, #0-285
 - **Date:** 2026-11-20
