@@ -797,8 +797,18 @@ security boundary, so every rule that matters is also enforced outside the model
   image. Limits: `factory`'s image store and home are the agent's side and live across
   tasks (ADR-0062's Consequences, #0-285); `rollback-start.sh` sees only the daemon's containers and a run's `factory.task` objects, so what a task left in
   `factory`'s reach outside them survives, and a rollback with the owner's logins after a dispatcher run starts on a VM
-  made anew (accepted for the migration, while the rollback is kept, until stage 5's exit; not enforced); the task container is checked only after `up` has started it
-  (#0-284); the image's firewall sudo rule and its unpinned Claude Code are #0-283.
+  made anew (accepted for the migration, while the rollback is kept, until stage 5's exit; not enforced); the image's
+  firewall sudo rule and its unpinned Claude Code are #0-283.
+- **The task container checked before anything runs in it** (backlog #0-284, ADR-0062 points 4 and 6 as amended;
+  `factory` PR #22, pinned `v0.1.2`): the daemon's `docker info` security options and default runtime checked before
+  any container of the run, so a `daemon.json` of the agent's side refuses the run; the image built by its own
+  `devcontainer build`, its ID read once and its label held to the factory's list before any container, and the
+  container started from that ID and held to it; the container's whole `HostConfig` held by a closed table (each field
+  the dispatcher's value or Docker 29.9.3's default); no refusal, reason or sweep output quoting a value the daemon gave
+  (positions, counts, hex IDs); a call's stderr returned to no caller, kept in a mode-600 file of the dispatcher's
+  state, and a stderr that cannot be kept refuses the call. Limits: not yet tried on the VM (#0-284 AC8); the stderr
+  files are never removed and could hold a token a task printed from step 4.6 (#0-308); a volume a task names like a
+  secret makes every later sweep, so every run, refuse until the owner removes it (#0-309).
 - **builder-app's push** (backlog #0-276, stage 4.3b, ADR-0060 D7 as amended; `factory` PR #16): no git with the
   dispatcher's rights runs in a repository an agent wrote.
   - Every git is `/usr/bin/git`, started by one function alone (a static test): its `cwd` the dispatcher's, `GIT_DIR`
