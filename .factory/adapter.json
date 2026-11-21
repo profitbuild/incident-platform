@@ -17,5 +17,5 @@
   "trustedPaths": ["scripts/factory/", ".factory/"],
   "taskImage": ".devcontainer/task.json",
   "profile": "spring-boot",
-  "factoryVersion": "v0.1.1"
+  "factoryVersion": "v0.1.2"
 }

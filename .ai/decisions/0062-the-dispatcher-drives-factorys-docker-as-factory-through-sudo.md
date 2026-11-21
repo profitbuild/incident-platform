@@ -10,9 +10,12 @@
   (2026-11-21): the rollback goes at M4 (#0-290); points 4 and 6 amended by #0-284 (2026-11-21, before its code): the
   image built and its label checked before any container, the container's `HostConfig` held whole, no refusal holding
   a value the daemon gave, a call's stderr kept from every caller; point 4 amended by ADR-0064 (2026-11-21, #0-300):
-  the dispatcher's mounts gain the factory's managed settings read-only on `/etc/claude-code`
+  the dispatcher's mounts gain the factory's managed settings read-only on `/etc/claude-code`; points 4 and 5 amended
+  on the review of `factory` PR #22 (2026-11-21): the daemon's options refuse the run before any container of it, and
+  the sweep counts volumes (point 5's sweep part; its rollback part lasts until M4)
 - **Backlog:** #0-277; point 4 amended on #0-282's review and on the review of `factory` PR #18; points 1, 2, 5, 8 and
-  the Consequences on the review of #0-277's VM part; their end-state follow-ups #0-284, #0-285
+  the Consequences on the review of #0-277's VM part; their end-state follow-ups #0-284, #0-285; points 4 and 5 amended
+  on the review of `factory` PR #22 (#0-284's code)
 - **Date:** 2026-11-20
 - **Author:** human (the owner chose the options of a `/research` of #0-277 in an interactive session); written by
   Claude Code
@@ -138,17 +141,19 @@ Two facts the item had not weighed (the `/research` of 2026-11-20):
      - **No refusal, `task.json` reason or line of the dispatcher's stderr holds a value the daemon gave:** a label's
        key, a mount's destination, a capability's name, a container's, network's or volume's name. A refusal names a
        position (an index, "an unexpected mount", a count) or an ID the daemon assigns (hex, never chosen by the
-       task), as the rollback's and the sweep's refusals then do with containers, networks and volumes.
+       task), as the sweep's refusals and its output then do: containers and networks by their IDs, volumes by a
+       count, since a volume has no ID but its name (`factory` PR #22).
      - **A call's stderr reaches no caller:** the starter keeps it, bounded, in a file of mode 600 under the run's
        state directory and returns its path, never its text; the refusal of a failed call names that path, which
        only the owner reads. A module that would quote stderr has none to quote.
      - **A feature's entry that differs** is refused naming the keys of the factory's list whose values differ, and
        how many keys the entry holds that the list does not: those keys are the daemon's text, so not named.
-     - **The daemon's own options are read before `up`:** `docker info`'s `SecurityOptions` must hold
+     - **The daemon's own options are read first:** `docker info`'s `SecurityOptions` must hold
        `seccomp` with `profile=builtin`, `rootless` and `cgroupns`, and its default runtime `runc`, so a `daemon.json`
-       the agent's side wrote (an unconfined or custom seccomp profile, another runtime) refuses the task before any
-       container (probed on the build VM, Docker 29.9.3: `["name=seccomp,profile=builtin","name=rootless",
-       "name=cgroupns"]`).
+       the agent's side wrote (an unconfined or custom seccomp profile, another runtime) refuses the run before any
+       container of it, the sweep's helper included, and `cli.mjs sweep` the same (the owner's decision in the review
+       of `factory` PR #22: a daemon's options are every task's, so the run is refused, not one task; probed on the
+       build VM, Docker 29.9.3: `["name=seccomp,profile=builtin","name=rootless","name=cgroupns"]`).
      - **What this does not reach:** a default of `factory`'s daemon that neither `HostConfig` nor `docker info` shows
        is the image store's and daemon's residual already accepted below and kept for #0-285.
 5. **No credential lives on `factory`'s daemon while the dispatcher runs; the rollback shares the VM by time.** A
@@ -172,8 +177,8 @@ Two facts the item had not weighed (the `/research` of 2026-11-20):
      before it creates the task container: with each side visible before it looks at the other, a rollback still
      building its image when the run starts is seen by one of the two checks;
    - a refusal on either side names the containers it found and the command that clears them (`cli.mjs sweep`, the
-     dispatcher's sweep alone, for what a killed run left); the sweep's refusals name them by ID from #0-284 on (point 4,
-     amended), and the rollback's go with the rollback at M4;
+     dispatcher's sweep alone, for what a killed run left); the sweep's refusals name containers and networks by ID and
+     count volumes from #0-284 on (point 4, amended), and the rollback's go with the rollback at M4;
    - otherwise its start-of-run sweep (point 7) removes everything of the daemon but its own cache volume
      `factory-dispatcher-m2`: a killed run's task container and what its tests left running (Testcontainers' and Ryuk's,
      unlabelled), a rollback's stopped container and the compose stack it started, every network, and every volume, the

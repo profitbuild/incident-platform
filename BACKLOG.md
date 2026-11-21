@@ -195,6 +195,9 @@ Code, Javadoc, config comments and commits reference items as `backlog #N`.
 | [0-305](#0-305-the-dispatcher-pushes-nothing-and-opens-no-pull-request-migration-steps-m31m32) | The dispatcher pushes nothing and opens no pull request (migration steps M3.1–M3.2) | ci | High | Open |
 | [0-306](#0-306-a-dispatcher-pr-carries-no-trace-of-its-agent-calls-and-the-audits-do-not-read-it-migration-step-m33) | A dispatcher PR carries no trace of its agent calls, and the audits do not read it (migration step M3.3) | ci | Medium | Open |
 | [0-307](#0-307-the-factory-version-is-pinned-in-two-places-and-the-copy-check-compares-with-factorymain-migration-step-m36) | The factory version is pinned in two places, and the copy check compares with `factory@main` (migration step M3.6) | ci | Low | Open |
+| [0-308](#0-308-the-starters-stderr-files-are-never-removed-found-by-the-review-of-factory-pr-22) | The starter's stderr files are never removed (found by the review of `factory` PR #22) | ci | Medium | Open |
+| [0-309](#0-309-a-volume-named-like-a-secret-makes-every-later-sweep-refuse-found-by-the-review-of-factory-pr-22) | A volume named like a secret makes every later sweep refuse (found by the review of `factory` PR #22) | ci | Medium | Open |
+| [0-310](#0-310-three-small-follow-ups-of-the-review-of-factory-pr-22-0-284) | Three small follow-ups of the review of `factory` PR #22 (#0-284) | refactor | Low | Open |
 | [0-133](#0-133-incidentresolvedevent-carries-no-openedat) | `IncidentResolvedEvent` carries no `openedAt` | tech-debt | Low | Open |
 | [0-134](#0-134-diff-cover-is-installed-by-version-without-hashes) | `diff-cover` is installed by version, without hashes | ci | Low | Open |
 | [0-135](#0-135-kubectl-in-ci-is-downloaded-unverified) | kubectl in CI is downloaded unverified | ci | Low | Open |
@@ -4005,7 +4008,8 @@ AC3. Claude Code's install is pinned by version and checksum, and the pin is che
 ### 0-284. The task container is checked before anything runs in it, and its refusals hold none of the agent side's text
 
 **Type:** ci · **Priority:** Medium · **Status:** Open (found by the review of `factory` PR #18, #0-277, 2026-11-20;
-for migration stage 4, step 4.4).
+for migration stage 4, step 4.4). Code: `factory` PR #22, merged as `b3960cd8`, pinned `v0.1.2`; open: AC8, the trial on
+the VM (`m2.md` Record).
 **Autopilot:** human-only · **Risk:** medium · **Complexity:** medium · **Depends on:** #0-277
 **Touches:** the repository `profitbuild/factory` (the dispatcher's task container, `daemon.mjs`'s refusals, its
 starter, and their tests, and its README), decisions (ADR-0062 points 4 and 6, amended before the code), root (README
@@ -4636,3 +4640,69 @@ is copied in three places (`ci.yml`'s adapter step, `create.sh`, `verify-pins.sh
 **Acceptance criteria.**
 AC1. `provision.sh` takes the factory's version from `.factory/adapter.json` and holds no pin of its own (test or check).
 AC2. `check-factory-copies.rb` compares with the pinned tag, and fails on a copy that differs from that tag (its test).
+
+### 0-308. The starter's stderr files are never removed (found by the review of `factory` PR #22)
+
+**Type:** ci · **Priority:** Medium · **Status:** Open (review of `factory` PR #22, 2026-11-21).
+**Autopilot:** human-only · **Risk:** low · **Complexity:** low · **Depends on:** #0-284
+**Touches:** the repository `profitbuild/factory` (dispatcher/src/container/run-container.mjs, the sweep, README)
+
+**Problem.** Since #0-284 the starter keeps every call's stderr, failed or not, in a mode-600 file of
+`$FACTORY_STATE_DIR/stderr/` (at most 1 MiB each, text of the agent's side), and nothing removes them: the directory
+grows with each `devcontainer build`/`up` and, from step 4.4, each agent call. From step 4.6 a file can hold a token
+a task printed, kept on the VM's disk indefinitely. AC6 of #0-284 speaks of a failed call's stderr.
+
+**Work.** One retention rule, in one place: either the files of a run go with its task (its end, or the sweep of
+the next run), or only a failed call's stderr is kept. A refusal still names a file that exists when the owner reads
+the reason.
+
+**Acceptance criteria.**
+AC1. After a run ends, no stderr file of a call that succeeded is left (or none of that run's at all, as the rule
+     says), and the files a refusal names are kept until the rule removes them (tests).
+AC2. The README's `$FACTORY_STATE_DIR` row states the rule.
+
+### 0-309. A volume named like a secret makes every later sweep refuse (found by the review of `factory` PR #22)
+
+**Type:** ci · **Priority:** Medium · **Status:** Open (review of `factory` PR #22, 2026-11-21).
+**Autopilot:** human-only · **Risk:** medium · **Complexity:** low · **Depends on:** #0-284
+**Touches:** the repository `profitbuild/factory` (dispatcher/src/container/daemon.mjs, its tests)
+
+**Problem.** The sweep removes volumes by name (`docker volume rm <name>`), and the starter refuses an argument
+shaped like a secret (#0-284 keeps it out of every message). A task's own code holds `factory`'s Docker socket (its
+tests, Testcontainers), so it can create a volume with such a name: every later sweep, so every run, is refused until
+the owner removes the volume by hand. Nothing leaks; the cost is that one task can stop the factory.
+
+**Work.** Remove the volumes without passing their names as arguments, e.g. a `docker volume prune` filtered to keep
+the dispatcher's own cache volume (`factory-dispatcher-m2`), checked afterwards by a count; or by a list read and
+written through stdin, never argv.
+
+**Acceptance criteria.**
+AC1. A volume whose name is shaped like a secret is removed by the sweep, and no message, reason or output quotes its
+     name (a test with a planted name).
+AC2. The dispatcher's own cache volume survives the sweep (test).
+
+### 0-310. Three small follow-ups of the review of `factory` PR #22 (#0-284)
+
+**Type:** refactor · **Priority:** Low · **Status:** Open (review of `factory` PR #22, 2026-11-21).
+**Autopilot:** human-only · **Risk:** low · **Complexity:** low · **Depends on:** #0-284
+**Touches:** the repository `profitbuild/factory` (dispatcher/src/container/host-config.mjs, daemon.mjs, mounts.mjs, run-container.mjs, environment.mjs, their tests)
+
+**Problem.** Round 2 of the review approved #0-284's code and left these, none a defect today:
+- `host-config.mjs`, a table without I/O, imports `daemon.mjs` (and through it the starter) only for
+  `DAEMON_DEFAULT_RUNTIME`;
+- `mounts.mjs`'s `mountKey` turns an `RW` that is not a boolean into read-only instead of refusing it (another
+  comparison still catches it today);
+- `run-container.mjs`'s `finish()` rebuilds the original error as `new Kind(message, { cause })`, which holds only
+  while every class reaching it has `Error`'s constructor;
+- "the daemon is checked before any container" holds because every caller goes through `inTaskEnvironment`; nothing
+  stops a later caller of `setUpTaskContainer` from skipping it.
+
+**Work.** The daemon's constants (`DAEMON_SECURITY_OPTIONS`, `DAEMON_DEFAULT_RUNTIME`) in a module without I/O; a
+mount whose `RW` is not a boolean refused by position; `finish()` wraps the original or says why it rebuilds; and a
+check (a test, or a token only `inTaskEnvironment` can pass) that `setUpTaskContainer` runs only after the daemon
+check.
+
+**Acceptance criteria.**
+AC1. `host-config.mjs` imports no module that runs a process (test or static check).
+AC2. A container whose `Mounts` holds a non-boolean `RW` is refused, naming its position (test).
+AC3. A call of `setUpTaskContainer` outside `inTaskEnvironment` is refused or cannot be written (test).
