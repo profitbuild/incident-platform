@@ -3809,44 +3809,96 @@ AC3. README "Infrastructure Hardening" drops the gap #0-272 named ("`dispatcher`
 
 ### 0-278. The product's code runs only from `main` (step 4.3d)
 
-**Type:** ci · **Priority:** High · **Status:** Open (migration stage 4, step 4.3d; ADR-0060 D6).
+**Type:** ci · **Priority:** High · **Status:** Open (migration stage 4, step 4.3d; ADR-0060 D6, D7 and D8, amended
+by this item's decisions on 2026-11-21).
 **Autopilot:** human-only · **Risk:** high · **Complexity:** medium · **Depends on:** #0-277
-**Touches:** the repository `profitbuild/factory` (reading the adapter's commands and `trustedPaths` at the base
-commit, the queue's short-lived container, `dispatcher/src/github/push.mjs`'s checks of `FACTORY_REPO_DIR` and
-`bin/check-app.mjs` (AC7, AC8), tests), factory (scripts/factory/next-item.sh and its tests,
-scripts/factory-admin/build-vm/provision.sh if provisioning makes the clone the dispatcher's alone: owner-only), root
-(`stage-4.md` "4.3", README "Infrastructure Hardening")
+**Touches:** the repository `profitbuild/factory` (the adapter and the product's files read from the base commit, the
+`trustedPaths` check, the product's commands from the base's blobs in the task container, the item's lock, `push.mjs`'s
+checks of `FACTORY_REPO_DIR` (AC7), `bin/check-app.mjs` (AC8), tests; its first tag `v0.1.0`, the owner's), factory
+(`.factory/adapter.json` (new), `.ai/rules/protected-paths.md` (`.factory/` Owner-only), `.github/workflows/factory-guards.yml`
+(the adapter validated), `scripts/factory-admin/build-vm/` (`create.sh` or `verify-pins.sh`: the tag at
+`FACTORY_COMMIT`; `install-builder-app.sh` if AC8 drops `--repository`): owner-only), decisions (ADR-0060 D6, D7, D8
+amended, this item's decisions PR), root (`stage-4.md` "4.3" and "4.7", README "Infrastructure Hardening")
 
-**Problem.** The dispatcher runs the product's own scripts (for incident-platform `next-item.sh`, `changed-paths.sh`,
-`run-tests.sh`). Run from a task's branch, a task could rewrite the scripts that judge it. And `next-item.sh` calls
-`gh pr list` for its locks, while a container holds no token (`stage-4.md` "4.3", open).
+**Problem.** The dispatcher will run the product's own scripts (for incident-platform `run-tests.sh` and
+`changed-paths.sh`) and read the product's adapter. Read from a task's branch, a task could rewrite the scripts that
+judge it, or shrink the `trustedPaths` that protect them. Run as `dispatcher`, the product's code, `main`'s too, would
+run as the uid that reads builder-app's key (ADR-0062 point 4: no product code on the host). And `next-item.sh`
+calls `gh pr list` for its locks, while a container holds no token.
 
-**Work.** The adapter's commands and the files of `trustedPaths` read from the base commit, never the task branch, a
-task branch that changes one refused; the queue command run in a short-lived container from `main`; the dispatcher
-passes the open pull requests to `next-item.sh` as a file (a new argument, the old call kept until 4.7's switch).
+**Decided with the owner (2026-11-21, `/research` of #0-278; ADR-0060 D6, D7, D8 amended; `stage-4.md` "Decided
+for 4.3d"):** no product code runs as `dispatcher`; the adapter and every product file the dispatcher reads come from
+the base commit of its clone of `main`, as blobs of the git tree; the refusals are the dispatcher's own code; the
+product's commands run only in the task container, from the base's blobs; until stage 7 the owner names the item
+(`next-item.sh` in the owner's session), so the dispatcher runs no queue command and `next-item.sh` is unchanged; the
+lock is the dispatcher's own check of the open pull requests; `factory` gets its first tag, `v0.1.0`, the version the
+adapter names. Minimum for the intermediate state (the queue until stage 7), the end state's mechanisms done whole.
+
+**Work.**
+- `factory`:
+  - the adapter read from `.factory/adapter.json` at the task's base commit in `FACTORY_REPO_DIR`, as a blob (as
+    `readTaskConfig` reads the task configuration, #0-277), checked against the schema; `run --adapter <path>` kept for
+    the trial only, refused once the product holds its adapter, or dropped (decided in its pull request);
+  - every path of the adapter resolved in the base's git tree, an entry that is a symlink on the way or at the path
+    refused, and every command's script under a path of `trustedPaths`;
+  - a branch that changes a path of `trustedPaths` refused: `git diff --name-only` of the base and the head in the push
+    repository (#0-276), the dispatcher's git and flags, compared with the base's adapter; one function, which 4.5's
+    Owner-only check (ADR-0060 D7, amended) extends with the `protectedPaths` lists;
+  - the product's commands (`gate`, `changedPaths`) run in the task container from the base's blobs of
+    `trustedPaths`, put into a fresh directory of the container before each run (`docker exec`, through the starter of
+    #0-277), with the clone as the working directory; the product's root as `cwd`, a script whose last segment is `.`
+    refused (from 4.3a's review);
+  - before a task starts, its item refused when an open pull request's head branch contains `/<id>-`, or when one of
+    the dispatcher's own tasks not ended holds it; the open pull requests listed with builder-app's token through the
+    retry helper (#0-261), every page, a list not read whole refusing the start; `run` without `--item` refused in v0;
+  - the first tag, `v0.1.0`, on the commit `FACTORY_COMMIT` names (the owner's: tags are admin-only).
+- incident-platform:
+  - `.factory/adapter.json` (moved here from 4.7): the gate `scripts/factory/run-tests.sh`, changed-paths
+    `scripts/factory/changed-paths.sh`, the queue as today's files (read by nothing until stage 7), the protected
+    paths `.ai/rules/protected-paths.md`, `trustedPaths` `scripts/factory/` and `.factory/`, `taskImage`
+    `.devcontainer/task.json`, profile `spring-boot`, `factoryVersion` `v0.1.0`; validated by Factory guards against
+    `factory`'s schema; `.factory/` added to the Owner-only list;
+  - `create.sh` or `verify-pins.sh` checks that `factoryVersion`'s tag is at `FACTORY_COMMIT` (two pins, held equal);
+  - README "Infrastructure Hardening": the control (AC4).
+- Both sides of a rule kept in step (review round 1 of this item's decisions, ARC-02): the lock rule (`/<id>-` in a
+  head branch) and the `protectedPaths` format each live in `next-item.sh` and `_protected.sh` and in the dispatcher;
+  the dispatcher's tests read fixtures taken from the product's real files (`.ai/rules/protected-paths.md`, the
+  branch names `next-item.sh`'s tests lock on), so a change of either side fails a test (AC11).
+- The new checks recorded (ARC-07): Factory guards' validation of `.factory/adapter.json` and the VM side's check of
+  the tag at `FACTORY_COMMIT` go into an ADR amendment in the pull request that adds them.
 
 **Acceptance criteria.**
-AC1. A task branch that changes a file of `trustedPaths` is refused before its gate runs (a test).
-AC2. The commands run are `main`'s, shown by a test where the branch's copy differs.
-AC3. `next-item.sh` takes the open pull requests from a file, its tests covering both forms.
-AC4. README "Infrastructure Hardening" names the control: a task cannot change the scripts that judge it.
-AC5. A path the adapter names that is a symlink, or reaches one, resolving outside the product's clone is refused
-     (its `realpath` checked against the clone, or opened with `O_NOFOLLOW`); the schema checks spelling only
-     (tests; from 4.3a's review).
-AC6. `changed-paths` runs against the push repository (#0-276) with the base and the head given as SHAs (a fresh bare
-     repository has no refs and an unborn `HEAD`), and where it runs (as `dispatcher` or in a short-lived container,
-     which cannot read `$FACTORY_STATE_DIR`) is decided and stated (a test of each SHA given).
+AC1. A task branch that changes a path of `trustedPaths` is refused before its gate runs, by the dispatcher's own
+     check, no product code run for it (a test).
+AC2. The commands run are the base's, shown by a test where the branch's copy differs, and by one where the
+     container's copy is changed after the branch's last commit.
+AC3. The adapter is read from the base commit, never from a branch nor from the work directory: a test where the
+     branch's `.factory/adapter.json` drops a path of `trustedPaths`, and the task still refuses a change to it.
+AC4. README "Infrastructure Hardening" names the control: a task cannot change the scripts that judge it nor the
+     adapter that names them, and no product code runs as `dispatcher`.
+AC5. A path the adapter names that is a symlink, or reaches one through a symlinked directory, in the base's tree is
+     refused, read from the tree's entries, never from a checkout; the schema checks spelling only (tests; from 4.3a's
+     review).
+AC6. `changed-paths` is advisory: it runs in the task container, from the base's blobs, and no refusal of the
+     dispatcher rests on what it prints (a test that a refusal comes with no run of it).
 AC7. (The way is taken in #0-277's `FACTORY_COMMIT` move: the clone is the dispatcher's alone, a bare clone in its
      home of mode 700, made by `provision.sh` as `dispatcher` and checked to be the product's; what is left is the
-     test, and that no product code runs as `dispatcher` where it could write the clone (AC6's `changed-paths`). A bare
-     clone has no `remote.origin.fetch`: the update before a run names `+refs/heads/main:refs/heads/main` itself.)
+     test, and that no product code runs as `dispatcher`, which ADR-0060 D6 as amended holds. A bare clone has no
+     `remote.origin.fetch`: the update before a run names `+refs/heads/main:refs/heads/main` itself.)
      Who may write `FACTORY_REPO_DIR` is decided and held: through `alternates` its objects feed every push (#0-276),
      which checks `objects`, `objects/info` and `objects/pack` but not the loose-object directories or the pack files;
      those are checked the same way, or the clone is shown to be the dispatcher's alone (a test).
-AC8. Once the adapter is a file `dispatcher` reads, `check-app` takes the repository from it (`--adapter`), or the
-     item states why `--repository` (`install-builder-app.sh`, read from `provision.sh`'s `PRODUCT_REPO_URL`, #0-277
-     AC8) stays beside it: one source of
-     the repository a token is narrowed to (review of #0-276).
+AC8. `check-app` takes the repository from the adapter at the base of the dispatcher's clone (`--adapter-from-repo`
+     or its pull request's name for it), and `install-builder-app.sh` passes no `--repository` of its own: one source
+     of the repository a token is narrowed to (review of #0-276, #0-277 AC8).
+AC9. A run whose item an open pull request holds (a head branch containing `/<id>-`), or one of the dispatcher's own
+     tasks not ended, is refused before any container; a list of pull requests not read whole refuses it too; `run`
+     without `--item` is refused (tests with a fake API, two pages among them).
+AC10. `factory`'s tag `v0.1.0` is at `FACTORY_COMMIT`, checked on the VM's side; the adapter's `factoryVersion` names
+     it, and Factory guards validate the adapter against `factory`'s schema.
+AC11. The dispatcher's lock check and its `protectedPaths` parser are tested against fixtures copied from the
+     product's `.ai/rules/protected-paths.md` and from the branch names `next-item.sh`'s tests lock on, and the copies
+     are held equal to their sources (#0-268's copy check, or a test of the product's that reads `factory`'s fixtures).
 
 ### 0-279. The dev app's ids and permissions are kept in two places with no check
 
