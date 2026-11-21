@@ -112,9 +112,9 @@ Directories are created when they provide real value. Current structure:
 
 Not created yet, on purpose: `context/frontend.md` (no frontend in this repository yet),
 `rules/frontend.md`, and the `agents/`, `playbooks/`, `workflows/` and `reviews/` directories of the
-earlier target structure. Agent definitions live in `.claude/agents/` (one implementation, no
-tool-neutral copy that could drift); review criteria live in `rules/review/`; workflows in
-`.claude/workflows/`.
+earlier target structure. Agent definitions live in `.claude/agents/` for the old path, and the build agents also in
+`factory`'s plugin (`factory:<name>`, product-neutral, backlog #0-299; the old copies go at M4, #0-290); review
+criteria live in `rules/review/`; workflows in `.claude/workflows/`.
 
 ---
 
@@ -216,7 +216,8 @@ AI assistants should not:
   (`.github/`).
 
 How these apply per session: `CLAUDE.md` "Working style" governs interactive sessions with the owner;
-an autopilot agent follows its definition in `.claude/agents/`.
+an agent of the factory follows its definition, in `.claude/agents/` on the old path or in `factory`'s plugin on the
+dispatcher's (`CLAUDE.md` "AI factory").
 
 ---
 

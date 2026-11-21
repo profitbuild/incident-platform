@@ -4419,6 +4419,14 @@ Three things are not known: whether `--agent <name>` works for this, or whether 
 passed as a system prompt with its tools and model; whether the plugin's hooks run in that mode; and what replaces
 ADR-0058's isolation probe.
 
+**Answered already (2026-11-21, #0-299's measurements, `m2.md` Record):** `-p --agent factory:implementer` runs the
+plugin's agent, its init event lists the agents, tools and no `plugin_errors`, and the plugin's hook runs in it. Left:
+keeping the clone's `.claude/settings.json` and hooks out while `CLAUDE.md` is still read (`--restricted` is a
+candidate: measured with `--plugin-dir`, `--agent factory:<name>`, the plugin's hook, Bash only through `--tools`, and
+the permissions channel it still reads), the probe's successor, and the same on the VM in a task container, with the
+init event's `tools` on the VM's Claude Code (not pinned until #0-249/#0-283) for an agent with and without Bash (with
+Bash, Claude Code drops Grep and Glob).
+
 **Work.** `migration/m2.md` M2.1, one trial task on the VM. Proposal for the probe: the `stream-json` init event's
 agent, tools and `plugin_errors`.
 
@@ -4432,7 +4440,7 @@ AC3. From #0-299's research: whether `-p --agent factory:implementer` runs the p
 ### 0-301. The dispatcher runs no phase of a task (migration steps M2.2–M2.3)
 
 **Type:** ci · **Priority:** High · **Status:** Open (ADR-0063, 2026-11-21).
-**Autopilot:** human-only · **Risk:** high · **Complexity:** high · **Depends on:** #0-300, #0-280, #0-284
+**Autopilot:** human-only · **Risk:** high · **Complexity:** high · **Depends on:** #0-300, #0-280, #0-284, #0-249, #0-283
 **Touches:** the repository `profitbuild/factory` (dispatcher/src/flow/, settings/autopilot.json, its tests and fixtures)
 
 **Problem.** After the spike the dispatcher still has no agent call and no phases, and `backlog-autopilot.js`'s
@@ -4449,7 +4457,7 @@ control flow lives only in incident-platform.
   allow rules, the flags that keep the clone's settings out): no earlier item writes it.
 
 **Acceptance criteria.**
-AC1. A call with no `structured_output`, or an init event with `plugin_errors` or not the expected agent and tools, stops the task (tests with recorded `stream-json` fixtures).
+AC1. A call with no `structured_output`, or an init event with `plugin_errors` or not the expected agent and tools, stops the task (tests with recorded `stream-json` fixtures); the expected tools are the pinned Claude Code's for that agent (with Bash it holds no Grep or Glob, `m2.md` M2.2).
 AC2. Whole runs against a fake agent reach each stop through `stopItem` with its stage (`node:test`, ported from `test-autopilot-workflow.mjs`).
 AC3. `MAX_TEST_FIXES`, `MAX_ROUNDS` and `MAX_AGENT_CALLS` each stop a run that exceeds them (tests).
 
@@ -4457,7 +4465,7 @@ AC3. `MAX_TEST_FIXES`, `MAX_ROUNDS` and `MAX_AGENT_CALLS` each stop a run that e
 
 **Type:** ci · **Priority:** High · **Status:** Open (ADR-0063, 2026-11-21).
 **Autopilot:** human-only · **Risk:** high · **Complexity:** medium · **Depends on:** #0-301
-**Touches:** the repository `profitbuild/factory` (dispatcher/src/flow/, git/, schemas/adapter.schema.json, the task's own repository under the state directory), factory (.factory/adapter.json: owner-only)
+**Touches:** the repository `profitbuild/factory` (dispatcher/src/flow/, git/, schemas/adapter.schema.json, the task's own repository under the state directory), factory (.factory/adapter.json, .ai/rules/implementation.md's commit line: owner-only)
 
 **Problem.** Today the agents commit with git inside the clone they write, so the trace of who added what is their
 word, and git's writing commands stay within an agent's reach (#0-236). #0-212's trailers have no writer yet.
@@ -4471,6 +4479,9 @@ Each call's changed paths (`--no-renames`) are held to its agent's write scope t
 by the agent's bare name (incident-platform: the architect to `.ai/decisions/` and `.ai/work/`, the implementers
 `["*"]`); an agent with no entry is not called (fail closed). It replaces the architect's `write-scope.sh`, which the
 plugin does not carry (#0-299, ADR-0063 as amended).
+The old path's commit lines go out of the rules the plugin's agents read: `.ai/rules/implementation.md`'s "Commit locally
+on the item's branch" is scoped to the old path here (owner-only), since `CLAUDE.md` tells the plugin's agents not to
+commit (#0-299's review); with it, `CLAUDE.md`'s "whatever a rule file written for the old path says" goes (owner).
 
 **Acceptance criteria.**
 AC1. Every commit the dispatcher makes carries both trailers, and its author is the dispatcher's (tests).
