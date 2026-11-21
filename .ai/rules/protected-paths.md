@@ -48,6 +48,7 @@ directory and everything under it; any other path is one file.
 - `scripts/factory/` — the autopilot's deterministic gates
 - `scripts/factory-admin/` — the owner's tools (breaker and audit counter reset, the local implementer, the seed-run scan)
 - `.devcontainer/` — the sandbox and its firewall
+- `.factory/` — the product's adapter: the dispatcher's gate, its trusted paths and the factory version it runs (backlog #0-278)
 <!-- protected:end -->
 
 ## Build configuration

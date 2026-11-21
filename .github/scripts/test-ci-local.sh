@@ -98,6 +98,8 @@ workflow '      - name: Checkout' '        uses: actions/checkout@00000000000000
          '      - name: Ruby' '        uses: ./.github/actions/setup-ruby' \
          '      - name: Other action' '        uses: actions/cache@0000000000000000000000000000000000000000 # v4' \
          '      - name: Conditional' "        if: github.event_name != 'push'" '        run: echo conditional-ran' \
+         '      - name: Not cancelled' '        if: ${{ !cancelled() }}' '        run: echo not-cancelled-ran' \
+         '      - name: Always' '        if: always()' '        run: echo always-ran' \
          '      - name: Token' '        env:' '          GH_TOKEN: ${{ github.token }}' '        run: echo token-ran' \
          '      - name: Expression' '        run: echo "${{ github.sha }}" expression-ran' \
          '      - name: Pwsh' '        shell: pwsh' '        run: Write-Output pwsh-ran' \
@@ -108,12 +110,14 @@ expect 0 "checkout: the container is it" '^\[skip\] Checkout: uses actions/check
 expect 0 "setup-ruby: the container is it" '^\[skip\] Ruby: uses \./\.github/actions/setup-ruby: the container is that'
 expect 0 "another action is not run" '^\[skip\] Other action: uses actions/cache@0+: not run locally'
 expect 0 "a step with if:" "^\[skip\] Conditional: has \`if: github.event_name != 'push'\`"
+expect 0 "if: !cancelled() is run: every step runs here after a failure" '^\[0\] Not cancelled '
+expect 0 "if: always() is run too" '^\[0\] Always '
 expect 0 "a step whose env needs a token" '^\[skip\] Token: its env GH_TOKEN is \$\{\{ github.token \}\}'
 expect 0 "a step whose run holds an expression" '^\[skip\] Expression: its run holds a \$\{\{ \}\} expression'
 expect 0 "a step in another shell" '^\[skip\] Pwsh: runs in pwsh'
 expect 0 "a step with no run" '^\[skip\] Nothing: no run'
 expect 0 "shell: bash is run" '^\[0\] Bash '
-expect 0 "the rest runs" 'j: 2 step\(s\) run, 0 failed, 8 skipped\.'
+expect 0 "the rest runs" 'j: 4 step\(s\) run, 0 failed, 8 skipped\.'
 expect_not "no skipped step ran" '(conditional|token|expression|pwsh)-ran'
 
 echo "ci-local-steps: --step"

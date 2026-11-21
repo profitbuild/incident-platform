@@ -39,6 +39,15 @@
 # misspelt one stops the item before it starts instead of getting a guessed prefix.
 BRANCH_PREFIX_OF='{"bug":"fix","security":"fix","tech-debt":"refactor","ci":"ci","docs":"docs","performance":"perf"}'
 
+# The lock of an item by a branch's name (backlog #0-278 AC11, ADR-0060 D8 as amended): item 0-N is held by a branch
+# whose name contains /0-N- (a slash, the item, a dash), and by no other. A jq definition, put in front of next-item.sh's
+# program; its cases are .github/scripts/fixtures/item-lock-branches.tsv, which test-queue.sh runs through this very
+# definition and profitbuild/factory's dispatcher (src/github/item-lock.mjs) through a copy of the file, held equal to
+# it by check-factory-copies.rb (ADR-0061): one rule, two implementations, the same cases. Fixed: the rule lived only
+# inside next-item.sh's program, and the dispatcher's copy of it was checked against nothing of the product's.
+# shellcheck disable=SC2016 # $locks and $id are jq's variables, not the shell's
+LOCKED_BY_JQ='def lockedBy($id): [$locks[] | select(contains("/" + $id + "-"))] | first // null;'
+
 KNOWN_MODULES='["shared","service-parent","auth-service","ingestion-service","incident-service","notification-service","escalation-service","postmortem-service","oncall-service","root","docs","k8s","docker","ci"]'
 
 # trim() and field(<line>, <name>): the value of `**<name>:**` on a line, up to the next ` · `, without backticks.

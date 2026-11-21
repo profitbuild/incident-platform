@@ -791,7 +791,8 @@ jobs:
           ruby .github/scripts/check-runtime-setup.rb
 
       # Backlog #0-268, ADR-0061: profitbuild/factory copies this repository's tool pins, its actions' SHAs, three
-      # scripts, its setup-node action and zizmor.yml, .node-version and the session's denies, and `factory` names no
+      # scripts, the item lock's cases (at a path of its own, #0-278), its setup-node action and zizmor.yml,
+      # .node-version and the session's denies, and `factory` names no
       # product (ADR-0060 D5), so the check that keeps the copies equal lives here. Its cases first.
       - name: Factory copies script tests
         run: .github/scripts/test-check-factory-copies.sh
@@ -802,7 +803,8 @@ jobs:
       # first, then re-runs. Every other difference, and every push, is a warning: drift `factory` started would
       # otherwise turn every pull request here red and stop the autopilot with a red main. Also runs
       # check-downloads.rb, check-runtime-setup.rb and check-shell.rb on the clone, as warnings: `factory` has no
-      # Ruby (ADR-0060 D2). Compared with factory@main until step 4.7 pins a `factory` tag in .factory/adapter.json.
+      # Ruby (ADR-0060 D2). Compared with factory@main until M3.6 (#0-307) moves it to the tag
+      # .factory/adapter.json pins, which the next step already validates the adapter against.
       - name: The factory's copies match their originals
         run: |
           set -euo pipefail
@@ -844,8 +846,10 @@ jobs:
       # is read-only: GitHub shows it neither the bypass actors, nor the
       # repository settings, nor the admins, nor the writers (#0-272), so
       # those are compared only when the owner runs it (the summary names
-      # them). Last in the job, so a
-      # GitHub outage or a changed setting hides no lint finding above. Its
+      # them). Last but one in the job (the adapter's step, which runs
+      # factory's code, follows every step that holds a token, and runs
+      # even when this one is red), so a GitHub outage or a changed
+      # setting hides no lint finding. Its
       # cases run first, in the step above.
       - name: The repository settings match .github/repository-settings/
         env:
@@ -858,6 +862,44 @@ jobs:
           else
             ruby .github/scripts/repository-settings.rb check
           fi
+
+      # Backlog #0-278 AC10, ADR-0061 (amended 2026-11-21): .factory/adapter.json keeps the schema of
+      # the factory version it names, checked by that version's own code (dispatcher/src/adapter.mjs,
+      # checkAdapter), the code the dispatcher reads it with; and that version's tag is at provision.sh's
+      # FACTORY_COMMIT, the code the build VM runs (two pins of one version, until #0-307 makes the
+      # adapter's the only one). `factory` at the tag, fetched without a token (public); a tag is the
+      # admin's alone and cannot move (factory's rulesets). The schema checks spelling only: the paths
+      # against the base's tree are the dispatcher's check at run time. A refusal names where the adapter
+      # breaks the schema, never a value (SEC-31). Last in the job, after every step that holds a token:
+      # the step runs `factory`'s code, so nothing it writes to GITHUB_ENV or GITHUB_PATH reaches a later
+      # step (review round 2 of #0-278; the token is this job's read-only one either way, which a job of
+      # its own would also give its post steps). It runs even when a step above failed (`!cancelled()`):
+      # the settings step is red by design until the owner applies a settings change, and a pull request
+      # merged past that red must still have had its adapter checked (review round 3 of #0-278).
+      - name: The adapter keeps its factory version's schema
+        if: ${{ !cancelled() }}
+        run: |
+          set -euo pipefail
+          version=$(jq -er '.factoryVersion | select(test("\\Av[0-9]+\\.[0-9]+\\.[0-9]+\\z"))' .factory/adapter.json) \
+            || { echo "::error::.factory/adapter.json has no factoryVersion vMAJOR.MINOR.PATCH (backlog #0-278)"; exit 1; }
+          checkout="${RUNNER_TEMP}/factory-at-version"
+          # The tag by its full ref, never `clone --branch`, which takes a branch of the same name first (review of #0-278).
+          git init --quiet "$checkout"
+          git -C "$checkout" fetch --quiet --depth 1 https://github.com/profitbuild/factory.git \
+            "refs/tags/$version:refs/tags/$version" \
+            || { echo "::error::profitbuild/factory has no tag $version, the adapter's factoryVersion (backlog #0-278)"; exit 1; }
+          tagged=$(git -C "$checkout" rev-parse --verify "refs/tags/$version^{commit}")
+          git -C "$checkout" checkout --quiet --detach "$tagged"
+          pin=$(sed -n 's/^FACTORY_COMMIT=\([0-9a-f]\{40\}\).*$/\1/p' scripts/factory-admin/build-vm/provision.sh)
+          [ "$tagged" = "$pin" ] \
+            || { echo "::error::factory's $version is at $tagged, provision.sh's FACTORY_COMMIT is $pin (backlog #0-278)"; exit 1; }
+          FACTORY_ADAPTER_MODULE="$checkout/dispatcher/src/adapter.mjs" node --input-type=module -e '
+            import { readFileSync } from "node:fs";
+            import { pathToFileURL } from "node:url";
+            const { checkAdapter } = await import(pathToFileURL(process.env.FACTORY_ADAPTER_MODULE).href);
+            checkAdapter(JSON.parse(readFileSync(".factory/adapter.json", "utf8")));
+          '
+          echo "the adapter keeps the schema of factory $version, at FACTORY_COMMIT $pin"
 
   # ──────────────────────────────────────────────────────────
   # Secret scan (backlog #0-109, ADR-0036)

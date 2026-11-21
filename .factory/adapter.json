@@ -1,0 +1,21 @@
+{
+  "repository": "profitbuild/incident-platform",
+  "gate": {
+    "command": ["scripts/factory/run-tests.sh"],
+    "contract": "gate.schema.json"
+  },
+  "changedPaths": {
+    "command": ["scripts/factory/changed-paths.sh"]
+  },
+  "queue": {
+    "kind": "backlog-md",
+    "files": ["BACKLOG.md", ".ai/plan/queue.md"]
+  },
+  "protectedPaths": {
+    "file": ".ai/rules/protected-paths.md"
+  },
+  "trustedPaths": ["scripts/factory/", ".factory/"],
+  "taskImage": ".devcontainer/task.json",
+  "profile": "spring-boot",
+  "factoryVersion": "v0.1.0"
+}

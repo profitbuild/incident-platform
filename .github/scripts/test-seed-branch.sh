@@ -456,11 +456,22 @@ called() { grep -qE -- "$1" "$MVN_CALLS" 2>/dev/null; }
 
 plant demo-service/src/A.java 'class B { static int f() { return 1; } }'
 compiled "a Java plant in a service: compiled" '.ok == true and .compiled == true and .modules == "demo-service"'
-if called '^-B -ntp -s scripts/factory/maven-settings.xml -gs scripts/factory/maven-settings.xml -o test-compile -pl demo-service -am$'; then
+cset=$(cd -P scripts/factory && pwd)/maven-settings.xml
+if called "^-B -ntp -s $cset -gs $cset -o test-compile -pl demo-service -am\$"; then
     ok "offline test-compile of the module and what it depends on, with the factory's settings"
 else fail "the Maven call: $(cat "$MVN_CALLS")"; fi
 if called '^MAVEN_OPTS= JAVA_TOOL_OPTIONS= MAVEN_SKIP_RC=true$'; then ok "the environment's Maven options are stripped"
 else fail "the environment reached Maven: $(cat "$MVN_CALLS")"; fi
+# As the dispatcher runs it (backlog #0-278): the scripts from a directory of their own (the base's blobs of
+# trustedPaths), the working directory the clone, whose scripts/factory/maven-settings.xml a branch can rewrite. The
+# settings Maven gets are the ones beside the script, never the clone's.
+TRUSTED=$WORK/trusted && mkdir -p "$TRUSTED"
+cp scripts/factory/_common.sh scripts/factory/seed-compile.sh scripts/factory/maven-settings.xml "$TRUSTED/"
+rm -f "$MVN_CALLS"
+MVN_MODE=ok "$TRUSTED/seed-compile.sh" "$CB" "$cchange" "$cfold" >/dev/null
+tset=$(cd -P "$TRUSTED" && pwd)/maven-settings.xml
+if called "^-B -ntp -s $tset -gs $tset "; then ok "run from another directory, Maven reads the settings beside the script, not the clone's"
+else fail "the settings Maven read, run from another directory: $(cat "$MVN_CALLS")"; fi
 if [ -z "$(ls .ai/runs/seed-compile-* 2>/dev/null)" ]; then ok "a build that passed leaves no log"; else fail "log left: $(ls .ai/runs)"; fi
 compiled "a compiler error: the first one, from the repository's root" \
     '.ok == false and .reason == "the plant does not compile (log .ai/runs/seed-compile-aaaaaaaa.log): [ERROR] demo-service/src/A.java:[3,12] non-static variable id cannot be referenced from a static context"' compile

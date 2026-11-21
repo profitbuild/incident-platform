@@ -2,6 +2,11 @@
 # Shared helpers for scripts/factory/*.sh. Sourced, not run.
 # Requires: bash (3.2 is enough), git, jq. Some scripts also need gh (authenticated) and docker.
 
+# The directory this file was sourced from, resolved before the cd below: in the dispatcher's task container that is a
+# fresh directory holding the base's blobs of trustedPaths (.factory/adapter.json, backlog #0-278), while the working
+# directory is the agent's clone. A file the gate reads beside its scripts is read through it, so it is the base's copy;
+# one read by a path relative to the clone would be the copy the agent's branch can change.
+FACTORY_SCRIPTS_DIR=$(cd -P "$(dirname "${BASH_SOURCE[0]}")" && pwd) || { echo '{"ok":false,"reasons":["cannot resolve the directory of scripts/factory"]}'; exit 1; }
 FACTORY_ROOT=$(git rev-parse --show-toplevel 2>/dev/null) || { echo '{"ok":false,"reasons":["not inside the repository"]}'; exit 1; }
 cd "$FACTORY_ROOT" || exit 1
 RUNS_DIR=".ai/runs"
@@ -66,9 +71,16 @@ needs_all_modules() { grep -qE '^(pom\.xml|(shared|service-parent)/.*)$' <<<"$1"
 # distribution's own launcher (bin/mvn) under ~/.m2, and an ignored file in the workspace that Maven reads — it can add
 # .mvn/maven.config, jvm.config or extensions.xml and hide them from a clean-tree check through .git/info/exclude or a
 # global gitignore. The PR's CI, on a fresh runner from the committed tree, is the check that none of this can forge.
+# The settings file is read beside this script (FACTORY_SCRIPTS_DIR), not as scripts/factory/maven-settings.xml of the
+# clone. Fixed (backlog #0-278): in the dispatcher's task container the working directory is the agent's clone, so the
+# relative path read the settings the agent's branch had written, and a branch could point Maven at its own mirror.
+# What that fix does not reach: ./mvnw and .mvn/wrapper/maven-wrapper.properties (distributionUrl) are still the
+# clone's, so a branch can run a Maven of its own that ignores -s and -gs, and the agent's tests can rewrite the
+# scripts the dispatcher unpacked (same uid in the container). The dispatcher's gate is the agent's side and can be
+# forged by a branch (ADR-0060 D6); the PR's CI, on a fresh runner, is the gate that counts.
 factory_mvn() {
     env -u MAVEN_OPTS -u MAVEN_ARGS -u JAVA_TOOL_OPTIONS -u _JAVA_OPTIONS -u JDK_JAVA_OPTIONS MAVEN_SKIP_RC=true \
-        ./mvnw -B -ntp -s scripts/factory/maven-settings.xml -gs scripts/factory/maven-settings.xml "$@"
+        ./mvnw -B -ntp -s "$FACTORY_SCRIPTS_DIR/maven-settings.xml" -gs "$FACTORY_SCRIPTS_DIR/maven-settings.xml" "$@"
 }
 # A Maven log line that says the environment failed, not the code: no Docker, a dependency that could not be fetched
 # (or, offline, is not in the local repository), no disk. run-tests.sh stops on it for a human; seed-compile.sh fails

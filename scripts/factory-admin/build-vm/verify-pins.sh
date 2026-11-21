@@ -24,6 +24,9 @@
 #   6. The dispatcher's code (provision.sh, FACTORY_COMMIT; backlog #0-272): the commit is on profitbuild/factory's
 #      main, its first parent line or merged into it, as GitHub's compare of the commit with main says (`identical`
 #      or `ahead`): a commit of a branch that never merged, or one GitHub does not know, is refused.
+#   6b. The factory's version (.factory/adapter.json, factoryVersion; backlog #0-278 AC10): that tag of
+#      profitbuild/factory, peeled to its commit, is FACTORY_COMMIT, so the version the product names and the code the
+#      VM runs are one. Tags are the admin's alone and cannot move (factory's rulesets `tags` and `tag-creation`).
 #   7. The helper image (provision.sh, HELPER_IMAGE; backlog #0-277, ADR-0062 point 8): its digest is an image index
 #      Docker Hub serves for that repository, with a linux/amd64 and a linux/arm64 image. The tag is a label: the
 #      digest is what the VM pulls, and a moved tag is no failure here (bump the pin on purpose, as the others).
@@ -44,6 +47,7 @@ prov=$here/provision.sh
 
 fail() { echo "verify-pins.sh: $*" >&2; exit 1; }
 command -v docker >/dev/null || fail "docker not found"
+command -v jq >/dev/null || fail "jq not found (it reads .factory/adapter.json's factoryVersion, backlog #0-278)"
 # One value per pattern, or the script refuses: a second image or a moved line must not pass unchecked.
 one() {
   local value
@@ -68,6 +72,8 @@ docker_version=$(one 's/^DOCKER_VERSION=\([0-9A-Za-z.:~+-]*\)$/\1/p' "$prov")
 containerd_version=$(one 's/^CONTAINERD_VERSION=\([0-9A-Za-z.:~+-]*\)$/\1/p' "$prov")
 factory_repo=$(one 's|^FACTORY_REPO_URL=https://github.com/\([A-Za-z0-9._-]*/[A-Za-z0-9._-]*\)\.git$|\1|p' "$prov")
 factory_commit=$(one 's/^FACTORY_COMMIT=\([0-9a-f]\{40\}\)\( .*\)\{0,1\}$/\1/p' "$prov")
+factory_version=$(jq -er '.factoryVersion | select(test("\\Av[0-9]+\\.[0-9]+\\.[0-9]+\\z"))' "$here/../../../.factory/adapter.json") \
+  || { echo "verify-pins.sh: cannot read factoryVersion from .factory/adapter.json" >&2; exit 1; }
 helper_repo=$(one 's/^HELPER_IMAGE=\([a-z0-9._-]*\):[a-z0-9._-]*@sha256:[0-9a-f]\{64\}$/\1/p' "$prov")
 helper_digest=$(one 's/^HELPER_IMAGE=[a-z0-9._-]*:[a-z0-9._-]*@\(sha256:[0-9a-f]\{64\}\)$/\1/p' "$prov")
 
@@ -76,7 +82,7 @@ docker run --rm \
   -e NODE_VERSION="$node_version" -e NODE_ARM64="$node_arm64" -e NODE_X64="$node_x64" -e NODE_KEYS_COMMIT="$NODE_KEYS_COMMIT" \
   -e CLI_VERSION="$cli_version" -e CLI_SHA512="$cli_sha512" -e DOCKER_FPR="$docker_fpr" \
   -e DOCKER_VERSION="$docker_version" -e CONTAINERD_VERSION="$containerd_version" \
-  -e FACTORY_REPO="$factory_repo" -e FACTORY_COMMIT="$factory_commit" \
+  -e FACTORY_REPO="$factory_repo" -e FACTORY_COMMIT="$factory_commit" -e FACTORY_VERSION="$factory_version" \
   -e HELPER_REPO="$helper_repo" -e HELPER_DIGEST="$helper_digest" \
   "$CONTAINER" bash -euo pipefail -c '
   bad() { echo "verify-pins.sh: $*" >&2; exit 1; }
@@ -150,6 +156,20 @@ docker run --rm \
   [ "$base" = "$FACTORY_COMMIT" ] && { [ "$state" = identical ] || [ "$state" = ahead ]; } \
     || bad "$FACTORY_REPO main does not contain $FACTORY_COMMIT (compare: $state, merge base $base)"
   echo "verified: $FACTORY_REPO main contains $FACTORY_COMMIT ($state)"
+
+  # 6b. The tag the adapter names, peeled: a lightweight tag points at the commit, an annotated one at a tag object.
+  ref=$(curl -fsSL -H "Accept: application/vnd.github+json" \
+    "https://api.github.com/repos/$FACTORY_REPO/git/ref/tags/$FACTORY_VERSION") \
+    || bad "$FACTORY_REPO has no tag $FACTORY_VERSION (.factory/adapter.json factoryVersion)"
+  type=$(jq -r .object.type <<<"$ref"); sha=$(jq -r .object.sha <<<"$ref")
+  if [ "$type" = tag ]; then
+    tag=$(curl -fsSL -H "Accept: application/vnd.github+json" "https://api.github.com/repos/$FACTORY_REPO/git/tags/$sha") \
+      || bad "cannot read the tag object $sha of $FACTORY_VERSION"
+    type=$(jq -r .object.type <<<"$tag"); sha=$(jq -r .object.sha <<<"$tag")
+  fi
+  [ "$type" = commit ] && [ "$sha" = "$FACTORY_COMMIT" ] \
+    || bad "$FACTORY_REPO tag $FACTORY_VERSION is at $type $sha, not at FACTORY_COMMIT $FACTORY_COMMIT"
+  echo "verified: $FACTORY_REPO tag $FACTORY_VERSION is at FACTORY_COMMIT $FACTORY_COMMIT"
 
   # 7. The helper image: an index Docker Hub serves at that digest, for amd64 and arm64.
   token=$(curl -fsSL "https://auth.docker.io/token?service=registry.docker.io&scope=repository:library/$HELPER_REPO:pull" | jq -r .token) \

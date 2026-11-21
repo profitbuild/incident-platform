@@ -96,6 +96,7 @@ unless $?.success? && node.start_with?('v')
 end
 puts "node #{node}"
 
+RUN_ANYWAY_IF = ['${{ !cancelled() }}', '!cancelled()', '${{ always() }}', 'always()'].freeze
 runner_temp = Dir.mktmpdir('runner-temp-')
 at_exit { FileUtils.remove_entry(runner_temp) if File.directory?(runner_temp) }
 failed = 0
@@ -108,7 +109,10 @@ job['steps'].each_with_index do |step, i|
   reason =
     if step['uses']
       REPLACED.any? { |r| step['uses'].start_with?(r) } ? "uses #{step['uses'].split('@').first}: the container is that" : "uses #{step['uses']}: not run locally"
-    elsif step.key?('if') then "has `if: #{step['if']}`"
+    # Every step runs here even after one failed (one line per step), so a condition that only says "even after a
+    # failure" changes nothing and is run; any other condition is GitHub's to decide, so the step is skipped (backlog
+    # #0-278: the adapter's step runs `if: ${{ !cancelled() }}`, after the settings step that is red until an apply).
+    elsif step.key?('if') && !RUN_ANYWAY_IF.include?(step['if'].to_s.strip) then "has `if: #{step['if']}`"
     elsif run.nil? then 'no run'
     elsif run.include?('${{') then 'its run holds a ${{ }} expression'
     elsif step['shell'] && step['shell'] != 'bash' then "runs in #{step['shell']}"

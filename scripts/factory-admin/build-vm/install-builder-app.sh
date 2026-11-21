@@ -74,8 +74,7 @@ factory_commit=$(pv FACTORY_COMMIT '[0-9a-f]\{40\}')
 helper_image=$(pv HELPER_IMAGE '[a-z0-9._-]*:[a-z0-9._-]*@sha256:[0-9a-f]\{64\}')
 state_dir=$(pv DISPATCHER_STATE '/[A-Za-z0-9/_.-]*')
 repo_dir=$(pv DISPATCHER_REPO '/[A-Za-z0-9/_.-]*')
-repository=$(sed -n 's|^PRODUCT_REPO_URL=https://github\.com/\([A-Za-z0-9_.-]*/[A-Za-z0-9_.-]*\)\.git$|\1|p' "$here/provision.sh")
-for v in factory_commit helper_image state_dir repo_dir repository; do
+for v in factory_commit helper_image state_dir repo_dir; do
   [ -n "${!v}" ] && [ "$(wc -l <<<"${!v}")" -eq 1 ] || fail "cannot read $v from provision.sh"
 done
 limits=$root/.claude/settings.autopilot.json
@@ -150,9 +149,11 @@ $expected"
 echo "modes and owners: ok (home and .config/factory 700, env and key 600, all $DISPATCHER's)"
 
 echo "check-app as $DISPATCHER on $NAME:"
-# --repository: the product's, from provision.sh's PRODUCT_REPO_URL (backlog #0-277 AC8; it stays beside the adapter
-# until #0-278 AC8 takes it from there).
-as_dispatcher "$NODE" --env-file="$ENV_FILE" "$CHECK_APP" --repository "$repository" || fail "check-app failed: the key stays in $key, and on $NAME"
+# --adapter-from-repo: check-app reads the repository a token is narrowed to from .factory/adapter.json at the base of
+# the dispatcher's clone (FACTORY_REPO_DIR, in the env file), the one source the dispatcher reads too (backlog #0-278
+# AC8, `factory` PR #20). Fixed: this script passed --repository, taken from provision.sh's PRODUCT_REPO_URL, a second
+# source of the same value (review of #0-276, #0-277 AC8). The adapter must be on main before this runs.
+as_dispatcher "$NODE" --env-file="$ENV_FILE" "$CHECK_APP" --adapter-from-repo || fail "check-app failed: the key stays in $key, and on $NAME"
 
 rm -f -- "$key"
 [ ! -e "$key" ] || fail "could not delete $key: delete it by hand"

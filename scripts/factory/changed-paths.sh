@@ -13,7 +13,8 @@
 # ============================================================
 set -uo pipefail
 . "$(dirname "$0")/_common.sh"
-. "$(dirname "$0")/_protected.sh"
+# Beside this script: _common.sh resolved FACTORY_SCRIPTS_DIR before its cd into the clone (#0-278).
+. "$FACTORY_SCRIPTS_DIR/_protected.sh"
 
 base=${1:-$(base_ref)}
 since=${2:-}

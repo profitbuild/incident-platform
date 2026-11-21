@@ -3867,6 +3867,11 @@ amended, this item's decisions PR), root (`stage-4.md` "4.3" and "4.7", README "
 
 **Migration (ADR-0063, 2026-11-21):** this is step M1. The `backlog-md` queue kind is not grown beyond what these decisions need: it goes at M5.
 
+**Progress (2026-11-21):** `factory` PR #20 merged (`b5e29d83`); this repository's side in the PR of branch
+`ci/0-278-adapter-from-main` (`stage-4.md` "Done for 4.3d"); the tag `v0.1.0` created by the owner at `b5e29d83`
+(2026-11-21, `verify-pins.sh` passed). Left: the VM recreated, the trial; AC11's
+`protectedPaths` half moved to #0-305 (M3.1), with the Owner-only check it serves.
+
 **Problem.** The dispatcher will run the product's own scripts (for incident-platform `run-tests.sh` and
 `changed-paths.sh`) and read the product's adapter. Read from a task's branch, a task could rewrite the scripts that
 judge it, or shrink the `trustedPaths` that protect them. Run as `dispatcher`, the product's code, `main`'s too, would
@@ -4568,7 +4573,8 @@ AC3. An orphan with no live lease is swept, and a running task's resources are n
 - a mint retried after a timeout that may leave a token unrevoked;
 - `pushTask`'s first production caller.
 
-**Work.** `migration/m2.md` M2.6. Build each, as `stage-4.md` 4.4's "Carried from 4.3b's decisions" and "Carried
+**Work.** `migration/m2.md` M2.6, and from `factory` PR #20's review (#0-278): a container's `runId` checked equal
+to its task's, and one helper for a task's base where two places read it. Build each, as `stage-4.md` 4.4's "Carried from 4.3b's decisions" and "Carried
 from 4.3a's review" state.
 
 **Acceptance criteria.**
@@ -4586,7 +4592,9 @@ AC4. `pushTask`'s production caller binds `repoDir` to the adapter's repository 
 **Problem.** M2's branch stays in the task's repository on the VM. ADR-0060 D7's checks before a push are not built,
 and nothing opens a PR.
 
-**Work.** `migration/m3.md` M3.1–M3.2:
+**Work.** `migration/m3.md` M3.1–M3.2, and #0-278 AC11's half moved here: the dispatcher's `protectedPaths` parser
+tested against a fixture copied from `.ai/rules/protected-paths.md`, the copy held equal by `check-factory-copies.rb`
+(`MOVED_COPIES`).
 - the checks in the push repository: the recorded chain, no merges, `changed-paths` from `main`, `trustedPaths`
   unchanged, the trailers;
 - the rebase path (base = current `main`, `--force-with-lease` to `factory/**` only), written here and used from M5;
@@ -4598,6 +4606,7 @@ and nothing opens a PR.
 AC1. Each check refuses its planted case: a merge, an Owner-only path, a changed `trustedPaths` entry, a missing trailer, and a rebase whose base is not `main` (tests).
 AC2. An existing PR is reused, not duplicated; a BLOCKED task opens a draft (tests against a fake GitHub).
 AC3. builder-app's Issues permission is in `apps/profitbuild-builder.json`, and `repository-settings.rb check` agrees.
+AC4. The dispatcher's `protectedPaths` parser is tested against a copy of `.ai/rules/protected-paths.md`'s lists, held equal to it by `check-factory-copies.rb` (#0-278 AC11's second half).
 
 ### 0-306. A dispatcher PR carries no trace of its agent calls, and the audits do not read it (migration step M3.3)
 
@@ -4632,7 +4641,8 @@ AC3. `audit-data.sh` counts a PR by `app/profitbuild-builder` (its test).
 repository runs.
 
 **Work.** `migration/m3.md` M3.6: the adapter's pinned tag is the one source; the provision reads it, and the copy
-check compares with that tag.
+check compares with that tag. The checks that hold the two pins equal go with the second pin: the `factoryVersion` pattern
+is copied in three places (`ci.yml`'s adapter step, `create.sh`, `verify-pins.sh`, #0-278), removed together.
 
 **Acceptance criteria.**
 AC1. `provision.sh` takes the factory's version from `.factory/adapter.json` and holds no pin of its own (test or check).
