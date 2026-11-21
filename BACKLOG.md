@@ -3867,9 +3867,11 @@ amended, this item's decisions PR), root (`stage-4.md` "4.3" and "4.7", README "
 
 **Migration (ADR-0063, 2026-11-21):** this is step M1. The `backlog-md` queue kind is not grown beyond what these decisions need: it goes at M5.
 
-**Progress (2026-11-21):** `factory` PR #20 merged (`b5e29d83`); this repository's side in the PR of branch
-`ci/0-278-adapter-from-main` (`stage-4.md` "Done for 4.3d"); the tag `v0.1.0` created by the owner at `b5e29d83`
-(2026-11-21, `verify-pins.sh` passed). Left: the VM recreated, the trial; AC11's
+**Progress (2026-11-21):** `factory` PR #20 merged (`b5e29d83`); this repository's side in PR #678 (`a492170c`,
+`stage-4.md` "Done for 4.3d"); the tag `v0.1.0` created by the owner at `b5e29d83`
+(2026-11-21, `verify-pins.sh` passed). Done: the VM recreated at `b5e29d83`, and the trial,
+run `20261121T121255Z-adc1c7` to the end of its task container from base `a492170c` (`stage-4.md` "Done for 4.3d, its
+trial"); AC11's
 `protectedPaths` half moved to #0-305 (M3.1), with the Owner-only check it serves.
 
 **Problem.** The dispatcher will run the product's own scripts (for incident-platform `run-tests.sh` and

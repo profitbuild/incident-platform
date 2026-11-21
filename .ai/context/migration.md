@@ -39,10 +39,9 @@ Legend:
 
 ## Where we are
 
-- Stages 0 to 3 are done, and stage 4's 4.1, 4.2 and 4.3a–c (records in `stage-1.md` … `stage-4.md`).
-- **Current: M1** (4.3d, #0-278), decided 2026-11-21. Its `factory` side was merged in `factory` PR #20 (2026-11-21);
-  this repository's side, the tag and the trial are still open.
-- Next: M2.
+- Stages 0 to 3 are done, and stage 4's 4.1, 4.2 and 4.3a–d (records in `stage-1.md` … `stage-4.md`).
+- **M1 done** (4.3d, #0-278, 2026-11-21): `factory` PR #20, PR #678 and its trial on the VM (`stage-4.md` "4.3").
+- **Current: M2** (`migration/m2.md`), its first item #0-299.
 - The old path (`/backlog-autopilot` in the VM's devcontainer, the rollback that shares the VM by time) still runs
   until M4.
 
@@ -62,7 +61,7 @@ Legend:
 
 ## Steps
 
-### M1. The product's code from `main` (4.3d), CURRENT
+### M1. The product's code from `main` (4.3d), DONE 2026-11-21
 - carries: #0-278, as decided on 2026-11-21, with no growth of the `backlog-md` queue kind. `factory`'s first tag is
   `v0.1.0`.
 - Done: the `factory` side, `factory` PR #20 (2026-11-21):
@@ -82,11 +81,12 @@ Legend:
   - `FACTORY_COMMIT` at `b5e29d83`;
   - `maven-settings.xml` read beside `_common.sh`.
 - `factory`'s tag `v0.1.0` at `b5e29d83`: created by the owner on 2026-11-21, `verify-pins.sh` passed.
-- Left, for the trial's PR that closes #0-278: the VM recreated, one trial run.
+- Trial (2026-11-21): the VM recreated at `b5e29d83`, `check-app --adapter-from-repo` passed, and one run
+  (`20261121T121255Z-adc1c7`) reached the end of its task container from base `a492170c`, the daemon swept after it.
 - Exit: one run to the end of the task container from `main`'s base.
 - Plan: `stage-4.md` "4.3", the decisions for 4.3d.
 
-### M2. The build zone's flow in the dispatcher (4.4, narrowed): `migration/m2.md`
+### M2. The build zone's flow in the dispatcher (4.4, narrowed): `migration/m2.md`, CURRENT
 - umbrella: #0-287. Split into one item per pull request (2026-11-21), in order:
   - #0-299 (M2.0, the build agents in `factory`'s plugin);
   - #0-300 (M2.1, the spike);

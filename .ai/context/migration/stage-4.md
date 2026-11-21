@@ -377,7 +377,7 @@ Split on 2026-11-20 (the owner's choice A), one `factory` pull request each, in 
   the lock itself, `next-item.sh` unchanged):** `next-item.sh` calls `gh pr list` for its locks and there is no token in a container (proposal: the
   dispatcher passes the open PRs as a file, a change to `next-item.sh`'s arguments).
 
-**Record (4.3, in progress: split 2026-11-20, PR #665; 4.3d decided 2026-11-21, its code `factory` PR #20 and the PR after it; 4.3a done 2026-11-20, `factory` PR #15; 4.3b decided with the
+**Record (4.3, done 2026-11-21: split 2026-11-20, PR #665; 4.3d decided 2026-11-21, its code `factory` PR #20 and PR #678, its trial the same day; 4.3a done 2026-11-20, `factory` PR #15; 4.3b decided with the
 owner 2026-11-20, before its code, and done the same day, `factory` PR #16; 4.3c decided 2026-11-20, ADR-0062, built
 by PRs #671, #672, #673, #674 and `factory` PRs #18, #19, and done 2026-11-21 with its trials on the VM).**
 - **Done:** the split into #0-275..#0-278 (above), in an order where each part is reviewed on its own and the first two
@@ -860,16 +860,27 @@ by PRs #671, #672, #673, #674 and `factory` PRs #18, #19, and done 2026-11-21 wi
   - C: the validation at the adapter's tag, the copy check staying on `main` until #0-307.
   The two narrowings of ADR-0060 D8 (a lock only by a running task with a branch; a fast-forward without `+`) are
   the owner's changes to `factory` PR #20's plan.
+- **Done for 4.3d, its trial (2026-11-21, after PR #678 merged as `a492170c`):**
+  - The VM was recreated at `FACTORY_COMMIT` `b5e29d83`. `create.sh`'s boundary checks held after creation and after a
+    reboot, the new check of the tag `v0.1.0` at the pin included, and the clone of the product is at `a492170c`.
+  - builder-app's key was installed again, the VM's recreation rotating it. `install-builder-app.sh`'s `check-app
+    --adapter-from-repo` printed "repository from the adapter at FACTORY_REPO_DIR's main: profitbuild/incident-platform",
+    then every token check (AC8).
+  - One run, `run --item 0-278` (`runId` `20261121T121255Z-adc1c7`):
+    - its `baseSha` is `a492170c`, `main` with the adapter, read from the base of the dispatcher's clone;
+    - its `imageId` was recorded, so the task image was built from `.devcontainer/task.json` and the container came
+      up;
+    - afterwards the daemon held no container and no network, `/home/factory/tasks` was empty, and the only volume
+      was `factory-dispatcher-m2`.
+  - The task stays `running` with no branch: v0 has no phase yet (`PHASES = []`), so a task never ends. By ADR-0060
+    D8 as narrowed (a lock only by a running task with a branch) it locks nothing; its resume by `runId` is M2's
+    (#0-304).
 - **Not done for 4.3d's code:**
-  - the trial run (the owner's; after the merge, since the dispatcher reads the adapter from `main`). The tag
-    `v0.1.0` was created by the owner at `b5e29d83` on 2026-11-21, before this side's review, and `verify-pins.sh`
-    passed;
   - the `protectedPaths` parser's half of AC11;
   - from `factory` PR #20's review, `container.runId` checked equal to `task.runId`, and one helper for a task's base.
-- **Why not:** the trial needs the adapter on `main` and a VM recreated at `b5e29d83`; its record closes #0-278. The
-  parser comes with the Owner-only check before a push (M3.1, #0-305). The two helpers belong to the flow that first
+- **Why not:** the parser comes with the Owner-only check before a push (M3.1, #0-305). The two helpers belong to the flow that first
   uses them (M2, #0-304).
-- **Not done:** 4.3d's remainder (the VM recreated and the trial, "Done for 4.3d"); and, from 4.3a's review, symlinks under the adapter's paths (now #0-278 AC5), a
+- **Not done:** from 4.3a's review, symlinks under the adapter's paths (now #0-278 AC5), a
   reason without GitHub's text, resuming by `runId` or one running task at most, a blocked task counted by the
   breaker, a retried mint's leftover token, a script whose last segment is `.` (now #0-278's Work), the item-id format tied to the
   queue's kind, and a check that `gate.schema.json` matches what `run-tests.sh` prints.
@@ -888,7 +899,7 @@ by PRs #671, #672, #673, #674 and `factory` PRs #18, #19, and done 2026-11-21 wi
   clone's configuration, and `factory` reads nothing of `dispatcher`'s home (`create.sh` checks it), so the check
   would guard against the uid that runs the dispatcher itself; 4.3d (#0-278) reads that clone and may take it with
   its own checks.
-- **Why not:** one item at a time (#0-278 next; `taskImage`, from 4.3a's review, was bounded by 4.3c, #0-277 AC5);
+- **Why not:** one item at a time (`taskImage`, from 4.3a's review, was bounded by 4.3c, #0-277 AC5);
   the adapter's paths by 4.3d (#0-278), the reason, the resume, the breaker's count, the mint's retries and the running of a command by 4.4's
   flow (its section, "Carried from 4.3a's review"); the item id belongs to the `backlog-md` queue, so it moves with
   the queue's kind before a second product or stage 7 (`migration.md`, stage 7's gap); the gate's schema and its
