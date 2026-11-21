@@ -177,7 +177,6 @@ Code, Javadoc, config comments and commits reference items as `backlog #N`.
 | [0-283](#0-283-the-devcontainer-image-lets-dev-widen-its-firewall-and-installs-claude-code-unpinned) | The devcontainer image lets `dev` widen its firewall and installs Claude Code unpinned | ci | Medium | Open |
 | [0-284](#0-284-the-task-container-is-checked-before-anything-runs-in-it-and-its-refusals-hold-none-of-the-agent-sides-text) | The task container is checked before anything runs in it, and its refusals hold none of the agent side's text | ci | Medium | Open |
 | [0-285](#0-285-what-a-task-leaves-in-factorys-reach-outside-the-daemon-is-decided-before-a-task-holds-a-credential) | What a task leaves in `factory`'s reach outside the daemon is decided before a task holds a credential | ci | High | Open |
-| [0-286](#0-286-the-migrations-plan-describes-only-the-current-stage-and-goes-through-states-it-later-removes) | The migration's plan describes only the current stage and goes through states it later removes | docs | High | In progress |
 | [0-287](#0-287-the-dispatcher-calls-no-agent-yet-migration-step-m2) | The dispatcher calls no agent yet (migration step M2) | ci | High | Open |
 | [0-288](#0-288-the-dispatcher-opens-no-pull-request-and-leaves-no-trace-of-its-agent-calls-migration-step-m3) | The dispatcher opens no pull request and leaves no trace of its agent calls (migration step M3) | ci | High | Open |
 | [0-289](#0-289-claudes-credential-would-sit-in-the-task-container-and-the-cost-of-a-run-is-unknown-migration-step-m3) | Claude's credential would sit in the task container, and the cost of a run is unknown (migration step M3) | security | High | Open |
@@ -4197,29 +4196,6 @@ AC2. What a task planted in `factory`'s Docker configuration, the daemon's unit,
      shared `factory-dispatcher-m2` volume does not reach the next task's credential, each by the way AC1 chose (a
      test or a VM trial, recorded).
 AC3. README "Infrastructure Hardening" names what still persists across tasks.
-
-### 0-286. The migration's plan describes only the current stage and goes through states it later removes
-
-**Type:** docs · **Priority:** High · **Status:** In progress (ADR-0063, 2026-11-21).
-**Autopilot:** human-only · **Risk:** low · **Complexity:** low · **Depends on:** —
-**Touches:** decisions (ADR-0063, status lines of ADR-0055, ADR-0060, ADR-0062, the ADR index), context (.ai/context/migration.md, .ai/context/migration/m2.md … m9-m12.md, stage-4.md's note), .ai/README.md, CLAUDE.md ("AI factory"), docs/ai-factory.md, BACKLOG.md
-
-**Problem.** ADR-0055 names the stages, but a stage's plan is written only when it starts: stages 5–10 have one line
-each in `migration.md` ("gap: all of it"), so what is built, where and in which order cannot be read anywhere. The
-plan also builds work that a later stage removes: the rollback that shares the VM by time (ADR-0062 point 5), a
-`backlog-md` queue kind in the dispatcher, the review panel ported into the build VM (4.4) and moved again (stage 5)
-after a shadow run, and 2–3 items per factory change. The owner's aim (2026-11-21) is the end state, quickly; the
-intermediate states may be skipped where that does not harm the migration.
-
-**Work.** The owner's decisions of 2026-11-21 (D1–D6, G1–G4), taken in an interactive session on an analysis of
-stages 0–4 against ADR-0055's target, recorded as ADR-0063; `migration.md` rewritten as steps M1–M12; a plan file for
-every remaining step; items #0-287 to #0-307 for the steps (M2 and M3 one per pull request); existing items moved to
-their steps.
-
-**Acceptance criteria.**
-AC1. ADR-0063 records D1–D6 and G1–G4 and amends ADR-0055 (stages, rules), ADR-0060 D7/D8 and ADR-0062 point 5; each amended ADR's status line names it, and the ADR index has its row.
-AC2. `.ai/context/migration.md` maps steps M1–M12 to their items, and every remaining step has its plan file under `.ai/context/migration/` (M2–M8 in parts, M9–M12 as an outline), each part saying what, where and its check, each file its exit.
-AC3. Items #0-287 to #0-307 exist: M2 and M3 one per pull request under their umbrellas, M4–M8 one per step, M9–M12 one umbrella; the existing items ADR-0063 moves name their step or deferral.
 
 ### 0-287. The dispatcher calls no agent yet (migration step M2)
 
