@@ -6,7 +6,8 @@
   starts); its Consequences amended on 2026-11-19 (step 4.2 split, #0-271 and #0-272: when ADR-0034 and
   ADR-0052 are amended); D7 amended on 2026-11-20 by #0-275 (v0's one lock for the whole dispatcher) and by #0-276
   (the commits cross as a bundle into a fresh push repository); its Consequences amended on 2026-11-20 by #0-276
-  (new sources of `factory`'s CI)
+  (new sources of `factory`'s CI); D6, D7 and D8 amended on 2026-11-21 by #0-278 (no product code runs as
+  `dispatcher`; the path checks are its own code; the owner names the item until stage 7)
 - **Backlog:** #0-267 (stage 4.1); stage 4's later items are created as their turn comes, each from its step of the
   plan `.ai/context/migration/stage-4.md`
 - **Date:** 2026-11-17
@@ -93,6 +94,25 @@ and `--plugin-dir` (code.claude.com/docs/en/headless.md, cli-reference.md).
   `factory` version. `factory` holds its
   JSON Schema and the gate contract (today's `run-tests.sh` JSON: `pass`, `fixable` or `stop`, an artifact, a summary).
   The dispatcher runs product code only from `main` (`next-item.sh`); code of a task branch runs only in its container.
+  **Amended (2026-11-21, #0-278, the owner): no product code runs as `dispatcher`, `main`'s included.** The
+  sentence above let the dispatcher run `main`'s `next-item.sh` itself, which ADR-0062 point 4 ("no product code on
+  the host") and the boundary of the key forbid. `main` is trusted for its intent, since the owner merged it, not
+  isolated: one change to `scripts/factory/` merged unnoticed would read builder-app's key, and to the factory a
+  product is a tenant (ADR-0055: the factory is a product of its own, with products of other stacks to come). So:
+  - the dispatcher reads the adapter, `.factory/adapter.json`, and every file of the product it reads, from the
+    base commit of its own clone of `main`, as blobs of the git tree, never from a checkout and never from a task's
+    branch. An entry that is a symlink, on the way to a path or at it, is refused (as `readTaskConfig` does, #0-277).
+    A path named as `run --adapter`'s argument is the trial's only, until the product holds its adapter;
+  - the product's commands (`gate`, `changedPaths`) run only in the task's container, from the base's blobs of
+    `trustedPaths` put there by the dispatcher before each run, never from the branch's copy; what they print is
+    the agent's side, read against its schema, and neither the review zone (ADR-0055) nor a refusal rests on it;
+  - the refusals the dispatcher makes are its own code: a branch that changes a path of `trustedPaths` is refused
+    (D7);
+  - until stage 7 the owner chooses the item (D8, amended below): the dispatcher runs no queue command, so the
+    adapter's `queue` stays as it is, read by nothing until stage 7 changes its kind.
+  Why not a short-lived container for `next-item.sh` (proposed in #0-278's analysis): it would serve `BACKLOG.md`
+  only until stage 7's Project, and v0 starts by hand anyway (D8), so the owner's choice costs one step per task
+  and adds no mechanism the end state drops.
 - **D7. Before a push the dispatcher checks, outside the container:** the branch descends from the base it recorded;
   no Owner-only path changed (changed-paths from `main`), else stop or the owner's label; no path of the adapter's `trustedPaths` changed;
   it writes the `Factory-Run` and `Factory-Agent` trailers and the per-call trace (head before and after each call);
@@ -115,8 +135,25 @@ and `--plugin-dir` (code.claude.com/docs/en/headless.md, cli-reference.md).
   way: accepted only as one commit whose only parent is the head the dispatcher recorded, carrying exactly its
   trailers, author and committer, so the trace and `Factory-Agent`
   stay the dispatcher's, not the container's (review round 1 of #0-276's decisions).
+  **Amended (2026-11-21, #0-278, the owner): the path checks are the dispatcher's own code.** "Changed-paths from
+  `main`" above meant the product's script run outside the container, that is as `dispatcher` (D6, amended). Instead
+  the dispatcher lists the changed paths itself, `git diff --name-only` of the base and the head in the push
+  repository (its git, its flags, the agent's objects read as data, #0-276), and compares them with the adapter's
+  `trustedPaths` (#0-278) and with the lists of the adapter's `protectedPaths` file that need the owner, `protected`
+  and `build-config`, as CI's check reads them (4.5). That file's format (each list between the markers
+  `<!-- <list>:start -->` and `<!-- <list>:end -->`, one ``- `<path>` `` line per entry, a directory ending with `/`, as
+  `_protected.sh` parses it today) becomes part of `factory`'s contract with a product, as the gate's JSON is, so the
+  template of a product repository (stage T) writes it. CI's "Changes that need the owner" stays the gate that
+  counts; the dispatcher's check stops a task before it costs a review round. The product's `changed-paths.sh`
+  stays advisory (areas, rule files, reviewers), run in the task's container.
 - **D8. v0 starts by hand** (`dispatcher run [#0-N]`), one task at a time, in shadow; a timer comes with stage 7's
   queue. #0-261's restart and idempotence requirements hold from v0 (an existing PR for the branch is reused).
+  **Amended (2026-11-21, #0-278, the owner): in v0 the owner always names the item,** `run --item 0-N`, until stage
+  7: the owner takes the next item of the approved queue with the product's `next-item.sh <base> <0-N>` in their own
+  session, where it runs today, and the dispatcher picks nothing. Before it starts a task it refuses an item that an
+  open pull request holds (a head branch containing `/<id>-`, the lock `next-item.sh` reads, so the two paths lock
+  each other, 4.7) or that one of its own tasks not ended holds, the open pull requests listed with builder-app's
+  token, every page, a list it could not read whole refusing the start.
 
 ## Alternatives considered
 

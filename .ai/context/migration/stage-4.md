@@ -315,9 +315,14 @@ Split on 2026-11-20 (the owner's choice A), one `factory` pull request each, in 
 - **4.3c, #0-277:** done 2026-11-21 (the Record's "Tried on the VM, the trials"). "Docker for the dispatcher" (decided
   with the owner on 2026-11-20, ADR-0062; the Record's "Decided for 4.3c") and the task container; with it #0-282, incident-platform's task configuration for that container (each
   needs the other: #0-282's check is #0-277's, #0-277's trial on the VM runs #0-282's configuration).
-- **4.3d, #0-278:** "Product code from `main` only" and `next-item.sh`'s open pull requests as a file.
+- **4.3d, #0-278:** "Product code from `main` only" (decided with the owner on 2026-11-21, ADR-0060 D6, D7 and D8
+  amended; the Record's "Decided for 4.3d"): the adapter and the product's files from the base commit, the
+  `trustedPaths` check the dispatcher's own, the product's commands from the base's blobs in the task container, and
+  the item named by the owner until stage 7, its lock checked by the dispatcher.
 
-- **CLI:** `node dispatcher/src/cli.mjs run [--item 0-N] [--resume <branch>] --adapter <product>/.factory/adapter.json`.
+- **CLI:** `node dispatcher/src/cli.mjs run [--item 0-N] [--resume <branch>] --adapter <product>/.factory/adapter.json`
+  (from 4.3d: `--item` required in v0 and the adapter read from `main`'s base, `--adapter` the trial's only; "Decided
+  for 4.3d").
   Configuration from the environment only (ADR-0055): `FACTORY_STATE_DIR`, `FACTORY_REPO_DIR` (the product clone the
   dispatcher reads `main` from), the app's ids (`BUILDER_APP_*`, 4.2a), `FACTORY_PROXY_ADDR`, and today's limits
   `FACTORY_MAX_BLOCKED`, `FACTORY_AUDIT_EVERY`, `FACTORY_MAX_MERGES_PER_DAY` (no defaults, ADR-0052 point 5).
@@ -362,15 +367,17 @@ Split on 2026-11-20 (the owner's choice A), one `factory` pull request each, in 
   shared cache volume (open: a task can poison it for the next; proposal: accept in v0, per-task copy if a seeded case
   shows it). At the end, BLOCKED or not, and at the next run's start: every container and network of the daemon, every
   volume but `~/.m2`, and the work directory removed (ADR-0062 point 7).
-- **Product code from `main` only (D6):** the adapter's commands and `trustedPaths` are read from the base commit
+- **Product code from `main` only (D6; as amended on 2026-11-21, "Decided for 4.3d" below supersedes this bullet and
+  the next where they differ):** the adapter's commands and `trustedPaths` are read from the base commit
   (for incident-platform: `next-item.sh`, `changed-paths.sh`, `run-tests.sh`); the queue command runs in a short-lived
   container from `main` too. The dispatcher names no product path itself (ADR-0055).
 - **Tests:** the lock refuses a second run; a killed run resumes at its phase and opens no second PR; a retried 503 is
   not counted, ten are a block; the adapter and gate schemas refuse a missing field.
-- **Open:** `next-item.sh` calls `gh pr list` for its locks and there is no token in a container (proposal: the
+- **Open (settled 2026-11-21, "Decided for 4.3d": the owner names the item until stage 7, the dispatcher checks
+  the lock itself, `next-item.sh` unchanged):** `next-item.sh` calls `gh pr list` for its locks and there is no token in a container (proposal: the
   dispatcher passes the open PRs as a file, a change to `next-item.sh`'s arguments).
 
-**Record (4.3, in progress: split 2026-11-20, PR #665; 4.3a done 2026-11-20, `factory` PR #15; 4.3b decided with the
+**Record (4.3, in progress: split 2026-11-20, PR #665; 4.3d decided 2026-11-21; 4.3a done 2026-11-20, `factory` PR #15; 4.3b decided with the
 owner 2026-11-20, before its code, and done the same day, `factory` PR #16; 4.3c decided 2026-11-20, ADR-0062, built
 by PRs #671, #672, #673, #674 and `factory` PRs #18, #19, and done 2026-11-21 with its trials on the VM).**
 - **Done:** the split into #0-275..#0-278 (above), in an order where each part is reviewed on its own and the first two
@@ -716,7 +723,8 @@ by PRs #671, #672, #673, #674 and `factory` PRs #18, #19, and done 2026-11-21 wi
     its name (ADR-0055).
   - **The trial's adapter is a file of the trial (C1),** in the dispatcher's state directory, written for AC3's trial
     and recorded; its `repository` must equal `provision.sh`'s `PRODUCT_REPO_URL`'s owner/name, since during the trial
-    it is a second source of the repository a token is narrowed to (#0-278 AC8); incident-platform's `.factory/adapter.json`, validated by Factory guards, stays 4.7's.
+    it is a second source of the repository a token is narrowed to (#0-278 AC8); incident-platform's `.factory/adapter.json`, validated by Factory guards, was 4.7's, moved to 4.3d (#0-278,
+    2026-11-21).
   - **AC8:** `install-builder-app.sh` passes `--repository profitbuild/incident-platform` to `check-app`, its test
     matching the whole call; the repository it passes, read from `provision.sh`'s `PRODUCT_REPO_URL`, stays beside the
     adapter until #0-278 AC8 takes it from there.
@@ -800,9 +808,40 @@ by PRs #671, #672, #673, #674 and `factory` PRs #18, #19, and done 2026-11-21 wi
   - **Not changed by the trials:** no code, no ADR. Two remarks: the clone's `origin` names the bundle's path in
     the helper container, absent in the task container (harmless; 4.4 pushes from the push repository, never the
     clone's `origin`); the clone is the mapped `dev`'s, so even `factory` writes nothing in it.
-- **Not done:** 4.3d; and, from 4.3a's review, symlinks under the adapter's paths, a
+- **Decided for 4.3d with the owner (2026-11-21, `/research` of #0-278, before its code; ADR-0060 D6, D7, D8
+  amended), by one rule the owner set for it: the intermediate state at its minimum, the end state's mechanisms whole
+  (secure, repeatable, efficient):**
+  - **No product code runs as `dispatcher`**, `main`'s included (ADR-0062 point 4, "no product code on the host"):
+    `main` is trusted for its intent, not isolated, and to the factory a product is a tenant. Why not the sentence
+    D6 held ("the dispatcher runs product code only from `main` (`next-item.sh`)"): one change to `scripts/factory/`
+    merged unnoticed would read builder-app's key.
+  - **The adapter and every product file the dispatcher reads come from the base commit** of its clone of `main`, as
+    blobs of the git tree (as `readTaskConfig`, #0-277), never from a checkout nor from the branch; a symlink entry on
+    the way to a path or at it refused (AC5 by the tree's modes, so no `realpath` or `O_NOFOLLOW`). So
+    incident-platform's `.factory/adapter.json` comes in 4.3d, moved from 4.7, `.factory/` Owner-only and in
+    `trustedPaths`, beside `scripts/factory/`.
+  - **The refusals are the dispatcher's own code:** the changed paths from `git diff` of the base and the head in
+    the push repository, against the base's `trustedPaths` (#0-278 AC1) and, in 4.5, the `protectedPaths` lists that
+    need the owner (`protected`, `build-config`), whose format becomes part of `factory`'s contract (stage T's
+    template writes it). CI's "Changes that need the owner" stays the gate that counts.
+  - **The product's commands run only in the task container, from the base's blobs**, put there before each run;
+    what they print is the agent's side (ADR-0055: the review zone never reads the build VM's local gate), so
+    `changed-paths.sh` is advisory there and AC6's run against the push repository is dropped.
+  - **Until stage 7 the owner names the item** (`run --item 0-N`; the owner takes the next item of the approved
+    queue with `next-item.sh <base> <0-N>` in their own session, as today). The dispatcher picks nothing, runs no
+    queue command, and `next-item.sh` is unchanged (its open pull requests as a file, the item's old AC3, dropped);
+    it refuses an item an open pull request holds (`/<id>-` in the head branch, the lock `next-item.sh` reads, so
+    the two paths lock each other) or one of its own tasks not ended holds, every page of the list read. Why not a
+    short-lived container for `next-item.sh`, the analysis's first proposal: it serves `BACKLOG.md` only until stage
+    7's Project, and v0 starts by hand anyway (D8), so it would be a mechanism the end state drops.
+  - **`factory`'s first tag, `v0.1.0`**, at the commit `FACTORY_COMMIT` names, created by the owner: the adapter's
+    `factoryVersion` must name a tag (the schema's, the end state's, which Renovate bumps), and `factory` had none.
+    Two pins, held equal by the VM's side's check, until one source replaces them (4.7's copy check takes the tag).
+  - **Not decided here, left to the code's pull request:** whether `run --adapter` is dropped or refused once the
+    product holds its adapter; `check-app`'s option name for the adapter (AC8).
+- **Not done:** 4.3d; and, from 4.3a's review, symlinks under the adapter's paths (now #0-278 AC5), a
   reason without GitHub's text, resuming by `runId` or one running task at most, a blocked task counted by the
-  breaker, a retried mint's leftover token, a script whose last segment is `.`, the item-id format tied to the
+  breaker, a retried mint's leftover token, a script whose last segment is `.` (now #0-278's Work), the item-id format tied to the
   queue's kind, and a check that `gate.schema.json` matches what `run-tests.sh` prints.
 - **Not done, from 4.3b's reviews:** a refused bundle's objects left in the repository it was read into; `repoDir`
   bound to the adapter's `repository`; `FACTORY_REPO_DIR`'s loose-object directories and pack files checked, and who
@@ -827,7 +866,8 @@ by PRs #671, #672, #673, #674 and `factory` PRs #18, #19, and done 2026-11-21 wi
 
 ## 4.4 The control flow, ported
 
-- **From `backlog-autopilot.js` into `dispatcher/src/flow/`:** the phases (preflight, pick, plan, implement, review
+- **From `backlog-autopilot.js` into `dispatcher/src/flow/`:** the phases (preflight, pick (in v0 the owner's `--item` and the dispatcher's lock check, ADR-0060 D8 as amended by
+  #0-278: no pick of its own until stage 7), plan, implement, review
   rounds with the path gate and the test gate, verify, acceptance, ship), the JSON schemas of each answer, `as()`
   (an agent that ends without its answer is a stop), `stopItem`, the limits (`MAX_ROUNDS` 3, `MAX_TEST_FIXES` 2,
   `MAX_AGENT_CALLS` 45), the breaker, `notify.sh`'s events. `factory-ops` calls become plain function calls.
@@ -861,7 +901,7 @@ by PRs #671, #672, #673, #674 and `factory` PRs #18, #19, and done 2026-11-21 wi
   branch is recorded can be resumed by neither today); `blockTask` counts the block in `state.json`, so an outage
   trips the breaker; a mint retried after a timeout may leave a token unrevoked (it expires within the hour: revoke
   what can be found, or accept it knowingly); a command is spawned with the product's root as `cwd` and its script
-  joined to it, and a script whose last segment is `.` is refused. #0-280 (the gate's schema checked against
+  joined to it, and a script whose last segment is `.` is refused (both moved to 4.3d, #0-278's Work, 2026-11-21). #0-280 (the gate's schema checked against
   `run-tests.sh`) lands before this step first reads a gate's answer.
 
 **Record (4.4):** not started; it waits for 4.3.
@@ -919,15 +959,17 @@ by PRs #671, #672, #673, #674 and `factory` PRs #18, #19, and done 2026-11-21 wi
 
 ## 4.7 The adapter, the switch and the three runs
 
-- **incident-platform:** `.factory/adapter.json` (the gate `scripts/factory/run-tests.sh`, changed-paths
+- **incident-platform (moved to 4.3d, #0-278, 2026-11-21: the dispatcher reads the adapter from `main`'s base from
+  then on; what follows stays as the adapter's content):** `.factory/adapter.json` (the gate `scripts/factory/run-tests.sh`, changed-paths
   `scripts/factory/changed-paths.sh`, queue `BACKLOG.md` and `.ai/plan/queue.md`, protected paths
   `.ai/rules/protected-paths.md`, the devcontainer image, profile `spring-boot`, the pinned `factory` tag), validated
   by Factory guards against `factory`'s schema.
-- **The switch:** the owner starts either path; both read the same queue, and an open PR is a lock for both. Only one
+- **The switch:** the owner starts either path; both read the same queue (the dispatcher's through the owner, who
+  names its item with `next-item.sh`, ADR-0060 D8 as amended by #0-278), and an open PR is a lock for both. Only one
   runs at a time (the owner's rule until the timer of stage 7).
 - **The copy check's reference:** with the pinned `factory` tag in `.factory/adapter.json`,
   `check-factory-copies.rb` (#0-268) compares with that tag instead of `factory@main`.
-- **Exit:** three items from the queue, each a PR opened by builder-app, reviewed and accepted, merged by the owner.
+- **Exit:** three items from the queue (each the next one `next-item.sh` gives, named by the owner), each a PR opened by builder-app, reviewed and accepted, merged by the owner.
   Then: ADR-0053 marked superseded by ADR-0060; #0-236, #0-251, #0-253, #0-213, #0-217, #0-226, #0-228, #0-234 closed
   as done by stage 4; the bot account and `factory-ops` kept for the rollback until stage 5's exit;
   `.ai/context/migration.md` and this file record the runs (as `stage-3.md` does).
