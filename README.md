@@ -1503,7 +1503,10 @@ checker's own cases run first; and zizmor's security audit of the same files and
 actions, one annotation per finding not suppressed with its reason (backlog #0-147). Last, GitHub's ruleset of
 `main`, the environments, repository settings and admins, and every secret a job reads, against `.github/repository-settings/` (`main`'s copy, on a PR that does
 not change it), and every required check against the jobs that report one (backlog #0-113, ADR-0034,
-`repository-settings.rb check`).
+`repository-settings.rb check`). After it, the two steps that run `factory`'s code at the adapter's `factoryVersion`,
+whose tag must be `FACTORY_COMMIT`: the adapter checked by that version's `checkAdapter` (backlog #0-278), and every
+answer of the test gate in its tests' cases by its `checkGateAnswer`, the dispatcher's, a difference always failing
+(backlog #0-280, ADR-0061 amended, `check-gate-answers.mjs`).
 
 ### Job 6 — Secret Scan
 

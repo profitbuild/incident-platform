@@ -3882,10 +3882,11 @@ AC1. `check-factory-copies.rb` fails a pull request here that changes the dev ap
 ### 0-280. The gate's schema in `factory` and `run-tests.sh` here are checked against each other by nothing
 
 **Type:** ci · **Priority:** Medium · **Status:** Open (found by the review of `factory` PR #15, #0-275, 2026-11-20).
-**Autopilot:** human-only · **Risk:** medium · **Complexity:** low · **Depends on:** #0-275
-**Touches:** factory (.github/scripts/test-autopilot-workflow.mjs's check of a factory script's keys against its schema,
-.github/scripts/test-run-tests.sh, the Lint Workflows step that clones `factory@main`: owner-only), decisions (an
-amendment of ADR-0061: a contract held in `factory` whose producer is here)
+**Autopilot:** human-only · **Risk:** medium · **Complexity:** low · **Depends on:** #0-275, #0-278 (its Lint Workflows
+step's checkout of `factory` at the adapter's version)
+**Touches:** factory (.github/scripts/test-run-tests.sh, check-gate-answers.mjs (new), .github/workflows/ci.yml: Lint
+Workflows: owner-only), decisions (an amendment of ADR-0061), root (`.ai/context/infrastructure.md`, README, CLAUDE.md
+"Commands")
 
 **Migration (ADR-0063, 2026-11-21):** step M2, before #0-301 reads a gate's answer.
 
@@ -3894,16 +3895,35 @@ modules, log, head, artifact, summary), with `additionalProperties: false`. A fi
 one renamed, would make every gate answer refused once 4.4's flow reads them, and nothing in either repository checks
 the two against each other until then (FAC-A01's spirit: a contract kept in one repository, its producer in another).
 
-**Work.** Extend the check that already holds a factory script's printed keys against the schema they are read
-with (`.github/scripts/test-autopilot-workflow.mjs`, #0-175): the keys `run-tests.sh` prints (pass, fixable, stop) held
-against `factory@main`'s `gate.schema.json`, read from the clone Lint Workflows already makes as data (its properties,
-required and `additionalProperties`), never by running `factory`'s validator or any of its code (ADR-0061 point 5: the
-clone is input, read, never run). No second validator here. ADR-0061's leading rule holds: a pull request here that
-changes the answer's shape fails until `factory` matches; a difference `factory` starts warns.
+**Decided with the owner (2026-11-21, `/research` of #0-280, then aligned with #0-278's choice A(a); ADR-0061
+amended):** the real answers, not samples, held to `factory`'s own `checkGateAnswer`, the dispatcher's, at the version
+the adapter pins (its tag at `FACTORY_COMMIT`), never `factory@main`.
+- `test-run-tests.sh` keeps every answer its cases make, each the real output of one path of `run-tests.sh`.
+- In Lint Workflows, the step "The test gate's answers keep factory's contract" follows #0-278's "The adapter keeps its
+  factory version's schema" and reads its checkout: one clone, one validator. `check-gate-answers.mjs` runs that
+  version's `checkGateAnswer` on every answer, after a canary answer it must refuse; a refusal is exit 1, a check not
+  made (no checkout, no export, another error, an unreadable answer) exit 3, never a pass.
+- A difference always fails: the producer and the pin are both this repository's, so only a pull request here makes
+  one. No warning case.
+- Why not the first plan (option B: the schema read as data with a subset of JSON Schema here, fetched by commit id):
+  each way the subset differs from the dispatcher's validator is a case where CI passes and every task's gate is
+  refused (its review found five); each keyword `factory` adds would turn CI red until the subset grows; a fetch by id
+  takes any commit of the fork network. Running the pinned code adds no reach: the build VM runs it beside
+  builder-app's key.
+- Leans on `factory`'s `dispatcher/src/adapter.mjs` exporting `checkGateAnswer` and `AdapterError`: a change there fails
+  the version's move loudly (exit 3).
 
 **Acceptance criteria.**
 AC1. A field added to or removed from `run-tests.sh`'s answer, without the schema in `factory`, fails a pull request
-     here; the shapes of today pass (tests).
+     here; the shapes of today pass (tests: every case's answer checked, and `run-tests.sh` itself given one more field
+     in `stop()`).
+AC2. The check cannot pass by not checking: a checker that takes a canary answer, one that refuses it with another
+     error, one that takes a taken answer with one field more, one that throws on an answer, a checkout with no
+     `checkGateAnswer`, no checkout, or an answer that is not JSON, is exit 3; a refusal is exit 1 and names the answer
+     and `factory`'s reason (tests, against fake checkouts).
+AC3. The checker is `factory`'s at the adapter's `factoryVersion`, from #0-278's checkout, whose tag is `FACTORY_COMMIT`
+     (#0-278's step compares the two before it checks the tree out, so a mismatch leaves no code to run); the step runs
+     after every step that holds a token, and fails without that checkout.
 
 ### 0-281. The dispatcher's credential checks are held at the call that sends them, and its static scans close their bounds
 
@@ -4180,6 +4200,8 @@ its hook and what `/seed-bugs` and `/audit` run through it stay until M6 ports t
 (review round 1 of #0-286). The preflight's "audit due" stop goes with the old path; until M6 the
 owner starts the audits by hand at the count (`m4.md` M4.1b). Three ties of `seed-bugs.js`/`audit.js` to the removed
 workflow are rewritten, not cut (M4.1).
+`run-tests.sh`'s answer is held to two schemas until then: the old path's `ops()` schema (`test-autopilot-workflow.mjs`,
+#0-175) and `factory`'s `gate.schema.json` (#0-280); the first goes with the old path (review round 1 of #0-280).
 
 **Acceptance criteria.**
 AC1. No file references a removed workflow, agent, skill or script (`git grep`, and Factory guards and `check-protected-paths.sh` green), and one `/seed-bugs` run and one `/audit` run still complete.
