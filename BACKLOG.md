@@ -170,7 +170,6 @@ Code, Javadoc, config comments and commits reference items as `backlog #N`.
 | [0-265](#0-265-a-task-back-after-a-pause-is-resumed-without-asking-whether-it-still-makes-sense) | A task back after a pause is resumed without asking whether it still makes sense | ci | Low | Open |
 | [0-274](#0-274-dispatcher-passes-the-egress-list-of-factory-wider-than-it-needs) | `dispatcher` passes the egress list of `factory`, wider than it needs | ci | Low | Open |
 | [0-279](#0-279-the-dev-apps-ids-and-permissions-are-kept-in-two-places-with-no-check) | The dev app's ids and permissions are kept in two places with no check | ci | Low | Open |
-| [0-280](#0-280-the-gates-schema-in-factory-and-run-testssh-here-are-checked-against-each-other-by-nothing) | The gate's schema in `factory` and `run-tests.sh` here are checked against each other by nothing | ci | Medium | Open |
 | [0-281](#0-281-the-dispatchers-credential-checks-are-held-at-the-call-that-sends-them-and-its-static-scans-close-their-bounds) | The dispatcher's credential checks are held at the call that sends them, and its static scans close their bounds | ci | Medium | Open |
 | [0-282](#0-282-incident-platform-ships-a-task-configuration-for-the-dispatchers-container) | incident-platform ships a task configuration for the dispatcher's container | ci | High | Open |
 | [0-283](#0-283-the-devcontainer-image-lets-dev-widen-its-firewall-and-installs-claude-code-unpinned) | The devcontainer image lets `dev` widen its firewall and installs Claude Code unpinned | ci | Medium | Open |
@@ -3879,32 +3878,6 @@ user id stays deferred to stage T.
 AC1. `check-factory-copies.rb` fails a pull request here that changes the dev app's file while `factory` differs,
      and warns otherwise (ADR-0061), with tests.
 
-### 0-280. The gate's schema in `factory` and `run-tests.sh` here are checked against each other by nothing
-
-**Type:** ci · **Priority:** Medium · **Status:** Open (found by the review of `factory` PR #15, #0-275, 2026-11-20).
-**Autopilot:** human-only · **Risk:** medium · **Complexity:** low · **Depends on:** #0-275
-**Touches:** factory (.github/scripts/test-autopilot-workflow.mjs's check of a factory script's keys against its schema,
-.github/scripts/test-run-tests.sh, the Lint Workflows step that clones `factory@main`: owner-only), decisions (an
-amendment of ADR-0061: a contract held in `factory` whose producer is here)
-
-**Migration (ADR-0063, 2026-11-21):** step M2, before #0-301 reads a gate's answer.
-
-**Problem.** `factory`'s `schemas/gate.schema.json` is the contract of `run-tests.sh`'s answer (status, exitCode,
-modules, log, head, artifact, summary), with `additionalProperties: false`. A field added to `run-tests.sh` here, or
-one renamed, would make every gate answer refused once 4.4's flow reads them, and nothing in either repository checks
-the two against each other until then (FAC-A01's spirit: a contract kept in one repository, its producer in another).
-
-**Work.** Extend the check that already holds a factory script's printed keys against the schema they are read
-with (`.github/scripts/test-autopilot-workflow.mjs`, #0-175): the keys `run-tests.sh` prints (pass, fixable, stop) held
-against `factory@main`'s `gate.schema.json`, read from the clone Lint Workflows already makes as data (its properties,
-required and `additionalProperties`), never by running `factory`'s validator or any of its code (ADR-0061 point 5: the
-clone is input, read, never run). No second validator here. ADR-0061's leading rule holds: a pull request here that
-changes the answer's shape fails until `factory` matches; a difference `factory` starts warns.
-
-**Acceptance criteria.**
-AC1. A field added to or removed from `run-tests.sh`'s answer, without the schema in `factory`, fails a pull request
-     here; the shapes of today pass (tests).
-
 ### 0-281. The dispatcher's credential checks are held at the call that sends them, and its static scans close their bounds
 
 **Type:** ci · **Priority:** Medium · **Status:** Open (found by the review of `factory` PR #16, #0-276, 2026-11-20).
@@ -4180,6 +4153,8 @@ its hook and what `/seed-bugs` and `/audit` run through it stay until M6 ports t
 (review round 1 of #0-286). The preflight's "audit due" stop goes with the old path; until M6 the
 owner starts the audits by hand at the count (`m4.md` M4.1b). Three ties of `seed-bugs.js`/`audit.js` to the removed
 workflow are rewritten, not cut (M4.1).
+`run-tests.sh`'s answer is held to two schemas until then: the old path's `ops()` schema (`test-autopilot-workflow.mjs`,
+#0-175) and `factory`'s `gate.schema.json` (#0-280); the first goes with the old path (review round 1 of #0-280).
 
 **Acceptance criteria.**
 AC1. No file references a removed workflow, agent, skill or script (`git grep`, and Factory guards and `check-protected-paths.sh` green), and one `/seed-bugs` run and one `/audit` run still complete.

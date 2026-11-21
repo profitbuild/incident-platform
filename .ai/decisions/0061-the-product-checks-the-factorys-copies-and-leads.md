@@ -2,6 +2,7 @@
 
 - **Status:** Accepted (2026-11-19, by the owner); amended by #0-272 (2026-11-20: a fifth comparison, below) and by
   #0-278 (2026-11-21: a copy at a path of its own, the adapter against its version's schema, the version's tag, below)
+  and by #0-280 (2026-11-21: the test gate's answers against that version's own check, below)
 - **Backlog:** #0-268
 - **Date:** 2026-11-19
 - **Author:** human (the owner chose option B and the lead direction (b) in an interactive session); written by Claude Code
@@ -39,7 +40,9 @@ as `factory` starts a difference; a red `main` stops the autopilot (main-guard).
 5. **The clone is outside input.** A symlink anywhere in it fails the check before anything reads it, the
    sub-checks included; a settings file that does not parse is reported by its error class only (SEC-31: the parser
    quotes the text, and the log is public). A copy's difference names a digest of the original, so a further change
-   here cannot hide behind drift `main` already has.
+   here cannot hide behind drift `main` already has. This is `factory@main`, which moves and no one here pinned: it
+   is input, never run. `factory` at the tag the adapter pins is another thing, the code the build VM runs anyway,
+   so this repository's CI checks the product with that code's own validators (the #0-278 and #0-280 amendments).
 6. **The reference moves at step 4.7** from `factory@main` to the `factory` tag the product pins in
    `.factory/adapter.json` (ADR-0060 D6). Moved to M3.6 (#0-307) by ADR-0063; the adapter itself is already checked
    against that tag's schema (the #0-278 amendment below).
@@ -82,6 +85,34 @@ to a literal, so a widening there fails its CI.
 - **The version's tag is `FACTORY_COMMIT`.** The same step, `verify-pins.sh` (against GitHub's API, the tag peeled) and
   `create.sh` (in the VM's checkout) refuse a `factoryVersion` whose tag is not at `provision.sh`'s `FACTORY_COMMIT`:
   two pins of one version, held equal, until #0-307 makes the adapter's the one source (the owner's choice B(c)).
+
+## Amendment (#0-280, 2026-11-21): the test gate's answers against that version's own check
+
+The test gate's answer is a contract `factory` holds, `schemas/gate.schema.json`, whose producer is this repository's
+`scripts/factory/run-tests.sh`; the dispatcher refuses an answer its `checkGateAnswer` refuses. Decided with the owner
+(`/research` of #0-280, then aligned with A(a) above once #0-278 chose it):
+- **What is compared:** every answer `test-run-tests.sh` makes, the real output of each path it runs, not samples.
+- **With what:** `factory`'s own `checkGateAnswer` (`dispatcher/src/adapter.mjs`), in the checkout #0-278's step made,
+  `factory` at the adapter's `factoryVersion`, whose tag is `FACTORY_COMMIT`: the validator the dispatcher refuses an
+  answer by, never `factory@main`. One clone, one validator: the step "The test gate's answers keep factory's
+  contract" follows #0-278's and reads its checkout, as a step that runs `factory`'s code (after every step that holds
+  a token, `!cancelled()`).
+- **How it cannot pass by not checking:** `check-gate-answers.mjs` first gives the checker a canary answer, with a field
+  no contract holds, and refuses to go on if it is taken; after the answers, the first one it took, with one field more,
+  must be refused too, so the contract is shown to close its fields, not only to refuse something. A refusal is the
+  module's `AdapterError` (exit 1); any other failure, a missing checkout or export included, is a check not made
+  (exit 3), never a pass. #0-278's step holds the tag's commit to `FACTORY_COMMIT` before it checks the tree out, so on
+  a mismatch there is no code to run, and this step fails as a check not made (review round 1 of #0-280).
+- **A difference always fails.** The producer and the pin are both this repository's, so only a pull request here
+  makes one: a change of `run-tests.sh`'s answer, or a move to a `factory` version whose contract differs.
+- **Why not a validator here** (the first plan, option B: `gate.schema.json` read as data with this repository's
+  subset of JSON Schema, fetched by commit id): every way the subset differs from the dispatcher's validator is a case
+  where CI passes and every task's gate is refused, and the review of that plan found five; each new keyword `factory`
+  adds would turn CI red until the subset grows; and a fetch by commit id takes any commit of the fork network, where
+  #0-278's step fetches the tag and holds its commit to the pin. Running the pinned code adds no reach: the build VM
+  runs it, beside builder-app's key.
+- **What it leans on:** `dispatcher/src/adapter.mjs` exporting `checkGateAnswer` and `AdapterError`. A change of either
+  in `factory` fails the step that moves the version, loudly (exit 3), never silently.
 
 ## Consequences
 

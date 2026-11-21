@@ -167,6 +167,7 @@ resolvable.
 | 0-277 | the dispatcher drives `factory`'s Docker through one sudo rule, the task container from a fresh clone, the rollback by time, tried on the VM (step 4.3c); details in [the section](#0-277-the-dispatcher-drives-factorys-docker-and-a-task-container-step-43c) | factory PRs #18, #19; PRs #670-#674, #675 |
 | 0-286 | the migration replanned as steps M1–M12 straight to ADR-0055's target (ADR-0063), every remaining step planned in `.ai/context/migration/`, its items #0-287 to #0-307; details in [the section](#0-286-the-migrations-plan-describes-only-the-current-stage-and-goes-through-states-it-later-removes) | PR #677 |
 | 0-278 | the product's code from `main` only, never as `dispatcher` (step 4.3d, M1): the adapter `.factory/adapter.json` read from the base, the commands in the task container, the `trustedPaths` refusal, the item lock's cases shared, the adapter checked against its version's tag at `FACTORY_COMMIT`, tried on the VM; details in [the section](#0-278-the-products-code-runs-only-from-main-step-43d) | `factory` PR #20; PRs #678, #679 |
+| 0-280 | the test gate's answers held to `factory`'s own `checkGateAnswer` at the adapter's pinned tag, every path of `run-tests.sh` in Lint Workflows (M2's precondition); details in [the section](#0-280-the-gates-schema-in-factory-and-run-testssh-here-are-checked-against-each-other-by-nothing) | PR #680 |
 
 Items completed before `BACKLOG.md` existed are not listed.
 
@@ -4798,3 +4799,49 @@ AC10. `factory`'s tag `v0.1.0` is at `FACTORY_COMMIT`, checked on the VM's side;
 AC11. The dispatcher's lock check and its `protectedPaths` parser are tested against fixtures copied from the
      product's `.ai/rules/protected-paths.md` and from the branch names `next-item.sh`'s tests lock on, and the copies
      are held equal to their sources (#0-268's copy check, or a test of the product's that reads `factory`'s fixtures).
+
+### 0-280. The gate's schema in `factory` and `run-tests.sh` here are checked against each other by nothing
+
+**Type:** ci · **Priority:** Medium · **Status:** Done, PR #680 (2026-11-21) (found by the review of `factory` PR #15, #0-275, 2026-11-20).
+**Autopilot:** human-only · **Risk:** medium · **Complexity:** low · **Depends on:** #0-275, #0-278 (its Lint Workflows
+step's checkout of `factory` at the adapter's version)
+**Touches:** factory (.github/scripts/test-run-tests.sh, check-gate-answers.mjs (new), .github/workflows/ci.yml: Lint
+Workflows: owner-only), decisions (an amendment of ADR-0061), root (`.ai/context/infrastructure.md`, README, CLAUDE.md
+"Commands")
+
+**Migration (ADR-0063, 2026-11-21):** step M2, before #0-301 reads a gate's answer.
+
+**Problem.** `factory`'s `schemas/gate.schema.json` is the contract of `run-tests.sh`'s answer (status, exitCode,
+modules, log, head, artifact, summary), with `additionalProperties: false`. A field added to `run-tests.sh` here, or
+one renamed, would make every gate answer refused once 4.4's flow reads them, and nothing in either repository checks
+the two against each other until then (FAC-A01's spirit: a contract kept in one repository, its producer in another).
+
+**Decided with the owner (2026-11-21, `/research` of #0-280, then aligned with #0-278's choice A(a); ADR-0061
+amended):** the real answers, not samples, held to `factory`'s own `checkGateAnswer`, the dispatcher's, at the version
+the adapter pins (its tag at `FACTORY_COMMIT`), never `factory@main`.
+- `test-run-tests.sh` keeps every answer its cases make, each the real output of one path of `run-tests.sh`.
+- In Lint Workflows, the step "The test gate's answers keep factory's contract" follows #0-278's "The adapter keeps its
+  factory version's schema" and reads its checkout: one clone, one validator. `check-gate-answers.mjs` runs that
+  version's `checkGateAnswer` on every answer, after a canary answer it must refuse; a refusal is exit 1, a check not
+  made (no checkout, no export, another error, an unreadable answer) exit 3, never a pass.
+- A difference always fails: the producer and the pin are both this repository's, so only a pull request here makes
+  one. No warning case.
+- Why not the first plan (option B: the schema read as data with a subset of JSON Schema here, fetched by commit id):
+  each way the subset differs from the dispatcher's validator is a case where CI passes and every task's gate is
+  refused (its review found five); each keyword `factory` adds would turn CI red until the subset grows; a fetch by id
+  takes any commit of the fork network. Running the pinned code adds no reach: the build VM runs it beside
+  builder-app's key.
+- Leans on `factory`'s `dispatcher/src/adapter.mjs` exporting `checkGateAnswer` and `AdapterError`: a change there fails
+  the version's move loudly (exit 3).
+
+**Acceptance criteria.**
+AC1. A field added to or removed from `run-tests.sh`'s answer, without the schema in `factory`, fails a pull request
+     here; the shapes of today pass (tests: every case's answer checked, and `run-tests.sh` itself given one more field
+     in `stop()`).
+AC2. The check cannot pass by not checking: a checker that takes a canary answer, one that refuses it with another
+     error, one that takes a taken answer with one field more, one that throws on an answer, a checkout with no
+     `checkGateAnswer`, no checkout, or an answer that is not JSON, is exit 3; a refusal is exit 1 and names the answer
+     and `factory`'s reason (tests, against fake checkouts).
+AC3. The checker is `factory`'s at the adapter's `factoryVersion`, from #0-278's checkout, whose tag is `FACTORY_COMMIT`
+     (#0-278's step compares the two before it checks the tree out, so a mismatch leaves no code to run); the step runs
+     after every step that holds a token, and fails without that checkout.
