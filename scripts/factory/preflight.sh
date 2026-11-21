@@ -9,8 +9,9 @@
 # tripped (FACTORY_MAX_BLOCKED consecutive BLOCKED items); an audit is due (FACTORY_AUDIT_EVERY shipped items
 # since the last one); the daily merge limit is reached (FACTORY_MAX_MERGES_PER_DAY); one of those three limits is
 # not set (they come from settings.autopilot.json's env, with no default); another run holds the lock (younger than
-# FACTORY_LOCK_HOURS, default 3); Docker is not reachable (the tests need it); Claude Code is older than 2.1.295, or
-# does not say its version (the hooks' onFailure, backlog #0-162); the run is not in the devcontainer, is not the
+# FACTORY_LOCK_HOURS, default 3); Docker is not reachable (the tests need it); Claude Code is not the version
+# .devcontainer/claude-code.pin names, or does not say its version, or the pin is below 2.1.295 (the hooks' onFailure,
+# backlog #0-162, #0-249); the run is not in the devcontainer, is not the
 # bot's, or example.com is not refused (no firewall); the session was not started with main's
 # .claude/settings.autopilot.json and .claude/settings.json (backlog #0-194, ADR-0052); its BASH_DEFAULT_TIMEOUT_MS or
 # BASH_MAX_TIMEOUT_MS is below 30 minutes (the test gate's answer, backlog #0-250).
@@ -113,7 +114,12 @@ run_id=$(date -u +%Y%m%d-%H%M%S)
 # sets for its commands), or the one on PATH when that is unset; one that cannot say its version refuses. A field
 # has at most six digits: a longer one is not a version, and would reach `[ -gt ]` past what bash compares (review
 # round 1).
+# Amended (backlog #0-249, ADR-0065): the devcontainer installs exactly the version .devcontainer/claude-code.pin names,
+# and the running binary must be that one, not merely 2.1.295 or newer: a container built from an older commit runs
+# another version, which ADR-0064's measurements (the hooks, the agents' tools) were not made on. 2.1.295 stays the
+# floor of the pin itself. The pin is read from this checkout (main, as the preflight requires), never sourced.
 MIN_CLAUDE_CODE=2.1.295
+PIN_FILE=.devcontainer/claude-code.pin
 # version_at_least <x.y.z> <x.y.z> — the first is the second or newer, field by field as numbers.
 version_at_least() {
     local IFS=.
@@ -143,13 +149,24 @@ claude_version() {
     wait "$pid" 2>/dev/null
     head -1 "$out"; rm -f "$out"
 }
+pinned=""
+if [ "$(grep -c '^CLAUDE_CODE_VERSION=' "$PIN_FILE" 2>/dev/null)" = 1 ]; then
+    pinned=$(sed -n 's/^CLAUDE_CODE_VERSION=//p' "$PIN_FILE")
+fi
+if ! [[ "$pinned" =~ ^[0-9]{1,6}\.[0-9]{1,6}\.[0-9]{1,6}$ ]]; then
+    add "cannot read the pinned Claude Code version: $PIN_FILE must have one CLAUDE_CODE_VERSION=x.y.z line (backlog #0-249)"
+    pinned=""
+elif ! version_at_least "$pinned" "$MIN_CLAUDE_CODE"; then
+    add "the pinned Claude Code $pinned ($PIN_FILE) is older than $MIN_CLAUDE_CODE: it ignores the hooks' onFailure, so a hook that cannot start would let the call through (backlog #0-162)"
+fi
 claude_bin=${CLAUDE_CODE_EXECPATH:-$(command -v claude 2>/dev/null)}
 claude_out=$([ -n "$claude_bin" ] && claude_version "$claude_bin")
 if [[ "$claude_out" =~ ^([0-9]{1,6}\.[0-9]{1,6}\.[0-9]{1,6})([^0-9.]|$) ]]; then
-    version_at_least "${BASH_REMATCH[1]}" "$MIN_CLAUDE_CODE" \
-        || add "Claude Code ${BASH_REMATCH[1]} is older than $MIN_CLAUDE_CODE: it ignores the hooks' onFailure, so a hook that cannot start would let the call through (backlog #0-162)"
+    if [ -n "$pinned" ] && [ "${BASH_REMATCH[1]}" != "$pinned" ]; then
+        add "Claude Code ${BASH_REMATCH[1]} is running, not the pinned $pinned ($PIN_FILE): rebuild the devcontainer from main (backlog #0-249)"
+    fi
 else
-    add "cannot read the version of Claude Code (${claude_bin:-no claude on PATH}): it must be $MIN_CLAUDE_CODE or newer (backlog #0-162)"
+    add "cannot read the version of Claude Code (${claude_bin:-no claude on PATH}): it must be the pinned ${pinned:-version} (backlog #0-249)"
 fi
 
 [ -z "$(git status --porcelain)" ] || add "working tree is not clean"

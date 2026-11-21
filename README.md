@@ -531,7 +531,7 @@ security boundary, so every rule that matters is also enforced outside the model
   (`async`, which the field does not cover), one that is not a command hook of `.claude/hooks/` with plain
   arguments, or one whose hook has no row in the fail-closed table, and a file that repeats a key. The field needs
   Claude Code 2.1.295 or newer (an older one ignores it silently, spike of 2026-10-25): the autopilot's preflight
-  refuses an older one.
+  refuses any version but `.devcontainer/claude-code.pin`'s, a pin no lower than 2.1.295 (#0-249, ADR-0065).
   Hook tests: `.claude/hooks/test-hooks.sh`, with every hook in a fail-closed table (a hook without a row fails Factory guards).
 - **Least privilege per agent**: reviewers, the architect, the auditors and the autopilot's picker run read-only Bash allow-lists
   and write scopes (`.claude/hooks/readonly-bash.sh`, `write-scope.sh`), in two layers: the agent's frontmatter and
@@ -606,7 +606,24 @@ security boundary, so every rule that matters is also enforced outside the model
   `api.osv.dev`, `tomcat.apache.org`, `spring.io`: open to the whole container, and by the IPs they resolve to,
   which a CDN or Google's front end shares with other sites — hence a short list) and the Docker host over IPv4, closes IPv6 to all
   but loopback, and blocks all traffic if its own setup fails (`FIREWALL SETUP FAILED`). It narrows exfiltration, it
-  does not prevent it: the host's Docker (needed by Testcontainers) and GitHub itself remain channels.
+  does not prevent it: the host's Docker (needed by Testcontainers) and GitHub itself remain channels. `dev` may run
+  the firewall script through sudo without arguments only (sudoers `""`), and the script takes none: its one extra
+  host, the owner's ntfy server, is written into the image at build time (`/etc/factory-firewall/extra-hosts`, absent
+  in a task container), so code in the container can no longer open a host by `sudo init-firewall.sh <host>`
+  (FAC-S02); `dev` is out of the base image's `sudo` group (backlog #0-283). The bound left: `dev` reaches the host's
+  Docker, and with it root in the container (#0-116, #0-285), and on the VM the egress filter still holds.
+- **Claude Code pinned** (backlog #0-249, #0-283, ADR-0065): the devcontainer image, and so every task container,
+  installs exactly the version `.devcontainer/claude-code.pin` names, from the manifest Anthropic signed (its key
+  committed in `.devcontainer/keys/` after its fingerprint matched in three places), the binary's SHA-256 compared with
+  the pin before it runs, as root's `/usr/local/bin/claude` (`dev` cannot replace it; the image no longer puts `~/.local/bin`
+  first on `PATH`, though `dev` owns its home and its shell files, so a login shell's `~/.profile` or a line code adds to
+  `~/.bashrc` can still put another `claude` first: the preflight checks the running binary's version, not who started
+  it (a wrapper there that execs the real binary would pass), so the boundary is the dispatcher's call of
+  `/usr/local/bin/claude` by absolute path, #0-301; the owner's container is the old path, gone at M4),
+  with `DISABLE_UPDATES` (no `claude update`/`install` in the container). Lint Workflows holds the pin to the signed
+  manifest (`--check`, beside the CI tools' pins); the preflight refuses any other running version. It was `curl https://claude.ai/install.sh | bash`: the
+  newest release on the day of the build, under `dev`'s home. Limit: root in the container (the Docker socket, #0-285)
+  can still replace the binary there, for that container's life.
 - **Where a run starts**: the preflight refuses a run outside the devcontainer (`FACTORY_DEVCONTAINER` from its
   `containerEnv`), not under the bot's identity (`GIT_AUTHOR_NAME`, `GIT_COMMITTER_NAME` and `gh`'s login must be
   `FACTORY_BOT_LOGIN`, the two `GIT_*_EMAIL` its noreply address), with the firewall down (`example.com` not refused,
@@ -797,8 +814,9 @@ security boundary, so every rule that matters is also enforced outside the model
   image. Limits: `factory`'s image store and home are the agent's side and live across
   tasks (ADR-0062's Consequences, #0-285); `rollback-start.sh` sees only the daemon's containers and a run's `factory.task` objects, so what a task left in
   `factory`'s reach outside them survives, and a rollback with the owner's logins after a dispatcher run starts on a VM
-  made anew (accepted for the migration, while the rollback is kept, until stage 5's exit; not enforced); the image's
-  firewall sudo rule and its unpinned Claude Code are #0-283.
+  made anew (accepted for the migration, while the rollback is kept, until stage 5's exit; not enforced). The image's
+  firewall sudo rule and its Claude Code were #0-283, closed with #0-249 (the two entries of "Network" and "Claude
+  Code pinned" above).
 - **The task container checked before anything runs in it** (backlog #0-284, ADR-0062 points 4 and 6 as amended;
   `factory` PR #22, pinned `v0.1.2`): the daemon's `docker info` security options and default runtime checked before
   any container of the run, so a `daemon.json` of the agent's side refuses the run; the image built by its own

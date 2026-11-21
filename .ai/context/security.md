@@ -75,7 +75,8 @@ on are in `.ai/rules/review/factory.md` (backlog #0-161); this is why they are w
   `_lib.sh`, and reads the call through `json_checked` (#0-162; a new hook gets a row in `test-hooks.sh`'s fail-closed
   table). A hook that cannot start or times out is blocked by Claude Code: every hook entry says `"onFailure":
   "block"` (Factory guards checks it, `check-hook-entries.rb`), which needs Claude Code 2.1.295 or newer; an older one
-  ignores it silently, and only the autopilot's preflight refuses one (ADR-0039). Frontmatter hooks are documented for
+  ignores it silently, and only the autopilot's preflight refuses one: any version but `.devcontainer/claude-code.pin`'s,
+  a pin no lower than 2.1.295 (ADR-0039, ADR-0065). Frontmatter hooks are documented for
   agents of the Agent tool, an @-mention or `--agent`, not for the agents a `Workflow` spawns and never in `claude
   -p`; session-level hooks are documented for every subagent, so every agent's guard runs in both: its frontmatter and
   a twin in both settings files keyed on `agent_type` (`--agent`, `applies_to_agent` in `_lib.sh`), kept equal by

@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # ============================================================
 # Tests for scripts/factory/preflight.sh's reading of main's CI result (backlog #0-148), of Claude Code's
-# version (backlog #0-162 PR 2: 2.1.295 or newer, the running binary's), and of where and how the session was started
+# version (backlog #0-162 PR 2, #0-249: the running binary's, exactly .devcontainer/claude-code.pin's, a pin no lower
+# than 2.1.295), and of where and how the session was started
 # (backlog #0-194, ADR-0052: the devcontainer, the bot's identity, the firewall, main's settings.autopilot.json and
 # the limits it sets), in a temporary repository with gh, docker, claude and curl replaced by stubs on PATH (the
 # real .ai/runs/ is never touched). Every case runs in the environment of a correct session (exported below) unless
@@ -73,6 +74,9 @@ printf '.ai/runs/\n.ai/STOP\n' > .gitignore
 mkdir -p .claude
 printf '{"permissions":{"defaultMode":"dontAsk"},"env":{"FACTORY_MAX_BLOCKED":"2"}}\n' > .claude/settings.autopilot.json
 printf '{"permissions":{"deny":["Bash(gh pr merge *)"]}}\n' > .claude/settings.json
+# The pin preflight holds the running version to (backlog #0-249): the claude stub's default version.
+mkdir -p .devcontainer
+printf '# a comment\nCLAUDE_CODE_VERSION=2.1.310\nCLAUDE_CODE_KEY=%040d\n' 0 > .devcontainer/claude-code.pin
 git add -A && git -c user.name=t -c user.email=t@t commit -qm init
 settings_sha=$(scripts/factory/settings-hash.sh .claude/settings.autopilot.json .claude/settings.json)
 
@@ -135,23 +139,40 @@ expect "a newer green run of a fork's branch main does not hide a red main" \
 expect "a pull request of this repository's own branch is not main's" \
     "[$(branchpr completed failure),$(push completed success)]" '.ok == true'
 
-echo "preflight.sh: Claude Code's version (onFailure, backlog #0-162)"
+echo "preflight.sh: Claude Code's version, exactly the pin's (backlog #0-162, #0-249)"
 green="[$(push completed success)]"
 older='.ok == false and any(.reasons[]; contains("is older than 2.1.295"))'
 unread='.ok == false and any(.reasons[]; contains("cannot read the version of Claude Code"))'
-CV="2.1.295 (Claude Code)" expect "2.1.295, the first that honours onFailure, passes" "$green" '.ok == true'
-CV="2.1.1000 (Claude Code)" expect "2.1.1000 passes (numbers, not text)" "$green" '.ok == true'
-CV="3.0.0 (Claude Code)" expect "3.0.0 passes" "$green" '.ok == true'
-CV="2.1.294 (Claude Code)" expect "2.1.294 stops (it ignores onFailure)" "$green" "$older"
-CV="2.1.30 (Claude Code)" expect "2.1.30 stops (\"30\" sorts after \"295\" as text)" "$green" "$older"
-CV="2.0.999 (Claude Code)" expect "2.0.999 stops" "$green" "$older"
-CV="1.9.400" expect "1.9.400 stops" "$green" "$older"
+nopin='.ok == false and any(.reasons[]; contains("cannot read the pinned Claude Code version"))'
+# other <version> — preflight refused a running <version> that is not the pin.
+other() { printf '.ok == false and any(.reasons[]; contains("Claude Code %s is running, not the pinned"))' "$1"; }
+# with_pin <pin file's content> <expect's arguments...> — runs one case with .devcontainer/claude-code.pin holding
+# that content (an empty one: no file), committed so the tree stays clean, then puts the repository's pin back.
+with_pin() {
+    local content=$1; shift
+    if [ -n "$content" ]; then printf '%s\n' "$content" > .devcontainer/claude-code.pin; else rm -f .devcontainer/claude-code.pin; fi
+    git add -A && git -c user.name=t -c user.email=t@t commit -qm pin
+    expect "$@"
+    git reset -q --hard HEAD~1
+}
+expect "the pinned version passes (2.1.310 in this repository's pin)" "$green" '.ok == true and .reasons == []'
+CV="2.1.311 (Claude Code)" expect "a newer version than the pin stops" "$green" "$(other 2.1.311)"
+CV="2.1.309 (Claude Code)" expect "an older version than the pin stops" "$green" "$(other 2.1.309)"
+CV="2.1.3100 (Claude Code)" expect "a version that only starts with the pin's stops" "$green" "$(other 2.1.3100)"
+CV="2.1.295 (Claude Code)" with_pin "CLAUDE_CODE_VERSION=2.1.295" "the floor itself, pinned and running, passes" "$green" '.ok == true'
+CV="2.1.1000 (Claude Code)" with_pin "CLAUDE_CODE_VERSION=2.1.1000" "a pin of 2.1.1000 is above the floor (numbers, not text)" "$green" '.ok == true'
+CV="2.1.294 (Claude Code)" with_pin "CLAUDE_CODE_VERSION=2.1.294" "a pin below 2.1.295 stops (it ignores onFailure)" "$green" "$older"
+CV="2.1.30 (Claude Code)" with_pin "CLAUDE_CODE_VERSION=2.1.30" "a pin of 2.1.30 stops (\"30\" sorts after \"295\" as text)" "$green" "$older"
+with_pin "" "no pin file stops" "$green" "$nopin"
+with_pin "CLAUDE_CODE_VERSION=latest" "a pin that is not x.y.z stops" "$green" "$nopin"
+with_pin "CLAUDE_CODE_VERSION=2.1.310.1" "a pin of four fields stops" "$green" "$nopin"
+with_pin "$(printf 'CLAUDE_CODE_VERSION=2.1.310\nCLAUDE_CODE_VERSION=2.1.311')" "a pin with two versions stops" "$green" "$nopin"
+with_pin "# CLAUDE_CODE_VERSION=2.1.310" "a commented-out version is no pin" "$green" "$nopin"
 CV="Claude Code" expect "an output without a version stops" "$green" "$unread"
 CV="" expect "an empty output stops" "$green" "$unread"
-CV="2.1.295.1 (Claude Code)" expect "a version of four fields stops" "$green" "$unread"
+CV="2.1.310.1 (Claude Code)" expect "a version of four fields stops" "$green" "$unread"
 CV="2.99999999999999999999.0 (Claude Code)" expect "a field too long for a number stops" "$green" "$unread"
-EXEC="$WORK/running" expect "the running binary decides, not the one on PATH" "$green" \
-    '.ok == false and any(.reasons[]; contains("Claude Code 2.1.294 is older"))'
+EXEC="$WORK/running" expect "the running binary decides, not the one on PATH" "$green" "$(other 2.1.294)"
 EXEC="$WORK/no-such-claude" expect "a running binary that cannot answer stops (no fallback to PATH)" "$green" "$unread"
 started=$SECONDS
 EXEC="$WORK/hangs" WAIT=5 expect "a binary that hangs stops, not the preflight" "$green" "$unread"

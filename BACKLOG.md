@@ -153,7 +153,6 @@ Code, Javadoc, config comments and commits reference items as `backlog #N`.
 | [0-244](#0-244-no-review-rule-covers-the-build-vms-own-allow-list) | No review rule covers the build VM's own allow-list | security | Low | Open |
 | [0-245](#0-245-validation-errors-do-not-redact-apikey-and-privatekey-fields) | Validation errors do not redact `apiKey` and `privateKey` fields | bug | Medium | Open |
 | [0-246](#0-246-service-classes-below-60-coverage-found-with-0-57) | Service classes below 60% coverage, found with #0-57 | tech-debt | Low | Open |
-| [0-249](#0-249-claude-code-in-the-devcontainer-image-is-whatever-version-was-current-at-build-time) | Claude Code in the devcontainer image is whatever version was current at build time | ci | Medium | Open |
 | [0-251](#0-251-a-live-runs-lock-turns-stale-after-a-fixed-three-hours) | A live run's lock turns stale after a fixed three hours | ci | Low | Blocked (superseded, ADR-0055) |
 | [0-253](#0-253-a-run-stopped-by-the-factory-scripts-guard-keeps-its-lock) | A run stopped by the factory-scripts guard keeps its lock | ci | Medium | Blocked (superseded, ADR-0055) |
 | [0-254](#0-254-a-resumed-item-that-ships-keeps-its-draft-prs-blocked-title) | A resumed item that ships keeps its draft PR's "(BLOCKED)" title | ci | Low | Blocked (superseded, ADR-0055) |
@@ -172,7 +171,6 @@ Code, Javadoc, config comments and commits reference items as `backlog #N`.
 | [0-279](#0-279-the-dev-apps-ids-and-permissions-are-kept-in-two-places-with-no-check) | The dev app's ids and permissions are kept in two places with no check | ci | Low | Open |
 | [0-281](#0-281-the-dispatchers-credential-checks-are-held-at-the-call-that-sends-them-and-its-static-scans-close-their-bounds) | The dispatcher's credential checks are held at the call that sends them, and its static scans close their bounds | ci | Medium | Open |
 | [0-282](#0-282-incident-platform-ships-a-task-configuration-for-the-dispatchers-container) | incident-platform ships a task configuration for the dispatcher's container | ci | High | Open |
-| [0-283](#0-283-the-devcontainer-image-lets-dev-widen-its-firewall-and-installs-claude-code-unpinned) | The devcontainer image lets `dev` widen its firewall and installs Claude Code unpinned | ci | Medium | Open |
 | [0-284](#0-284-the-task-container-is-checked-before-anything-runs-in-it-and-its-refusals-hold-none-of-the-agent-sides-text) | The task container is checked before anything runs in it, and its refusals hold none of the agent side's text | ci | Medium | Open |
 | [0-285](#0-285-what-a-task-leaves-in-factorys-reach-outside-the-daemon-is-decided-before-a-task-holds-a-credential) | What a task leaves in `factory`'s reach outside the daemon is decided before a task holds a credential | ci | High | Open |
 | [0-287](#0-287-the-dispatcher-calls-no-agent-yet-migration-step-m2) | The dispatcher calls no agent yet (migration step M2) | ci | High | Open |
@@ -198,6 +196,8 @@ Code, Javadoc, config comments and commits reference items as `backlog #N`.
 | [0-308](#0-308-the-starters-stderr-files-are-never-removed-found-by-the-review-of-factory-pr-22) | The starter's stderr files are never removed (found by the review of `factory` PR #22) | ci | Medium | Open |
 | [0-309](#0-309-a-volume-named-like-a-secret-makes-every-later-sweep-refuse-found-by-the-review-of-factory-pr-22) | A volume named like a secret makes every later sweep refuse (found by the review of `factory` PR #22) | ci | Medium | Open |
 | [0-310](#0-310-three-small-follow-ups-of-the-review-of-factory-pr-22-0-284) | Three small follow-ups of the review of `factory` PR #22 (#0-284) | refactor | Low | Open |
+| [0-311](#0-311-factorys-own-devcontainer-installs-claude-code-unpinned-and-lets-node-widen-its-firewall) | `factory`'s own devcontainer installs Claude Code unpinned and lets `node` widen its firewall | ci | Medium | Open |
+| [0-312](#0-312-nothing-watches-anthropics-claude-code-signing-key) | Nothing watches Anthropic's Claude Code signing key | ci | Low | Open |
 | [0-133](#0-133-incidentresolvedevent-carries-no-openedat) | `IncidentResolvedEvent` carries no `openedAt` | tech-debt | Low | Open |
 | [0-134](#0-134-diff-cover-is-installed-by-version-without-hashes) | `diff-cover` is installed by version, without hashes | ci | Low | Open |
 | [0-135](#0-135-kubectl-in-ci-is-downloaded-unverified) | kubectl in CI is downloaded unverified | ci | Low | Open |
@@ -3449,40 +3449,6 @@ auth-service's `SlackWorkspace` is next changed, the comment should say it carri
 change over time, and point to the criterion in `.ai/context/architecture.md` (#0-25 AC5). The same words in
 `V17__create_slack_workspaces.sql` stay: a migration on `main` is never edited.
 
-### 0-249. Claude Code in the devcontainer image is whatever version was current at build time
-
-**Type:** ci · **Priority:** Medium · **Status:** Open. Found with #0-248 (owner, 2026-11-14).
-**Option to weigh (ADR-0064 point 5, 2026-11-21):** Claude Code run by absolute path from a read-only, root-owned
-mount the factory provides, at the pinned version, rather than installed by the product's image into the agent
-user's `~/.local/bin`. It would close the binary's part of ADR-0064's residual. It would also amend ADR-0062 point 4
-again (a new mount) and tie a factory-supplied binary to the image's userland.
-**Autopilot:** human-only · **Risk:** medium · **Complexity:** low · **Depends on:** —
-**Touches:** factory (.devcontainer/Dockerfile, owner-only), the repository `profitbuild/factory` (.devcontainer/Dockerfile,
-which installs Claude Code the same way since #0-269), docs (docs/ai-factory.md "Pinned versions"), root
-(.ai/decisions/ ADR-0039 amended, if the floor 2.1.295 becomes a pin)
-
-**Migration (ADR-0063, 2026-11-21):** step M2, with #0-283.
-
-**Problem.** `.devcontainer/Dockerfile` installs Claude Code with `curl -fsSL https://claude.ai/install.sh | bash`, the
-newest release at the moment the image is built; `DISABLE_AUTOUPDATER` only stops it from moving afterwards. So two
-images built on different days run different versions, and nothing records which: the build VM's image (built
-2026-11-14) runs 2.1.325, the Mac's devcontainer an older one, and the isolation check that passed on the Mac failed
-on the VM (#0-248). `docs/ai-factory.md` "Pinned versions" says Claude Code "is pinned to the version the
-devcontainer image was built with", which is true of one image, not of the factory; a change of agent behaviour
-arrives with a rebuild, unreviewed, while every other tool of the factory is pinned and bumped in a PR (ADR-0033).
-
-**Approach.** Install an exact version (the native installer takes one: `bash -s <version>`), held in one place the
-Dockerfile reads, bumped in a PR like the other pins, with the seed-bugs benchmark run before a bump is trusted (as
-"Pinned versions" already asks); check it in the preflight (the floor of ADR-0039 becomes the pinned version, or the
-pin is checked beside it) and, if Renovate can read it, let it propose bumps. Decide whether the installer script
-itself, fetched from claude.ai at build time, is checked against a digest.
-
-AC1. Two images built from the same commit run the same Claude Code version, the one named in the repository.
-AC2. A bump is a change to that one place, in a PR; `docs/ai-factory.md` "Pinned versions" says how.
-AC3. The preflight refuses a Claude Code other than the pinned version (or below it, if the owner keeps a floor), and
-says which it found.
-
-
 ### 0-251. A live run's lock turns stale after a fixed three hours
 
 **Type:** ci · **Priority:** Low · **Status:** Blocked — superseded by migration stage 4 (ADR-0055, 2026-11-17: the
@@ -3977,33 +3943,6 @@ as `factory` (the dispatcher's own call is `--config` since #0-277's first trial
   check of the label must accept, whole and value by value, and nothing else under the feature's id (ADR-0062
   point 4 as amended).
 Removed after the trial: the container, the volume and the directory; nothing left on the daemon.
-
-### 0-283. The devcontainer image lets `dev` widen its firewall and installs Claude Code unpinned
-
-**Type:** ci · **Priority:** Medium · **Status:** Open (found by the review of #0-282, 2026-11-20).
-**Option to weigh:** Claude Code from a factory-provided read-only mount instead of the image's install (ADR-0064
-point 5, #0-249's note).
-**Autopilot:** human-only · **Risk:** medium · **Complexity:** low · **Depends on:** —
-**Touches:** factory (.devcontainer/Dockerfile, .devcontainer/init-firewall.sh, their checks: owner-only), README
-"Infrastructure Hardening"
-
-**Migration (ADR-0063, 2026-11-21):** step M2, with #0-249.
-
-**Problem.** The image `.devcontainer/Dockerfile` builds is the owner's container and, since #0-282, every task
-container. Two things in it predate that and now reach every task:
-- the sudoers line lets `dev` run `/usr/local/bin/init-firewall.sh` with any arguments, and the script adds each host
-  argument to its allow-list, so code in a container opens a host by `sudo /usr/local/bin/init-firewall.sh <host>`
-  (FAC-S02; on the VM the egress chain still bounds it to the VM's list);
-- Claude Code is installed by `curl -fsSL https://claude.ai/install.sh | bash`, no version or checksum pinned.
-
-**Work.** The sudo rule held to the arguments the owner's container passes (the ntfy host) and none in a task
-container (for example a fixed argument list, or the script ignoring arguments when the task's label is set); Claude
-Code installed at a pinned version with its checksum, bumped as the other pins are.
-
-**Acceptance criteria.**
-AC1. In a task container, `sudo /usr/local/bin/init-firewall.sh <host>` opens no host (a test or a VM trial, recorded).
-AC2. The owner's container still opens its ntfy host.
-AC3. Claude Code's install is pinned by version and checksum, and the pin is checked as the other tools' are.
 
 ### 0-284. The task container is checked before anything runs in it, and its refusals hold none of the agent side's text
 
@@ -4727,3 +4666,45 @@ check.
 AC1. `host-config.mjs` imports no module that runs a process (test or static check).
 AC2. A container whose `Mounts` holds a non-boolean `RW` is refused, naming its position (test).
 AC3. A call of `setUpTaskContainer` outside `inTaskEnvironment` is refused or cannot be written (test).
+
+### 0-311. `factory`'s own devcontainer installs Claude Code unpinned and lets `node` widen its firewall
+
+**Type:** ci · **Priority:** Medium · **Status:** Open (split from #0-249/#0-283, 2026-11-21).
+**Autopilot:** human-only · **Risk:** medium · **Complexity:** low · **Depends on:** #0-249, #0-283
+**Touches:** the repository `profitbuild/factory` (.devcontainer/Dockerfile, .devcontainer/init-firewall.sh,
+.devcontainer/devcontainer.json, its CI), root (`check-factory-copies.rb`, if the pin becomes a copy it compares)
+
+**Problem.** `profitbuild/factory`'s `.devcontainer/Dockerfile` (since #0-269) has the two defects #0-249 and #0-283
+fixed here: `curl -fsSL https://claude.ai/install.sh | bash` (whatever version is newest at build time, into the
+user's `~/.local`) and `node ALL=(root) NOPASSWD: /usr/local/bin/init-firewall.sh` with any arguments. It is the
+owner's container for working on `factory`, not a task container, so no agent's code runs there unattended; the
+same pattern in two repositories is still the old one in one of them.
+
+**Approach.** ADR-0065's: the pin file, `install-claude-code.sh` and the key, as copies of this repository's
+(`check-factory-copies.rb` compares them, ADR-0061), the binary root's, `DISABLE_UPDATES`; the sudoers line `""`,
+the script's extra hosts (if any) from the image; the base image's user out of `sudo` if it is in it.
+
+AC1. `factory`'s devcontainer runs the pinned Claude Code, installed from the signed manifest, root's.
+AC2. `sudo /usr/local/bin/init-firewall.sh <host>` is refused there.
+AC3. The copies are compared from here, or the reason they are not is recorded.
+
+### 0-312. Nothing watches Anthropic's Claude Code signing key
+
+**Type:** ci · **Priority:** Low · **Status:** Open (found by the review of #0-249, round 1, architecture, 2026-11-21).
+**Autopilot:** human-only · **Risk:** low · **Complexity:** low · **Depends on:** #0-249
+**Touches:** ci (.github/scripts/watch-signing-keys.sh, .github/scripts/test-watch-signing-keys.sh,
+.github/workflows/signing-keys.yml: owner-only), factory (.devcontainer/keys/), docs (ADR-0065 point 6, ADR-0033)
+
+**Problem.** `.devcontainer/keys/31DD…CACE.asc` is the key `install-claude-code.sh` verifies Claude Code's manifests
+with (ADR-0065). `watch-signing-keys.sh` (weekly, `signing-keys.yml`; `--sources-only` in Lint Workflows) reads only
+`.github/keys/`, and its `<fingerprint>.source` is `<owner/repo> <path>` fetched through gh; this key's source is a
+URL (`https://downloads.claude.ai/keys/claude-code.asc`). So a rotation or a revocation by Anthropic is noticed only
+when a bump fails or someone refreshes the file: a bump whose hashes come from a manifest signed before the
+revocation still passes `--check` with the stale key file. The installed binary stays held by the pin's hash.
+
+**Approach.** Teach the watch a URL source (fetched with curl, https only, the same three-way check on a new
+fingerprint), and read `.devcontainer/keys/` beside `.github/keys/`; or move the watch's input to a list of key
+directories. A key without a watched source fails Lint Workflows, wherever it lives.
+
+AC1. The weekly watch reports a rotated, revoked or extended Claude Code key, as it does Snyk's (test).
+AC2. A committed signing key under `.devcontainer/keys/` without a source the watch reads fails Lint Workflows (test).
