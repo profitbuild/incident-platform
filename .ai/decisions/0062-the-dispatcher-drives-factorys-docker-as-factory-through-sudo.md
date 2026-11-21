@@ -12,7 +12,8 @@
   a value the daemon gave, a call's stderr kept from every caller; point 4 amended by ADR-0064 (2026-11-21, #0-300):
   the dispatcher's mounts gain the factory's managed settings read-only on `/etc/claude-code`; points 4 and 5 amended
   on the review of `factory` PR #22 (2026-11-21): the daemon's options refuse the run before any container of it, and
-  the sweep counts volumes (point 5's sweep part; its rollback part lasts until M4)
+  the sweep counts volumes (point 5's sweep part; its rollback part lasts until M4); point 7 amended by #0-303
+  (2026-11-21): the whole-daemon sweep only while no other task is live
 - **Backlog:** #0-277; point 4 amended on #0-282's review and on the review of `factory` PR #18; points 1, 2, 5, 8 and
   the Consequences on the review of #0-277's VM part; their end-state follow-ups #0-284, #0-285; points 4 and 5 amended
   on the review of `factory` PR #22 (#0-284's code)
@@ -207,6 +208,15 @@ Two facts the item had not weighed (the `/research` of 2026-11-20):
    (no container left, no volume but `factory-dispatcher-m2`), or the run is refused. A long-lived container of the
    dispatcher's own (4.6's proxy, if one) carries a label of the run (`factory.task=<runId>`), so a sweep at a later
    run's start removes it as any other.
+   **Amended (2026-11-21, #0-303, the owner's option B):** that sweep of the whole daemon runs at a run's start and
+   end only while no other task is live (its lock held, ADR-0060 D7 as amended), which is always while
+   `FACTORY_SLOTS` is 1; otherwise a run removes only what carries its own label, and nothing of a live task's. A run
+   takes its own task lock first, then checks the others' liveness and sweeps at its start under the dispatcher's
+   lock, and checks again and sweeps at its end under that lock too, before it releases its task lock; `cli.mjs sweep`
+   refuses while any task's lock is held, naming that task's `runId`, and `--force` does not override it (`--force` is
+   for a container a killed run left labelled as the rollback's, not for a live task). The sweep's scope when two tasks
+   can be live, the orphans, the Maven cache's layout and the removal of volumes without their names (#0-309) are
+   decided with the daemon's model in #0-285 (M3.4).
 8. **New source of software for the VM:** `buildpack-deps:noble-scm` from Docker Hub, pinned by digest as
    `provision.sh`'s `HELPER_IMAGE` and checked by `verify-pins.sh` (an index Docker Hub serves for arm64 and amd64), its update path #0-281's with the other
    `ubuntu`-based digest.

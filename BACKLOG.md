@@ -4110,6 +4110,9 @@ running as `factory` could take it.
 **Work.** Decide, before 4.6, what keeps one task's leftovers from the next task's credential: a root-owned
 `DOCKER_CONFIG` set by the dispatcher's sudo rule (its `env_file`), `factory`'s home checked or made anew between
 tasks, a VM per run, or another way; record it (ADR) and build it.
+Taken over from #0-303 (the owner's option B, 2026-11-21; `migration/m3.md` M3.4): with the daemon's model, the
+orphans' sweep and the sweep's scope when two tasks can be live (M5), the Maven cache's layout (per slot, or read-only
+shared with a per-task layer such as Maven 3.9's `maven.repo.local.tail`, to check on 3.9.16), and #0-309.
 
 **Acceptance criteria.**
 AC1. An ADR (or an amendment of ADR-0062) records what persists across tasks as `factory`, what of it can reach a
@@ -4535,22 +4538,36 @@ AC4. An architect's commit that changes a path outside its `writeScopes` entry s
 
 **Type:** ci · **Priority:** Medium · **Status:** Open (ADR-0063, 2026-11-21).
 **Autopilot:** human-only · **Risk:** medium · **Complexity:** medium · **Depends on:** #0-278
-**Touches:** the repository `profitbuild/factory` (dispatcher/src/state/, container/), decisions (ADR-0060 D7, as amended by ADR-0063)
+**Touches:** the repository `profitbuild/factory` (dispatcher/src/state/, container/environment.mjs, container/daemon.mjs, cli.mjs), decisions (ADR-0060 D7 and ADR-0062 point 7, as amended for #0-303)
 
 **Problem.** One `flock` guards the whole dispatcher. Both ends of a run sweep every container, network, volume and
 work directory. One Maven cache volume is shared by all tasks. M5's two slots (ADR-0063 G1) cannot run on that.
 
+**Decided 2026-11-21** (`/research` of #0-303 with #0-309, the owner's option B; ADR-0060 D7 and ADR-0062 point 7
+amended): only what holds whatever the daemon's model is. The sweep's scope with two live tasks, the orphans, the
+Maven cache and #0-309 move to #0-285 (M3.4), which chooses that model: on a shared daemon a label is no boundary (a
+task's code makes objects unlabelled or labelled as another run's), and until M4 the whole sweep keeps the rollback's
+credential volumes off the daemon.
+
 **Work.** `migration/m2.md` M2.5:
-- a lock per task;
-- a sweep of only what carries the run's label, plus a sweep of orphans (no live lease);
-- a Maven cache per slot (`factory-dispatcher-m2-<slot>`), or a shared read-only cache with a per-task layer;
-- `state.json` written atomically under a short state lock;
-- `FACTORY_SLOTS` (1 until M5).
+- a lock per task, `tasks/<runId>/lock`, by `lock.mjs`'s `flock`; the dispatcher's lock only for `cli.mjs sweep` and
+  taking a slot;
+- a task is live while its lock cannot be taken (`--nonblock`), in place of M5's lease;
+- a short state lock around each read, change and write of `state.json` and the task records;
+- `FACTORY_SLOTS` (1 until M5): a run refused while as many tasks are live;
+- the whole-daemon sweep at a run's start and end only while no other task is live (always in M2); otherwise only
+  the run's own labelled objects (`removeOwnObjects`); the run's task lock taken first, the check and the start's sweep
+  under the dispatcher's lock, the end's check and sweep under it too, before the task lock is released;
+- `cli.mjs sweep` (and `--force`) refused while any task's lock is held, naming its `runId`.
 
 **Acceptance criteria.**
-AC1. Two fake tasks in one process remove none of each other's containers, networks, volumes or directories (tests).
-AC2. The breaker counts the blocks of both, and a concurrent write to `state.json` loses neither (tests).
-AC3. An orphan with no live lease is swept, and a running task's resources are not (tests).
+AC1. A run whose `FACTORY_SLOTS` are all held by live tasks is refused before it touches the daemon; a killed run's
+     lock is free again and its task no longer live, a child process of it still alive included (tests).
+AC2. The breaker counts the blocks of two concurrent writers, and a concurrent write to `state.json` loses neither
+     (tests).
+AC3. A run does not sweep the whole daemon while another task is live (it removes only its own labelled objects), and
+     sweeps it whole when none is; `cli.mjs sweep` and `sweep --force` refuse while a task's lock is held, naming its
+     `runId` (tests with a fake second task holding its lock).
 
 ### 0-304. What the reviews of 4.3a–c left for the control flow is not built (migration step M2.6)
 
@@ -4664,13 +4681,17 @@ AC2. The README's `$FACTORY_STATE_DIR` row states the rule.
 ### 0-309. A volume named like a secret makes every later sweep refuse (found by the review of `factory` PR #22)
 
 **Type:** ci · **Priority:** Medium · **Status:** Open (review of `factory` PR #22, 2026-11-21).
-**Autopilot:** human-only · **Risk:** medium · **Complexity:** low · **Depends on:** #0-284
+**Autopilot:** human-only · **Risk:** medium · **Complexity:** low · **Depends on:** #0-284, #0-285
 **Touches:** the repository `profitbuild/factory` (dispatcher/src/container/daemon.mjs, its tests)
 
 **Problem.** The sweep removes volumes by name (`docker volume rm <name>`), and the starter refuses an argument
 shaped like a secret (#0-284 keeps it out of every message). A task's own code holds `factory`'s Docker socket (its
 tests, Testcontainers), so it can create a volume with such a name: every later sweep, so every run, is refused until
 the owner removes the volume by hand. Nothing leaks; the cost is that one task can stop the factory.
+
+**Decided with #0-285 (2026-11-21, #0-303's option B):** the way depends on the daemon's model, which #0-285 chooses;
+under a daemon per task the case goes with it. On a shared daemon a task's code chooses names and labels, so a
+filtered prune closes an accidental name, and a deliberate one is refused by a count.
 
 **Work.** Remove the volumes without passing their names as arguments, e.g. a `docker volume prune` filtered to keep
 the dispatcher's own cache volume (`factory-dispatcher-m2`), checked afterwards by a count; or by a list read and

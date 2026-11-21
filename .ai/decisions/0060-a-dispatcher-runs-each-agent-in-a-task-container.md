@@ -9,7 +9,9 @@
   (new sources of `factory`'s CI); D6, D7 and D8 amended on 2026-11-21 by #0-278 (no product code runs as
   `dispatcher`; the path checks are its own code; the owner names the item until stage 7); D7 and D8 amended on
   2026-11-21 by ADR-0063 (a lock per task, `--force-with-lease` to `factory/**` for a rebase, the base checked as
-  current `main`; the owner names the item until M5, the queue's step); its 4.4–4.7 plan replaced by ADR-0063's M2/M3
+  current `main`; the owner names the item until M5, the queue's step); D7 amended on 2026-11-21 by #0-303 (the lock
+  per task, a task's liveness by its lock, the state lock, `FACTORY_SLOTS`); its 4.4–4.7 plan replaced by ADR-0063's
+  M2/M3
 - **Backlog:** #0-267 (stage 4.1); stage 4's later items are created as their turn comes, each from its step of the
   plan `.ai/context/migration/stage-4.md`
 - **Date:** 2026-11-17
@@ -134,6 +136,13 @@ and `--plugin-dir` (code.claude.com/docs/en/headless.md, cli-reference.md).
   refuses any run while another holds it, which equals one lock per task while one task runs at a time (D8). A lock
   per task comes back with more than one task at a time. Apart from the lock, the breaker (today's, ported with the
   flow, D1) refuses a new task and a resumed one while it is tripped.
+  **Amended (2026-11-21, #0-303, the owner's option B): the lock per task.** Each task holds `tasks/<runId>/lock`, by
+  the same `flock` on a descriptor its run holds; a task is live while that lock cannot be taken (`--nonblock`), which
+  stands in for M5's lease; the dispatcher's one lock stays for `cli.mjs sweep` and the moment a run takes its slot,
+  and a short state lock guards each read, change and write of `state.json`; `FACTORY_SLOTS` (1 until M5) refuses a
+  run while as many tasks are live. Since that lock no longer spans a run, `cli.mjs sweep` refuses while any task's lock
+  is held, naming that task's `runId`, and `--force` does not override it (`--force` is for a container a killed run
+  left labelled as the rollback's, not for a live task).
   **Amended (2026-11-20, #0-276, the owner): where the checks and the push run.** No git with the dispatcher's
   rights runs in a repository an agent wrote (its config, attributes and hooks can make git run a program as the uid
   that reads builder-app's key). The task's commits leave its container only as a bundle on `docker exec`'s stdout,
