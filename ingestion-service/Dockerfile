@@ -9,7 +9,7 @@
 # The jar extracted into Spring Boot's layers (dependencies, loader, snapshot dependencies, application),
 # each copied below as an image layer of its own: a change to the code alone changes the application layer
 # (under 1 MB), and the dependencies' layer (over 100 MB) is reused by the build cache and a registry.
-FROM eclipse-temurin:21.0.11_10-jre-alpine AS layers
+FROM eclipse-temurin:25.0.5_8-jre-alpine AS layers
 
 WORKDIR /layers
 
@@ -20,7 +20,7 @@ RUN set -- jar/*.jar \
     && java -Djarmode=tools -jar "$1" extract --layers --launcher --destination extracted
 
 # ---- Runtime stage ----
-FROM eclipse-temurin:21.0.11_10-jre-alpine
+FROM eclipse-temurin:25.0.5_8-jre-alpine
 
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 
