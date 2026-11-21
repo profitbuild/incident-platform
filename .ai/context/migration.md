@@ -94,7 +94,7 @@ Legend:
   - #0-302 (M2.4, the dispatcher's commits; #0-212 folded in);
   - #0-303 (M2.5, per task);
   - #0-304 (M2.6, what 4.3a–c left).
-- carries too: #0-280 (the gate's schema against `run-tests.sh`), #0-284 (the container checked before anything
+- carries too: #0-280 (the gate's schema against `run-tests.sh`; done, PR #680), #0-284 (the container checked before anything
   runs), #0-249 and #0-283 (Claude Code pinned, `dev`'s firewall rule).
 - part: #0-261's per-task baseline and the gate's short summary (in #0-301).
 - superseded at M4 by its removal: #0-213, #0-217, #0-226, #0-228, #0-234, #0-236.
