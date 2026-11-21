@@ -60,7 +60,7 @@ if finds "$cmd" '(>|[[:space:]]tee[[:space:]]|sed[[:space:]]+(-[a-zA-Z]*i|--in-p
     block "the command may write to the Maven wrapper (mvnw), which every verification runs"
 fi
 
-protected='(\.ai/rules|\.ai/plan/|\.ai/audit/decisions\.md|\.claude/|\.github/|architecture-tests|AGENTS\.md|scripts/factory|\.devcontainer|\.mvn/|\.ruby-version|\.node-version|\.git/|\.ai/runs/LOCK|\.ai/runs/state\.json|\.ai/runs/ops-calls|\.ai/runs/isolation|\.ai/STOP)'
+protected='(\.ai/rules|\.ai/plan/|\.ai/audit/decisions\.md|\.claude/|\.github/|architecture-tests|AGENTS\.md|scripts/factory|\.devcontainer|\.factory|\.mvn/|\.ruby-version|\.node-version|\.git/|\.ai/runs/LOCK|\.ai/runs/state\.json|\.ai/runs/ops-calls|\.ai/runs/isolation|\.ai/STOP)'
 # The paths are matched as text, after the spellings a path resolves through without changing (review round 3 of
 # #0-235): `//` is `/`, `/./` is `/`. Without it `git log --output=.ai/runs//LOCK`, an allowed read, overwrote the lock
 # with a branch and a base the agent chose, and `mkdir -p .ai/runs//ops-calls/<id>` blocked a factory-ops run. `..`

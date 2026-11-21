@@ -49,7 +49,7 @@ expect 1 "a hook that lets writes through fails" "$SRC/.claude/settings.autopilo
 grep -v '^/.ai/audit/decisions.md' "$SRC/.github/CODEOWNERS" > "$WORK/CODEOWNERS-missing"
 expect 1 "a protected path without a CODEOWNERS rule fails" "$SRC/.claude/settings.autopilot.json" "$SRC/.claude/hooks/guard-protected-bash.sh" "$WORK/CODEOWNERS-missing"
 
-printf '/.ai/   @owner\n/.claude/ @owner\n/.github/ @owner\n/architecture-tests/ @owner\n/AGENTS.md @owner\n/scripts/ @owner\n/.devcontainer/ @owner\n' > "$WORK/CODEOWNERS-parents"
+printf '/.ai/   @owner\n/.claude/ @owner\n/.github/ @owner\n/architecture-tests/ @owner\n/AGENTS.md @owner\n/scripts/ @owner\n/.devcontainer/ @owner\n/.factory/ @owner\n' > "$WORK/CODEOWNERS-parents"
 expect 0 "a rule for a directory above covers it" "$SRC/.claude/settings.autopilot.json" "$SRC/.claude/hooks/guard-protected-bash.sh" "$WORK/CODEOWNERS-parents"
 
 { cat "$SRC/.github/CODEOWNERS"; echo '/.github/workflows/'; } > "$WORK/CODEOWNERS-unowned"

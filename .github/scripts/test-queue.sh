@@ -264,5 +264,25 @@ git rm -q .ai/rules/protected-paths.md; base=$(commit noprotected)
 expect_jq "no protected-path list: fail closed"  "$($NI "$base" 0-3)" '(.ok | not) and (.reasons[0] | test("protected-paths.md"))'
 expect_jq "no list: the queue check fails closed" "$($CQ)" '(.valid | not) and (.errors[0] | test("protected-paths.md"))'
 
+echo "the lock rule against its cases (backlog #0-278 AC11)"
+# next-item.sh's own definition (_backlog.sh, LOCKED_BY_JQ) run on every case of the fixture that profitbuild/factory's
+# dispatcher reads a copy of: the two sides of the rule agree on the same names. A case file read whole or not at all.
+LOCK_CASES=$SRC/.github/scripts/fixtures/item-lock-branches.tsv
+# shellcheck source=scripts/factory/_backlog.sh
+LOCKED_BY_JQ=$(. "$SRC/scripts/factory/_backlog.sh" && printf '%s' "$LOCKED_BY_JQ")
+cases=0
+while IFS=$'\t' read -r item branch want extra; do
+    case "$item" in '#'*|'') continue ;; esac
+    cases=$((cases+1))
+    if [ -n "${extra:-}" ] || [ -z "$branch" ] || { [ "$want" != held ] && [ "$want" != free ]; }; then
+        fail "a malformed case in item-lock-branches.tsv: $item $branch $want"; continue
+    fi
+    got=$(jq -n --arg id "$item" --arg b "$branch" '[$b] as $locks | '"$LOCKED_BY_JQ"' if lockedBy($id) == null then "free" else "held" end') \
+        || { fail "jq could not run the lock rule on $item $branch"; continue; }
+    [ "$got" = "\"$want\"" ] || fail "lock: $item by $branch is $got, the case says $want"
+done < "$LOCK_CASES"
+if [ "$cases" -ge 10 ]; then echo "  ok: the lock rule agrees with all $cases cases of item-lock-branches.tsv"
+else fail "item-lock-branches.tsv holds $cases cases, fewer than its 10"; fi
+
 if [ "$failures" -gt 0 ]; then echo "$failures queue test(s) failed"; exit 1; fi
 echo "All queue tests passed."

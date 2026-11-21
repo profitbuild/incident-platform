@@ -102,6 +102,10 @@ expect 0 "read .ruby-version"            "$P" -- "$(bash_call 'cat .ruby-version
 # Backlog #0-163 (ADR-0043): .node-version decides the Node of CI's JavaScript tests, likewise.
 expect 2 "redirect into .node-version"   "$P" -- "$(bash_call 'echo 22.0.0 > .node-version')"
 expect 0 "read .node-version"            "$P" -- "$(bash_call 'cat .node-version')"
+# Backlog #0-278: .factory/adapter.json names the dispatcher's gate and trusted paths (Owner-only), the directory too.
+expect 2 "redirect into the adapter"     "$P" -- "$(bash_call 'echo {} > .factory/adapter.json')"
+expect 2 "remove the adapter's dir"      "$P" -- "$(bash_call 'rm -r .factory')"
+expect 0 "read the adapter"              "$P" -- "$(bash_call 'cat .factory/adapter.json')"
 # Labels (backlog #0-126): the audits count a `human:*` label as the owner's word, so an autopilot session may
 # add or remove only the shipper's own labels, on both commands that set them, in every form gh accepts.
 expect 0 "shipper creates a labelled PR"        "$P" -- "$(bash_call 'gh pr create --draft --base main --head fix/0-1-x --label autopilot --label blocked --body-file /tmp/b')"

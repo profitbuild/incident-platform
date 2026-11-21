@@ -210,7 +210,8 @@ which compares the VM's provisioning marker with this checkout: recreate it.
    the key on stdin into `/home/dispatcher/.config/factory/`, writes the env file (the app's two ids and the
    dispatcher's settings, each from its source: `provision.sh`'s paths and helper image, the three limits of
    `.claude/settings.autopilot.json`; it refuses a VM made from another `provision.sh`), checks it and the modes, runs
-   `factory`'s `check-app --repository profitbuild/incident-platform` as `dispatcher` and deletes the download once
+   `factory`'s `check-app --adapter-from-repo` as `dispatcher` (the repository from `.factory/adapter.json` on the
+   clone's `main`, which must be there first, #0-278) and deletes the download once
    that passed. The VM also holds the dispatcher's own bare clone of the product, `/home/dispatcher/repo`
    (`FACTORY_REPO_DIR`), made by `provision.sh` as `dispatcher`. The three limits are a snapshot taken at this run:
    after you change them in `.claude/settings.autopilot.json`, run the script again for the dispatcher to follow. On a rotation delete the old key in the app's settings
@@ -222,7 +223,7 @@ which compares the VM's provisioning marker with this checkout: recreate it.
 
 **Changing the VM:** its contents only in `provision.sh`, its size or image only in `factory-build.yaml`, then
 `delete.sh` and `create.sh`: a VM is recreated, never patched by hand. Every pin is bumped by hand (Renovate does not
-read these files) and `verify-pins.sh` must print seven `verified:` lines in the same PR:
+read these files) and `verify-pins.sh` must print eight `verified:` lines in the same PR:
 - the image: the two `images:` lines (Ubuntu's dated directory under `cloud-images.ubuntu.com/releases/noble/` and
   the file's sha256 from its `SHA256SUMS`);
 - Node: `NODE_VERSION` and its two sha256 (`linux-arm64`, `linux-x64`, from nodejs.org's `SHASUMS256.txt`), with
@@ -231,7 +232,9 @@ read these files) and `verify-pins.sh` must print seven `verified:` lines in the
 - Docker's apt key: `DOCKER_KEY_FPR`, which changes only when Docker rotates its key, confirmed in three places first;
 - Docker CE: `DOCKER_VERSION` and `CONTAINERD_VERSION`, versions of Docker's noble repository
   (`apt-cache madison docker-ce` in the VM lists them);
-- the dispatcher's code: `FACTORY_COMMIT`, a commit on `profitbuild/factory`'s `main` (#0-272), until M3's tag pin (`.ai/context/migration/m3.md`, M3.6);
+- the dispatcher's code: `FACTORY_COMMIT`, a commit on `profitbuild/factory`'s `main` (#0-272), and the tag
+  `.factory/adapter.json`'s `factoryVersion` names, which must be at that commit (#0-278: create the tag first, the
+  admin's; CI, `verify-pins.sh` and `create.sh` check it), until M3's single pin (`.ai/context/migration/m3.md`, M3.6);
 - the helper image of the tasks' work directories: `HELPER_IMAGE` (`buildpack-deps:noble-scm` by its index digest,
   #0-277), an index Docker Hub serves with an amd64 and an arm64 image.
 **Stopping it** (12 GiB of RAM while it runs): `limactl stop factory-build`; `limactl start factory-build` brings it

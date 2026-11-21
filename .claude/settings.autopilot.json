@@ -73,6 +73,8 @@
       "Write(./scripts/factory-admin/**)",
       "Edit(./.devcontainer/**)",
       "Write(./.devcontainer/**)",
+      "Edit(./.factory/**)",
+      "Write(./.factory/**)",
       "Edit(./mvnw)",
       "Write(./mvnw)",
       "Edit(./mvnw.cmd)",
@@ -275,6 +277,6 @@
     "FACTORY_AUDIT_EVERY": "10",
     "FACTORY_MAX_BLOCKED": "2",
     "FACTORY_MAX_MERGES_PER_DAY": "5",
-    "FACTORY_SETTINGS_SHA256": "3dc90f1cb9f31d79abd4bcbffd4c9d43f1e976a40577a937f0a0c979d21722dd"
+    "FACTORY_SETTINGS_SHA256": "98380665e5b1c2bcf6e560c8f31596bbf4b50b47f1f960965ceddc1df73aa47d"
   }
 }

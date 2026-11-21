@@ -68,7 +68,7 @@ jq -n --argjson items "$backlog" --argjson 'done' "$done_ids" --argjson q "$queu
       --arg want "$want" --argjson present "$present" --argjson prefixOf "$BRANCH_PREFIX_OF" '
   ($items | map({key: .id, value: .}) | from_entries) as $byId
   | def isDone($id): ($done | index($id)) != null;
-    def lockedBy($id): [$locks[] | select(contains("/" + $id + "-"))] | first // null;
+    '"$LOCKED_BY_JQ"'
     def why($id):
       ($byId[$id]) as $it
       | if $it == null then (if isDone($id) then "done" else "not in BACKLOG.md on main" end)

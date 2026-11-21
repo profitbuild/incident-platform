@@ -32,6 +32,7 @@
 /scripts/factory/           @lukaszplawiak
 /scripts/factory-admin/     @lukaszplawiak
 /.devcontainer/             @lukaszplawiak
+/.factory/                  @lukaszplawiak
 
 # The build: plugins and repositories in the root POM run wherever `mvn verify` runs (#0-110)
 /pom.xml                    @lukaszplawiak

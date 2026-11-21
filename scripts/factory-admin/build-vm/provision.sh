@@ -58,12 +58,13 @@ DEVCONTAINER_CLI_VERSION=0.89.0
 DEVCONTAINER_CLI_SHA512=2f36a8386290fd9aa5e8fb226788552185596a0cd6903eb9686ff5a2ee7f2a5cb96353ed8cb835ca7eeabbe2d90b3568025e83659fe96f3f2a38ee112cd96a32
 FACTORY_USER=factory
 # The dispatcher (backlog #0-272, ADR-0060 D3): the one user that holds builder-app's key, never `factory`, whose
-# rootless Docker a container escape lands in. Its code is profitbuild/factory at the commit pinned here (until 4.7's
-# tag), which verify-pins.sh checks is on factory's main; a change of the pin takes effect on a new VM (delete.sh, then
+# rootless Docker a container escape lands in. Its code is profitbuild/factory at the commit pinned here, which
+# verify-pins.sh checks is on factory's main and is the commit of the tag .factory/adapter.json names (factoryVersion;
+# create.sh checks it too, backlog #0-278; the adapter becomes the one source at M3.6, #0-307); a change of the pin takes effect on a new VM (delete.sh, then
 # create.sh), as every change here: Lima reads this file when it creates the VM.
 DISPATCHER_USER=dispatcher
 FACTORY_REPO_URL=https://github.com/profitbuild/factory.git
-FACTORY_COMMIT=648723d3f0816b79b2777c06bfe45fd9291f493d  # gitleaks:allow: a public commit id of profitbuild/factory, no secret
+FACTORY_COMMIT=b5e29d83b07407095b244679e3cb4c4ca7746848  # gitleaks:allow: a public commit id of profitbuild/factory, no secret
 # The one checkout of factory on the VM (ADR-0062 point 3): root's, outside every user's home, so `factory`'s daemon can
 # mount it read-only into a task container and neither `factory` nor `dispatcher` can write it; the dispatcher runs
 # from it too (backlog #0-277).

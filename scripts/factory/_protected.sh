@@ -18,6 +18,12 @@
 # Fixed (backlog #0-122): the list was copied into each script and agent and had drifted apart.
 # ============================================================
 
+# Read relative to the clone, from the given commit's tree (git show <ref>:<file>) or, with no ref, the working
+# tree. In the dispatcher's task container the clone and its objects are the agent's side, so this input is not the
+# base's as the scripts beside _common.sh are (FACTORY_SCRIPTS_DIR): changed-paths.sh, its reader there, is advisory,
+# and no refusal of the dispatcher rests on it; the dispatcher reads the list itself (#0-305, M3.1). Until then a
+# branch can narrow what run-tests.sh builds there (it takes its modules from changed-paths.sh); the PR's CI builds
+# from the committed tree and is the check. Backlog #0-278.
 PROTECTED_PATHS_FILE=.ai/rules/protected-paths.md
 
 # Fails (status 1, nothing printed) when the file, the list or its markers are missing: callers fail closed.

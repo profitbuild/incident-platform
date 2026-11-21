@@ -1,0 +1,22 @@
+# The lock of an item by an open pull request's head branch (incident-platform backlog #0-278 AC11, ADR-0060 D8 as
+# amended): an item 0-N is held by a head branch that contains /0-N- (a slash, the item, a dash), and by no other.
+# Both sides of the rule read these cases: the product's next-item.sh, through its tests
+# (incident-platform's .github/scripts/test-queue.sh), and the factory's lock (profitbuild/factory's
+# dispatcher/src/github/item-lock.mjs, through dispatcher/test/item-lock.test.mjs, which reads a copy).
+# Format: lines starting with # are comments; every other line is one case, three fields separated by one tab:
+#   <item>	<head branch>	<held|free>
+# held: the branch holds the item; free: it does not.
+0-3	fix/0-3-three	held
+0-3	refactor/0-3-left-over	held
+0-278	factory/feat/0-278-x	held
+0-278	feat/0-278-main-only	held
+0-4	a/0-3-b/0-4-c	held
+0-3	a/0-3-b/0-4-c	held
+0-278	feat/0-2780-x	free
+0-2780	feat/0-2780-x	held
+0-3	feat/10-3-x	free
+0-3	0-3-x	free
+0-3	feat/0-3	free
+0-3	feat/x0-3-y	free
+0-3	feat/0-30-x	free
+0-3	feat/0-3_x	free

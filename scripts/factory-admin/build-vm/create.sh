@@ -289,6 +289,15 @@ check_boundary() {
   [ -z "$linked" ] || boundary_fail "a link of /opt/factory-checkout is not root's: $linked"
   head_now=$(vm sudo git -C /opt/factory-checkout rev-parse HEAD) || boundary_fail "cannot read the HEAD of /opt/factory-checkout"
   [ "$head_now" = "$pin" ] || boundary_fail "/opt/factory-checkout is at $head_now, not at FACTORY_COMMIT $pin"
+  # The adapter's factoryVersion names the same commit (backlog #0-278 AC10): the tag the product says it runs is at the
+  # pin the VM runs, read from the checkout's own tags (root's clone, made after the tag; a tag moved or deleted later is
+  # refused by factory's ruleset `tags`). Two pins of one version, held equal here and by verify-pins.sh, until M3.6
+  # (#0-307) makes the adapter's the one source.
+  ver=$(jq -er '.factoryVersion | select(test("\\Av[0-9]+\\.[0-9]+\\.[0-9]+\\z"))' "$root/.factory/adapter.json") \
+    || boundary_fail "cannot read factoryVersion from .factory/adapter.json"
+  tagged=$(vm sudo git -C /opt/factory-checkout rev-parse --verify --quiet "refs/tags/$ver^{commit}") \
+    || boundary_fail "factory's tag $ver is not in /opt/factory-checkout: create the tag on FACTORY_COMMIT first"
+  [ "$tagged" = "$pin" ] || boundary_fail "factory's tag $ver is at $tagged, not at FACTORY_COMMIT $pin"
   tree_now=$(vm sudo git -C /opt/factory-checkout status --porcelain --ignored) \
     || boundary_fail "cannot read the status of /opt/factory-checkout"
   [ -z "$tree_now" ] || boundary_fail "/opt/factory-checkout is not clean: $tree_now"

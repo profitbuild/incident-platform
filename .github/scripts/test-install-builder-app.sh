@@ -5,7 +5,7 @@
 # moved under one temporary directory per case, and `sudo` dropped. What a case checks:
 #   - a good run writes the key (equal to the downloaded one) and the env file (the two ids and the dispatcher's six
 #     settings, each from its one source: provision.sh and .claude/settings.autopilot.json; backlog #0-277), both mode
-#     600 with no `.new` left, runs check-app with that env file and `--repository` (the whole call matched, AC8), and
+#     600 with no `.new` left, runs check-app with that env file and `--adapter-from-repo` (the whole call matched, #0-278 AC8), and
 #     deletes the downloaded key;
 #   - the key never travels in an argument (argv is readable by every user of the VM): no call holds its text;
 #   - every refusal names its cause and keeps the downloaded key: wrong arguments, a link or a file that is no key, no
@@ -26,7 +26,6 @@ P_COMMIT=$(sed -n 's/^FACTORY_COMMIT=\([0-9a-f]\{40\}\).*$/\1/p' "$PROV")
 P_HELPER=$(sed -n 's/^HELPER_IMAGE=\(.*\)$/\1/p' "$PROV")
 P_STATE=$(sed -n 's/^DISPATCHER_STATE=\(.*\)$/\1/p' "$PROV")
 P_REPO=$(sed -n 's/^DISPATCHER_REPO=\(.*\)$/\1/p' "$PROV")
-P_REPOSITORY=$(sed -n 's|^PRODUCT_REPO_URL=https://github.com/\(.*\)\.git$|\1|p' "$PROV")
 MARKER="factory-build provisioned: docker; node v24; dispatcher at factory $P_COMMIT in /opt/factory-checkout; helper $P_HELPER; repo $P_REPO; state $P_STATE; boot 1"
 WORK=$(mktemp -d)
 trap 'rm -rf "$WORK"' EXIT
@@ -139,8 +138,8 @@ else
   if [ "$(mode "$(conf)/builder-app.pem")" = 600 ] && [ "$(mode "$(conf)/env")" = 600 ]; then ok "key and env file are mode 600"
   else fail "modes: key $(mode "$(conf)/builder-app.pem"), env $(mode "$(conf)/env")"; fi
   if ls "$(conf)"/*.new >/dev/null 2>&1; then fail "a .new file is left"; else ok "no .new file is left"; fi
-  if grep -qxF "node --env-file=$(conf)/env $VM/opt/factory-checkout/dispatcher/bin/check-app.mjs --repository $P_REPOSITORY" "$VM/node.log" \
-    && grep -qx 'BUILDER_APP_ID=5844656' "$VM/node.log"; then ok "check-app ran with that env file and --repository $P_REPOSITORY (the whole call)"
+  if grep -qxF "node --env-file=$(conf)/env $VM/opt/factory-checkout/dispatcher/bin/check-app.mjs --adapter-from-repo" "$VM/node.log" \
+    && grep -qx 'BUILDER_APP_ID=5844656' "$VM/node.log"; then ok "check-app ran with that env file and --adapter-from-repo, no --repository of its own (the whole call)"
   else fail "check-app call: $(cat "$VM/node.log" 2>/dev/null)"; fi
   if [ ! -e "$KEY" ]; then ok "the downloaded key is deleted"; else fail "the downloaded key is still there"; fi
   if grep -qF 'MIIEsecretLINE' "$VM/calls"; then fail "the key's text is in a limactl argument"

@@ -1,6 +1,7 @@
 # ADR-0061: The product checks the factory's copies of its controls, and leads
 
-- **Status:** Accepted (2026-11-19, by the owner); amended by #0-272 (2026-11-20: a fifth comparison, below)
+- **Status:** Accepted (2026-11-19, by the owner); amended by #0-272 (2026-11-20: a fifth comparison, below) and by
+  #0-278 (2026-11-21: a copy at a path of its own, the adapter against its version's schema, the version's tag, below)
 - **Backlog:** #0-268
 - **Date:** 2026-11-19
 - **Author:** human (the owner chose option B and the lead direction (b) in an interactive session); written by Claude Code
@@ -40,7 +41,8 @@ as `factory` starts a difference; a red `main` stops the autopilot (main-guard).
    quotes the text, and the log is public). A copy's difference names a digest of the original, so a further change
    here cannot hide behind drift `main` already has.
 6. **The reference moves at step 4.7** from `factory@main` to the `factory` tag the product pins in
-   `.factory/adapter.json` (ADR-0060 D6).
+   `.factory/adapter.json` (ADR-0060 D6). Moved to M3.6 (#0-307) by ADR-0063; the adapter itself is already checked
+   against that tag's schema (the #0-278 amendment below).
 7. **No deny for deleting a branch by a push** in either repository (D1): CLAUDE.md "Working style" has sessions run
    `git push origin --delete <branch>` after a merge; `main` and the tags are the rulesets'.
 
@@ -61,6 +63,25 @@ as `factory` starts a difference; a red `main` stops the autopilot (main-guard).
 exactly, both ways. The rule of point 3 holds: this repository leads, so a pull request here that changes the file
 fails until `factory` matches, and a difference `factory` starts is a warning here; `factory`'s own test holds its file
 to a literal, so a widening there fails its CI.
+
+## Amendment (#0-278, 2026-11-21): the item lock's cases, the adapter and the factory version
+
+- **A copy at a path of its own.** The item lock's cases, `.github/scripts/fixtures/item-lock-branches.tsv` (one rule,
+  `next-item.sh`'s and the dispatcher's, ADR-0060 D8), are copied to `factory`'s
+  `dispatcher/testing/fixtures/item-lock-branches.tsv`, a path of its own: `check-factory-copies.rb`'s `MOVED_COPIES`
+  maps the original to it, compared as `COPIES` are, and the original is in `COMPARED` (this repository leads).
+  `test-queue.sh` runs every case through `next-item.sh`'s own definition (`_backlog.sh`'s `LOCKED_BY_JQ`), and
+  `factory`'s `item-lock.test.mjs` through the dispatcher's, so either side's drift fails a test (#0-278 AC11). The
+  `protectedPaths` parser's half of AC11 comes with the Owner-only check before a push (M3.1, #0-305).
+- **The adapter against its version.** CI's step "The adapter keeps its factory version's schema" clones `factory` at
+  the adapter's `factoryVersion` and checks `.factory/adapter.json` with that version's own `checkAdapter`, the code the
+  dispatcher reads it with, not a second validator here. The adapter's `gate.contract`, `gate.schema.json`, is a
+  constant of that schema naming `factory`'s own `schemas/gate.schema.json`, not a file of this repository. It runs that code of `factory` in this repository's CI,
+  accepted: a tag is the admin's alone and cannot move, and the job's token is read-only. Chosen over a check in
+  Factory guards with its own clone (the owner's choice A(a), 2026-11-21): one clone, one validator.
+- **The version's tag is `FACTORY_COMMIT`.** The same step, `verify-pins.sh` (against GitHub's API, the tag peeled) and
+  `create.sh` (in the VM's checkout) refuse a `factoryVersion` whose tag is not at `provision.sh`'s `FACTORY_COMMIT`:
+  two pins of one version, held equal, until #0-307 makes the adapter's the one source (the owner's choice B(c)).
 
 ## Consequences
 

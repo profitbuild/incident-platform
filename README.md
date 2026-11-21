@@ -820,8 +820,35 @@ security boundary, so every rule that matters is also enforced outside the model
   - Behind those, the askpass answers only the push URL's origin and `GIT_ALLOW_PROTOCOL` is `https`; a refused push is
     reported by git's kind of refusal, never the remote's text.
   - Proven on the VM's git: `factory`'s required check `Test (git 2.43)` runs the whole suite on Ubuntu 24.04's git
-    as an ordinary user. Gaps behind them: #0-281 (the request helper, redirects, the scans' bounds), #0-278 AC7
-    (who writes `FACTORY_REPO_DIR`).
+    as an ordinary user. Gaps behind them: #0-281 (the request helper, redirects, the scans' bounds). Who writes
+    `FACTORY_REPO_DIR` is settled by #0-278 below (the clone, or its parent, is the dispatcher's own and
+    writable by no one else).
+- **The product's code only from `main`, never as `dispatcher`** (backlog #0-278, migration step M1, ADR-0060 D6, D7
+  and D8 as amended; `factory` PR #20): a task cannot change the scripts that judge it nor the adapter that names them,
+  and no product code runs as the uid that reads builder-app's key.
+  - The adapter, `.factory/adapter.json` (Owner-only), and every product file the dispatcher reads are blobs of the
+    base commit of its own clone of `main`, never a checkout nor a task's branch; a symlink or a submodule on the way
+    to a path it names, or at it, is refused; each command's script and the adapter itself lie under `trustedPaths`
+    (`scripts/factory/`, `.factory/`).
+  - A task branch that changes a path of `trustedPaths` is refused by the dispatcher's own `git diff-tree` of the base
+    and the head, in a repository made from the task's bundle, before any gate runs.
+  - The product's commands (`run-tests.sh`, `changed-paths.sh`) run only in the task container, from the base's blobs
+    of `trustedPaths` unpacked into a fresh directory there; a file they read beside themselves is the base's
+    (`maven-settings.xml` through `_common.sh`'s `FACTORY_SCRIPTS_DIR`, fixed here: it was read relative to the clone,
+    so a branch could point Maven at its own settings); `changed-paths.sh` is advisory, and no refusal rests on it.
+    The gate's answer there is the agent's side, not a boundary: the clone's `./mvnw` and `.mvn/` are the branch's,
+    and the agent's tests run as the uid that unpacked the scripts, so a branch can forge it; the PR's CI, on a fresh
+    runner, is the gate that counts.
+  - An item an open pull request holds (a head branch containing `/<id>-`), or one of the dispatcher's own running
+    tasks with a branch, is refused before any container, every page of the list read; `main` is updated only as a
+    fast-forward, with builder-app's token; the rule's cases (`.github/scripts/fixtures/item-lock-branches.tsv`) are
+    run through `next-item.sh`'s own definition here and through the dispatcher's lock there, the copy held equal by
+    `check-factory-copies.rb`.
+  - The adapter keeps the schema of the `factory` version it names, checked in CI by that version's own
+    `checkAdapter`, and that version's tag is at the build VM's `FACTORY_COMMIT`, checked in CI, by `verify-pins.sh`
+    and by `create.sh`; `install-builder-app.sh` lets `check-app` take the token's repository from the adapter
+    (`--adapter-from-repo`), one source. Gaps: the `protectedPaths` parser and the Owner-only check before a push are
+    M3.1's (#0-305); two pins of one version until #0-307.
 
 **Known gaps**: a bypass actor or an admin added in the UI is seen only when the owner runs
 `repository-settings.rb check` (#0-113, ADR-0034), and so is a secret added in the UI (ADR-0035); a scan that

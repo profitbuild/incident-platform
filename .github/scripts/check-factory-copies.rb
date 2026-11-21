@@ -5,10 +5,11 @@
 #   ruby .github/scripts/check-factory-copies.rb <factory checkout> [--changed <file> --baseline <dir>]
 #                                                [--shellcheck <binary>]
 #
-# `factory` copies this repository's CI tool pins, its actions' SHAs, three scripts, its setup-node action and
-# zizmor.yml, .node-version and the owner session's denies; `factory` names no product (ADR-0060 D5), so the check
-# comparing the two lives here (ADR-0061). Renovate and check-pinned-tools.sh run here alone, so a bump here leaves
-# `factory` on the old value with no signal (the drift of #0-122) unless this fails. It compares, run from this
+# `factory` copies this repository's CI tool pins, its actions' SHAs, three scripts, the item lock's cases (at a path of
+# its own, MOVED_COPIES), its setup-node action and zizmor.yml, .node-version and the owner session's denies; `factory`
+# names no product (ADR-0060 D5), so the check comparing the two lives here (ADR-0061). Renovate and
+# check-pinned-tools.sh run here alone, so a bump here leaves `factory` on the old value with no signal (the drift of
+# #0-122) unless this fails. It compares, run from this
 # repository's root:
 #   1. pins: every <NAME>_VERSION / <NAME>_SHA256 in `factory`'s workflows and actions has the same value here, and
 #      `factory` holds the pins of the tools its CI needs (REQUIRED_PINS);
@@ -32,8 +33,8 @@
 # fails, the owner mirrors the change in `factory` and re-runs, and a pull request is never failed by drift it did not
 # bring (Renovate's next pull request, while `factory` leads on another tool). Every other difference, and every run
 # that is not a pull request, is a warning and passes: drift `factory` started would otherwise turn every pull request
-# here red, and a red main stops the autopilot. At step 4.7 the reference moves from factory@main to the tag the
-# product pins (.factory/adapter.json, ADR-0060 D6).
+# here red, and a red main stops the autopilot. At M3.6 (#0-307) the reference moves from factory@main to the tag the
+# product pins (.factory/adapter.json, ADR-0060 D6), against which CI already validates the adapter (#0-278).
 #
 # It also runs check-downloads.rb, check-runtime-setup.rb and check-shell.rb on the `factory` checkout (they take the
 # root as an argument; `factory` has no Ruby, ADR-0060 D2): their findings are `factory`'s own, never caused by a
@@ -64,12 +65,20 @@ COMPARED = %w[
   .node-version
   .claude/settings.json
   .github/repository-settings/apps/profitbuild-builder.json
+  .github/scripts/fixtures/item-lock-branches.tsv
 ].freeze
 COPIES = %w[
   .github/scripts/install-pinned-tool.sh
   .github/scripts/secret-scan.sh
   .github/scripts/test-secret-scan.sh
 ].freeze
+# Copies `factory` keeps at a path of its own: the original here => the copy there, compared as COPIES are (the notice
+# removed). The item lock's cases (backlog #0-278 AC11): next-item.sh's rule is tested on the original
+# (test-queue.sh), the dispatcher's lock on the copy (dispatcher/test/item-lock.test.mjs).
+MOVED_COPIES = {
+  '.github/scripts/fixtures/item-lock-branches.tsv' => 'dispatcher/testing/fixtures/item-lock-branches.tsv'
+}.freeze
+COPY_PAIRS = (COPIES.map { |rel| [rel, rel] } + MOVED_COPIES.to_a).freeze
 # Copies whose comments differ on purpose: compared once comment lines and blank lines are removed.
 COMMENT_COPIES = %w[.github/actions/setup-node/action.yml .github/zizmor.yml].freeze
 REQUIRED_PINS = %w[ACTIONLINT SHELLCHECK ZIZMOR BETTERLEAKS].flat_map { |t| ["#{t}_VERSION", "#{t}_SHA256"] }.freeze
@@ -241,20 +250,21 @@ def compare(product)
     end
   end
 
-  COPIES.each do |rel|
+  COPY_PAIRS.each do |rel, there|
     original = read(product, rel)
-    copy = read(FACTORY, rel)
+    copy = read(FACTORY, there)
     if original.nil?
       found << "#{rel} is listed as copied but this repository has no such file"
     elsif copy.nil?
-      found << "factory has no #{rel}"
+      found << "factory has no #{there}"
     elsif (stripped = without_notice(copy)).nil?
-      found << "factory's #{rel} has no copy notice (a paragraph starting \"#{NOTICE_START}\", ending at a bare #)"
+      found << "factory's #{there} has no copy notice (a paragraph starting \"#{NOTICE_START}\", ending at a bare #)"
     elsif stripped != original
-      found << "factory's #{rel} differs from this repository's (#{digest(original)} here) beyond its notice"
+      ours = there == rel ? '' : " #{rel}"
+      found << "factory's #{there} differs from this repository's#{ours} (#{digest(original)} here) beyond its notice"
     end
   end
-  (noticed_files - COPIES - COMMENT_COPIES).each do |rel|
+  (noticed_files - COPY_PAIRS.map(&:last) - COMMENT_COPIES).each do |rel|
     found << "factory's #{rel} says it is a copy of this repository's, but check-factory-copies.rb does not list it in COPIES"
   end
   no_comments = ->(text) { text.lines.reject { |l| l.strip.start_with?('#') || l.strip.empty? }.join }

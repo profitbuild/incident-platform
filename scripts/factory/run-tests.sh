@@ -80,7 +80,8 @@ write_artifact() {
 }
 
 ALL="shared,service-parent,auth-service,ingestion-service,incident-service,notification-service,escalation-service,postmortem-service,oncall-service"
-paths=$(bash "$(dirname "$0")/changed-paths.sh" "$base")
+# Beside this script (_common.sh resolved it before its cd into the clone), whatever form of path ran it (#0-278).
+paths=$(bash "$FACTORY_SCRIPTS_DIR/changed-paths.sh" "$base")
 if ! printf '%s' "$paths" | jq -e '(.error == null) and (.modules|type == "array")' >/dev/null 2>&1; then
     stop "$head" "changed-paths failed: $paths"
 fi

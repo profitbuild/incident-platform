@@ -377,7 +377,7 @@ Split on 2026-11-20 (the owner's choice A), one `factory` pull request each, in 
   the lock itself, `next-item.sh` unchanged):** `next-item.sh` calls `gh pr list` for its locks and there is no token in a container (proposal: the
   dispatcher passes the open PRs as a file, a change to `next-item.sh`'s arguments).
 
-**Record (4.3, in progress: split 2026-11-20, PR #665; 4.3d decided 2026-11-21; 4.3a done 2026-11-20, `factory` PR #15; 4.3b decided with the
+**Record (4.3, in progress: split 2026-11-20, PR #665; 4.3d decided 2026-11-21, its code `factory` PR #20 and the PR after it; 4.3a done 2026-11-20, `factory` PR #15; 4.3b decided with the
 owner 2026-11-20, before its code, and done the same day, `factory` PR #16; 4.3c decided 2026-11-20, ADR-0062, built
 by PRs #671, #672, #673, #674 and `factory` PRs #18, #19, and done 2026-11-21 with its trials on the VM).**
 - **Done:** the split into #0-275..#0-278 (above), in an order where each part is reviewed on its own and the first two
@@ -839,7 +839,37 @@ by PRs #671, #672, #673, #674 and `factory` PRs #18, #19, and done 2026-11-21 wi
     Two pins, held equal by the VM's side's check, until one source replaces them (4.7's copy check takes the tag).
   - **Not decided here, left to the code's pull request:** whether `run --adapter` is dropped or refused once the
     product holds its adapter; `check-app`'s option name for the adapter (AC8).
-- **Not done:** 4.3d; and, from 4.3a's review, symlinks under the adapter's paths (now #0-278 AC5), a
+- **Done for 4.3d (M1 under ADR-0063), its code (2026-11-21):**
+  - `factory` PR #20, merged as `b5e29d83`: the adapter and the product's files from the base; the commands in the task
+    container from the base's blobs; the `trustedPaths` refusal; the item lock; `main` fast-forwarded with
+    builder-app's token; `run --item | --resume`, `--adapter` dropped (the first open point); `check-app
+    --adapter-from-repo` (the second).
+  - This repository's side, the PR after it (branch `ci/0-278-adapter-from-main`):
+    - `.factory/adapter.json`, `.factory/` Owner-only (its two copies, the deny rules and the hook, and CODEOWNERS);
+    - `_common.sh` reading `maven-settings.xml` beside itself (`FACTORY_SCRIPTS_DIR`), found while writing the adapter:
+      in the container the gate's working directory is the agent's clone;
+    - CI's step validating the adapter with its version's `checkAdapter` and the tag at `FACTORY_COMMIT`
+      (`verify-pins.sh` and `create.sh` check the tag too); `FACTORY_COMMIT` moved to `b5e29d83`;
+    - `install-builder-app.sh` on `--adapter-from-repo`;
+    - the lock's cases, `.github/scripts/fixtures/item-lock-branches.tsv`, run through `next-item.sh`'s definition
+      (`LOCKED_BY_JQ`) and held equal to `factory`'s copy (`MOVED_COPIES`);
+    - ADR-0060 and ADR-0061 amended; README "Infrastructure Hardening".
+- **Why, for 4.3d's code:** the owner's choices of 2026-11-21:
+  - A(a): the adapter checked by `factory`'s own code in the existing clone step, one validator;
+  - B(c): the tag checked both by `verify-pins.sh` before a change and by `create.sh` at the VM's creation;
+  - C: the validation at the adapter's tag, the copy check staying on `main` until #0-307.
+  The two narrowings of ADR-0060 D8 (a lock only by a running task with a branch; a fast-forward without `+`) are
+  the owner's changes to `factory` PR #20's plan.
+- **Not done for 4.3d's code:**
+  - the trial run (the owner's; after the merge, since the dispatcher reads the adapter from `main`). The tag
+    `v0.1.0` was created by the owner at `b5e29d83` on 2026-11-21, before this side's review, and `verify-pins.sh`
+    passed;
+  - the `protectedPaths` parser's half of AC11;
+  - from `factory` PR #20's review, `container.runId` checked equal to `task.runId`, and one helper for a task's base.
+- **Why not:** the trial needs the adapter on `main` and a VM recreated at `b5e29d83`; its record closes #0-278. The
+  parser comes with the Owner-only check before a push (M3.1, #0-305). The two helpers belong to the flow that first
+  uses them (M2, #0-304).
+- **Not done:** 4.3d's remainder (the VM recreated and the trial, "Done for 4.3d"); and, from 4.3a's review, symlinks under the adapter's paths (now #0-278 AC5), a
   reason without GitHub's text, resuming by `runId` or one running task at most, a blocked task counted by the
   breaker, a retried mint's leftover token, a script whose last segment is `.` (now #0-278's Work), the item-id format tied to the
   queue's kind, and a check that `gate.schema.json` matches what `run-tests.sh` prints.

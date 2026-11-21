@@ -74,12 +74,15 @@ Legend:
   - the open-PR item lock (`github/item-lock.mjs`);
   - `run --item 0-N | --resume <branch>`, with `--adapter` gone;
   - `check-app --adapter-from-repo`.
-- Left, for the PR that closes #0-278:
-  - `.factory/adapter.json` on this repository's `main` (the dispatcher refuses to start without it);
-  - the product's copy of the lock fixture `item-lock-branches.tsv`;
-  - `install-builder-app.sh` onto `check-app --adapter-from-repo` (`--repository` stays only until then);
-  - `factory`'s tag `v0.1.0` (it has none yet);
-  - one trial run.
+- Done, this repository's side (branch `ci/0-278-adapter-from-main`, `stage-4.md` "Done for 4.3d"):
+  - `.factory/adapter.json` (Owner-only);
+  - the lock fixture's original, run through `next-item.sh`'s definition, held equal to `factory`'s copy;
+  - `install-builder-app.sh` on `--adapter-from-repo`;
+  - the adapter validated in CI against its version, the tag checked at `FACTORY_COMMIT`;
+  - `FACTORY_COMMIT` at `b5e29d83`;
+  - `maven-settings.xml` read beside `_common.sh`.
+- Left, for the trial's PR that closes #0-278: `factory`'s tag `v0.1.0` at `b5e29d83` (the owner's, before this
+  side's CI can pass), the VM recreated, one trial run.
 - Exit: one run to the end of the task container from `main`'s base.
 - Plan: `stage-4.md` "4.3", the decisions for 4.3d.
 

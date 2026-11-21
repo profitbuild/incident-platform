@@ -104,7 +104,8 @@ and `--plugin-dir` (code.claude.com/docs/en/headless.md, cli-reference.md).
   - the dispatcher reads the adapter, `.factory/adapter.json`, and every file of the product it reads, from the
     base commit of its own clone of `main`, as blobs of the git tree, never from a checkout and never from a task's
     branch. An entry that is a symlink, on the way to a path or at it, is refused (as `readTaskConfig` does, #0-277).
-    A path named as `run --adapter`'s argument is the trial's only, until the product holds its adapter;
+    A path named as `run --adapter`'s argument is the trial's only, until the product holds its adapter (the option
+    was dropped by `factory` PR #20, 2026-11-21: the adapter is read from `main` only);
   - the product's commands (`gate`, `changedPaths`) run only in the task's container, from the base's blobs of
     `trustedPaths` put there by the dispatcher before each run, never from the branch's copy; what they print is
     the agent's side, read against its schema, and neither the review zone (ADR-0055) nor a refusal rests on it;
@@ -156,6 +157,16 @@ and `--plugin-dir` (code.claude.com/docs/en/headless.md, cli-reference.md).
   open pull request holds (a head branch containing `/<id>-`, the lock `next-item.sh` reads, so the two paths lock
   each other, 4.7) or that one of its own tasks not ended holds, the open pull requests listed with builder-app's
   token, every page, a list it could not read whole refusing the start.
+  **Amended (2026-11-21, #0-278's code, `factory` PR #20, the owner's two changes): two narrowings.**
+  - "One of its own tasks not ended" is a task `running` **with a branch**: a task killed before its branch was
+    recorded stays `running` for ever (#0-261's resume by `runId` is M2's, #0-304), so counting it would lock its item
+    for good; its remedy is `run --resume <branch>`.
+  - The update of the clone before a run is a **fast-forward only**, `refs/heads/main:refs/heads/main` without `+`
+    (#0-278 AC7 had named `+refs/heads/main:refs/heads/main`): a `main` that is not a descendant of the clone's is a
+    refusal, never a forced move of the base every later check reads.
+  The checks that hold the two sides of the product's rules equal are ADR-0061's (amended the same day): the
+  adapter validated in CI against the schema of the version it names, that version's tag at `FACTORY_COMMIT`, and the
+  item lock's cases shared by `next-item.sh` and the dispatcher.
 
 ## Alternatives considered
 

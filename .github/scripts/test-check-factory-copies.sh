@@ -77,6 +77,10 @@ fresh() {
         script_body "$s" > "$dir/product/.github/scripts/$s"
         copy "$s" > "$dir/factory/.github/scripts/$s"
     done
+    put product .github/scripts/fixtures/item-lock-branches.tsv '# The lock cases, the original.' '0-3	fix/0-3-x	held'
+    { printf '%s\n' "# A copy of profitbuild/incident-platform's .github/scripts/fixtures/item-lock-branches.tsv." '#'
+      cat "$dir/product/.github/scripts/fixtures/item-lock-branches.tsv"; } > "$dir/x"
+    mkdir -p "$dir/factory/dispatcher/testing/fixtures" && mv "$dir/x" "$dir/factory/dispatcher/testing/fixtures/item-lock-branches.tsv"
     put product .node-version 24.22.1
     put factory .node-version 24.22.1
     put product .claude/settings.json "$PRODUCT_DENIES"
@@ -122,6 +126,14 @@ fresh; put factory .claude/settings.json '{"permissions":{"deny":["Bash(git push
 expect "an optional deny factory adds is no finding" 0 "factory's copies match" .claude/settings.json
 fresh; { notice action.yml; cat "$dir/factory/.github/actions/setup-node/action.yml"; } > "$dir/x" && mv "$dir/x" "$dir/factory/.github/actions/setup-node/action.yml"
 expect "a notice on a comment-compared copy is no unlisted copy" 0 "factory's copies match" .github/workflows/ci.yml
+
+echo "check-factory-copies.rb: a copy at a path of its own (backlog #0-278 AC11)"
+fresh; printf '0-4\tfix/0-4-x\theld\n' >> "$dir/product/.github/scripts/fixtures/item-lock-branches.tsv"
+expect "a lock case added here, factory's copy behind, fails the PR" 1 \
+    "::error::factory's dispatcher/testing/fixtures/item-lock-branches.tsv differs from this repository's .github/scripts/fixtures/item-lock-branches.tsv" \
+    .github/scripts/fixtures/item-lock-branches.tsv
+fresh; rm "$dir/factory/dispatcher/testing/fixtures/item-lock-branches.tsv"
+expect "factory without the moved copy" 0 "::warning::factory has no dispatcher/testing/fixtures/item-lock-branches.tsv"
 
 echo "check-factory-copies.rb: this repository leads (a difference the pull request brings)"
 fresh; replace product .github/workflows/ci.yml 'BETTERLEAKS_VERSION: v1.9.0' 'BETTERLEAKS_VERSION: v1.10.0'
