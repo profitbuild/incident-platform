@@ -18,7 +18,7 @@
   that cannot take the dispatcher's lock removes the run's own objects; point 4 amended by #0-284's AC8 trial
   (2026-11-22, `factory` PR #24): `OomScoreAdj` held as a range 0–1000 under rootless Docker; points 4 and 5 amended
   by ADR-0064 for #0-301 and #0-313 (2026-11-22): a task's container gains its token file for the dispatcher's proxy,
-  read-only, the one credential on the daemon, valid only for its task and only through the proxy
+  read-only, the one credential on the daemon, valid only for its task and only through the proxy; point 2 amended by #0-302's decisions (2026-11-22): a resume's work directory filled by the same helper from a bundle of the task's lasting repository
 - **Backlog:** #0-277; point 4 amended on #0-282's review and on the review of `factory` PR #18; points 1, 2, 5, 8 and
   the Consequences on the review of #0-277's VM part; their end-state follow-ups #0-284, #0-285; points 4 and 5 amended
   on the review of `factory` PR #22 (#0-284's code); points 4 and 5 amended for #0-301 and #0-313 (the task's token
@@ -78,6 +78,12 @@ Two facts the item had not weighed (the `/research` of 2026-11-20):
    `rm -rf <runId>` (dot entries and the directory itself included), at the task's end, BLOCKED or not, and at the
    next run's start for what a killed run left. The dispatcher writes nothing in a directory of `factory`'s; the
    clone shares no inode with `FACTORY_REPO_DIR`.
+   **Amended (2026-11-22, #0-302's decisions, before its code):**
+   - **The bundle on stdin** is either the base of a new task (`refs/heads/base` of `FACTORY_REPO_DIR`, as above) or,
+     on `run --resume`, a whole bundle of a branch at the task's recorded head. It is made by the dispatcher's git in
+     the task's lasting repository (ADR-0060 D7 as amended for #0-302), and cloned with `-b` on that branch.
+   - **The same helper and script fill both,** so a resumed workspace is the recorded head by construction, and there
+     is no second way to fill a work directory.
 3. **The factory the containers load is one checkout owned by root**, `/opt/factory-checkout` at `FACTORY_COMMIT`
    (`root:root`, 0755), made by `provision.sh` outside every user's home and checked at boot as the dispatcher's clone
    is today; the daemon mounts it read-only at `/opt/factory`, and as `factory` it could not write it anyway. The
