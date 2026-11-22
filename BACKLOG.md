@@ -196,6 +196,9 @@ Code, Javadoc, config comments and commits reference items as `backlog #N`.
 | [0-311](#0-311-factorys-own-devcontainer-installs-claude-code-unpinned-and-lets-node-widen-its-firewall) | `factory`'s own devcontainer installs Claude Code unpinned and lets `node` widen its firewall | ci | Medium | Open |
 | [0-312](#0-312-nothing-watches-anthropics-claude-code-signing-key) | Nothing watches Anthropic's Claude Code signing key | ci | Low | Open |
 | [0-313](#0-313-the-first-real-agent-call-on-the-vm-would-need-claudes-key-in-the-task-container-migration-step-m27) | The first real agent call on the VM would need Claude's key in the task container (migration step M2.7) | security | High | Open |
+| [0-315](#0-315-a-runaway-task-can-take-the-build-vm-and-the-dispatcher-down-with-it) | A runaway task can take the build VM and the dispatcher down with it | ci | High | Open |
+| [0-316](#0-316-every-agent-call-reads-a-215-kb-claudemd-written-as-a-runbook) | Every agent call reads a 21.5 KB `CLAUDE.md` written as a runbook | docs | Medium | Open |
+| [0-317](#0-317-nothing-keeps-factorys-modules-small) | Nothing keeps `factory`'s modules small | ci | Low | Open |
 | [0-133](#0-133-incidentresolvedevent-carries-no-openedat) | `IncidentResolvedEvent` carries no `openedAt` | tech-debt | Low | Open |
 | [0-134](#0-134-diff-cover-is-installed-by-version-without-hashes) | `diff-cover` is installed by version, without hashes | ci | Low | Open |
 | [0-135](#0-135-kubectl-in-ci-is-downloaded-unverified) | kubectl in CI is downloaded unverified | ci | Low | Open |
@@ -3634,6 +3637,11 @@ owner-only), docs (docs/ai-factory.md)
 
 **Migration (ADR-0063, 2026-11-21):** step M6 (the review zone), with #0-294.
 
+**Added on the review of opencomputer (2026-11-22; `.ai/context/migration/opencomputer.md`):** the second model's
+calls go through the dispatcher's proxy as a profile of their own (routes such as `POST /v1/responses`, its key), so
+that key stays out of the container as Claude's does. That is how opencomputer serves an OpenAI profile beside
+Anthropic's (`modelproxy/profiles/default.json`).
+
 **Problem.** The panel's reviewers and the implementer are one family of models, so their misses are correlated: what
 one does not see, the others do not either. The benchmark that measures the panel is correlated too, as the
 defect-seeder that plants its defects is the same family. `local-review.sh` already gives a second opinion of
@@ -3970,6 +3978,38 @@ tasks, a VM per run, or another way; record it (ADR) and build it.
 Taken over from #0-303 (the owner's option B, 2026-11-21; `migration/m3.md` M3.4): with the daemon's model, the
 orphans' sweep and the sweep's scope when two tasks can be live (M5), the Maven cache's layout (per slot, or read-only
 shared with a per-task layer such as Maven 3.9's `maven.repo.local.tail`, to check on 3.9.16), and #0-309.
+**Added on the review of opencomputer (2026-11-22, the owner; `.ai/context/migration/opencomputer.md`):** one more
+option to compare, and what the chosen model also decides.
+- **Option: nested rootless Podman in the task container,** as opencomputer runs one per session:
+  - flags `--userns=keep-id`, `--security-opt unmask=/proc/*`, `--device /dev/fuse`, `--device /dev/net/tun`;
+  - Docker inside as rootless Podman, and Testcontainers through `DOCKER_HOST` on it.
+
+  The task then holds no socket of a host daemon. It is compared with Sysbox's daemon in the task container (ADR-0063
+  G1-b) and a user per slot. Its cost, weighed with what it closes:
+  - the outer task container gives things up: `unmask=/proc/*` (Docker's `systempaths=unconfined`), `/dev/fuse`,
+    `/dev/net/tun`, and likely a seccomp profile that allows user namespaces, each an entry ADR-0062 point 6's closed
+    `HostConfig` table refuses today;
+  - choosing it amends ADR-0063 G1-b (Sysbox if its spike passes, else a user per slot) and revisits ADR-0057's
+    rejected Podman alternative for Testcontainers;
+  - opencomputer's outer runtime is rootless Podman, not rootless Docker, so its gates are a model, not a test that
+    carries over.
+
+  If it holds, it closes at once:
+  - a token readable across tasks (`docker inspect`, #0-289's AC4);
+  - limits that do not cover a task's test containers;
+  - what a task leaves on the shared daemon (the orphans, part of #0-309);
+  - ADR-0064's residual (root in the task's own container through the socket).
+- **Its spike first,** by gates on the build VM modelled on opencomputer's `deploy/vm/sandbox-gates.sh` G1–G9: the
+  runtime as written, a cold start, mounts, network from inside, the cost of an exec, cleanup as root, and Docker and
+  Testcontainers inside; and one gate of its own, what the outer container gives up (its `HostConfig` against
+  ADR-0062 point 6, and what the loosened `/proc`, devices and seccomp let a task do on
+  the VM). It is measured beside today's shared daemon by `run-tests.sh`'s time, with images shared
+  read-only (Podman's `additionalimagestores`) so each task does not pull PostgreSQL and Kafka again.
+- **With the chosen model:**
+  - limits per task container instead of the zeros `host-config.mjs` requires today (memory, PIDs, CPU), the
+    container's `HostConfig` table amended;
+  - and whether the proxy is reached by a unix socket per task (#0-313's AC9 measurement), which becomes a boundary
+    between tasks only once a task holds no host daemon socket.
 
 **Acceptance criteria.**
 AC1. An ADR (or an amendment of ADR-0062) records what persists across tasks as `factory`, what of it can reach a
@@ -4026,21 +4066,23 @@ AC1. One PR opened by builder-app from a dispatcher run, through the proxy, with
 
 **Type:** security · **Priority:** High · **Status:** Open (ADR-0063, 2026-11-21).
 **Autopilot:** human-only · **Risk:** high · **Complexity:** medium · **Depends on:** #0-287, #0-285, #0-313
-**Touches:** the repository `profitbuild/factory` (dispatcher/src/proxy/), factory (scripts/factory-admin/build-vm/provision.sh, .devcontainer/ allow-list: owner-only), root (README "Infrastructure Hardening")
+**Touches:** the repository `profitbuild/factory` (dispatcher/src/proxy/), factory (scripts/factory-admin/build-vm/provision.sh: owner-only), root (README "Infrastructure Hardening")
 
 **Problem.** A task's agents need Claude. Today the login lives in the devcontainer's volumes; a token inside the task
 container is readable by every test it runs, and nothing counts what a run costs.
 
 **Moved to #0-313 (2026-11-22, ADR-0063 as amended for #0-301):** the proxy's core, the Console workspace and key,
 the task's token (through `apiKeyHelper`, not `ANTHROPIC_AUTH_TOKEN`: ADR-0064 point 5), usage per task, and AC1–AC3
-below. What stays here: the other Anthropic hosts out of the task allow-list, #0-274's rule if needed, AC4, the
+below. What stays here (the other Anthropic hosts out of the task allow-list moved to #0-313 on 2026-11-22, the review of
+opencomputer): #0-274's rule if needed, AC4, the
 transcripts (`m3.md` M3.5). AC4 also names, for M5's shared daemon, the proxy's plain HTTP hop on the Docker bridge,
 which another task's container could reach.
 
 **Work.** `migration/m3.md` part M3.5: a Console workspace with a monthly spend limit (owner); a `node:http` proxy on
 the containers' host-gateway address that accepts only the running task's random token, swaps in the key and
-streams to `api.anthropic.com`, counting usage per task; other Anthropic hosts removed from the task allow-list;
-#0-274 if the proxy needs a rule of its own. Spike first: no login is needed with `ANTHROPIC_BASE_URL` and
+streams to `api.anthropic.com`, counting usage per task (the task allow-list without Anthropic's hosts is #0-313's
+AC7 since 2026-11-22); #0-274 if the proxy needs a rule of its own.
+Spike first: no login is needed with `ANTHROPIC_BASE_URL` and
 `ANTHROPIC_AUTH_TOKEN`.
 
 **Acceptance criteria.**
@@ -4321,7 +4363,9 @@ AC4. One call on the VM, in a task container, records #0-300's VM part in `m2.md
      above (after #0-313, which needs AC1–AC3, AC5 and AC6's code): the init event's fields and its tools with and without Bash; `result.subtype`; the VM's Claude Code;
      whether the clone's `CLAUDE.md` loads (what F3's `--add-dir /workspace` is for) and whether `CLAUDE.local.md` does;
      whether any of the planted set takes effect; whether `--plugin-dir` loads under
-     `strictKnownMarketplaces: []`; whether the plugin's hook still refuses `run_in_background`.
+     `strictKnownMarketplaces: []`; whether the plugin's hook still refuses `run_in_background`; the built-in plugins
+     of the init event under ADR-0064 point 5's full list, `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1` included
+     (2026-11-22), and against the closed list of point 3.
 AC5. Each agent's answer is checked against its schema in `factory`'s `schemas/answers/`, the one passed to
      `--json-schema`, and each agent's "## Answer (JSON)" example passes it (tests).
 AC6. Lint Workflows fails when the factory's expected Claude Code version differs from `.devcontainer/claude-code.pin`
@@ -4497,6 +4541,12 @@ AC4. The dispatcher's `protectedPaths` parser is tested against a copy of `.ai/r
 **Problem.** Nothing records which agent call added which commit, how long it took or what it cost (#0-204), and
 `audit-data.sh` counts PRs by the bot's login only.
 
+**Added on the review of opencomputer (2026-11-22; `.ai/context/migration/opencomputer.md`):** the proxy (#0-313)
+gives the trace one event per model call: time to first byte, status, the rate-limit headers and refusals. A
+thresholds file, which a threshold may only lower, is read by `audit-data.sh`, as opencomputer's
+`telemetry/thresholds.json` holds `min(budget, trailing p95 × 1.25)`. A note of the plan, not yet an acceptance
+criterion: its ACs are written when this item is made ready.
+
 **Work.** `migration/m3.md` M3.3:
 - one row per agent call in a `<details>` block of the PR body (agent, phase, round, duration, tokens, commits
   added), from the `stream-json` records;
@@ -4646,7 +4696,7 @@ AC2. A committed signing key under `.devcontainer/keys/` without a source the wa
 2026-11-22).
 **Autopilot:** human-only · **Risk:** high · **Complexity:** medium · **Depends on:** #0-301's code (AC1–AC3, AC5, AC6: its managed file and call, which this extends); the measurements can come first. #0-301's AC4 (the first call on the VM) follows this item
 **Touches:** the repository `profitbuild/factory` (dispatcher/src/proxy/, the managed settings' `apiKeyHelper`, the token's mount in
-dispatcher/src/container/, its tests), factory (scripts/factory-admin/build-vm/provision.sh if the proxy needs an egress rule, owner-only), decisions
+dispatcher/src/container/, its tests), factory (scripts/factory-admin/build-vm/provision.sh if the proxy needs an egress rule, .devcontainer/init-firewall.sh and task.json for the task's allowlist without Anthropic, provision.sh's `FACTORY-EGRESS` split by uid and check-allowlists.sh: owner-only), decisions
 (ADR-0064 point 5 if the measurement fails; ADR-0062 points 4 and 5 as amended), factory
 (scripts/factory-admin/build-vm/create.sh and provision.sh: the fresh-VM marker, owner-only), docs (docs/ai-factory.md: the VM made anew
 before a run that holds a token), root (README "Infrastructure Hardening", `.ai/context/migration/m2.md`)
@@ -4681,6 +4731,42 @@ was planned for M3.5, after M2.
 - its pull request in `factory` gets a security review of its own (`/review factory#<n>` with `2` and `7`, by
   `factory.md`): the review #0-301's options asked of the one chosen.
 
+**Added on the review of opencomputer (2026-11-22, the owner; `.ai/context/migration/opencomputer.md`):**
+- **No way to Anthropic for a task but the proxy:** two changes, both needed.
+  - **The task container's allowlist without Anthropic's hosts** (moved here from #0-289). With K2 every model call
+    goes through the proxy, so a task needs no Anthropic host; kept, a task's code could still send to Anthropic
+    around the proxy (telemetry, a key of its own).
+    - The five hosts: `api.anthropic.com`, `claude.ai`, `platform.claude.com`, `console.anthropic.com` and the
+      optional `statsig.anthropic.com`.
+    - How the list is chosen: from a root-owned file written into the image at build time, as
+      `/etc/factory-firewall/extra-hosts` is (ADR-0065), never from an environment variable, an argument or a file
+      the task can write, since `dev` may run `sudo init-firewall.sh` again inside the container.
+    - Fail closed: the default list has no Anthropic host, and the owner's container adds them (opt-in), so a
+      missing or unreadable choice gives a task none.
+  - **`FACTORY-EGRESS` split by uid** (the security review of the plan's update, round 1). The VM's filter takes
+    every uid from 1000 up as one set (`provision.sh`, `FILTERED`) and allows the five hosts to all of them. A task
+    holds `factory`'s daemon socket and can start a sibling container, which `init-firewall.sh` does not filter, so
+    the first change alone closes only the traffic from inside the task container. Anthropic's addresses are allowed
+    to `dispatcher`'s uid only, whose proxy needs `api.anthropic.com`, and closed to `factory`'s;
+    `check-allowlists.sh` compares the lists that result.
+- **The proxy's missing parts, each from opencomputer's `modelproxy`, as design and not as code:**
+  - a client's `Authorization`, `X-Api-Key` and `Cookie` are removed before the key is set;
+  - refusals use Anthropic's error shape, with `X-Should-Retry: false` on 401, 403 and 404, and `true` with
+    `Retry-After: 1` on 429 and 503, so Claude Code retries only what can succeed;
+  - the request body is streamed, never read or logged;
+  - an in-flight limit per task (429 past it);
+  - a refusal logged at most once per 10 s per task and reason, with a count of those skipped, so a looping agent
+    cannot flood the log;
+  - the response's rate-limit headers (`retry-after`, `anthropic-ratelimit-*`) reported to the dispatcher per task,
+    the signal M5's slots need to stop taking work before a limit;
+  - a test that a stream is not buffered.
+- **A third measurement:** whether the pinned Claude Code (2.1.328) sends its calls through `ANTHROPIC_UNIX_SOCKET`
+  under F3.
+  - The result decides nothing here: a socket per task is #0-285's, with its model.
+  - The reason: while a task holds `factory`'s daemon socket, a socket per task is no boundary between tasks, since
+    `factory`'s daemon must reach every task's socket to mount it.
+  - This item stays on the host-gateway address with the task's token, as decided.
+
 **Acceptance criteria.**
 AC1. A request without the task's token, with another task's, or after the task ended is refused (tests).
 AC2. The key never appears in a response, a log line or a task's files (tests, and a VM trial recorded).
@@ -4694,3 +4780,93 @@ AC6. Until #0-285, the dispatcher refuses to issue a task's token on a VM that h
      `create.sh` writes (root's, outside `factory`'s reach) and the first run consumes, so a skipped rebuild stops the
      run instead of exposing the next task's token to what an earlier one left (tests; review round 3 of #0-301's
      decisions, security).
+AC7. The task container's allowlist holds none of the five Anthropic hosts, chosen from a root-owned file of the image
+     and with none when that choice is missing, and the owner's container's still holds them; `FACTORY-EGRESS` allows
+     Anthropic's hosts to `dispatcher`'s uid only (tests of each list and of `check-allowlists.sh`; on the VM, a
+     sibling container started through `factory`'s daemon does not reach `api.anthropic.com`, and the first call
+     answers through the proxy alone, recorded).
+AC8. A client's `Authorization`, `X-Api-Key` and `Cookie` never reach upstream; every refusal is in Anthropic's error
+     shape with its `X-Should-Retry`; the request body is never read or logged; a task past its in-flight limit gets
+     429 with `Retry-After`; a refusal is logged at most once per 10 s per task and reason; the rate-limit headers
+     reach the dispatcher per task; a stream is not buffered (tests).
+AC9. Whether the pinned Claude Code routes its calls through `ANTHROPIC_UNIX_SOCKET` under F3 is recorded in `m2.md`
+     for #0-285 (a measurement).
+
+### 0-315. A runaway task can take the build VM and the dispatcher down with it
+
+**Type:** ci · **Priority:** High · **Status:** Open (the review of opencomputer, 2026-11-22;
+`.ai/context/migration/opencomputer.md`).
+**Autopilot:** human-only · **Risk:** medium · **Complexity:** low · **Depends on:** —
+**Touches:** factory (scripts/factory-admin/build-vm/provision.sh: owner-only), root (README "Infrastructure Hardening",
+`.ai/context/migration/m2.md`)
+
+**Problem.** Nothing limits what `factory`'s containers use:
+- `host-config.mjs` requires `Memory`, `NanoCpus` and `CpuQuota` at 0 and `PidsLimit` unset;
+- a task's Testcontainers are siblings on the same daemon, which a container's own limit would not cover anyway.
+
+So one Maven build, or a fork bomb in a test, can exhaust the VM's memory or PIDs and take down the other slot's task
+and the dispatcher, whose process runs on the same VM as another user.
+
+**Work.** A limit on `factory`'s systemd user slice, `user-<factory's uid>.slice` (`MemoryHigh`/`MemoryMax` below
+the VM's memory with room for the dispatcher and the system, `TasksMax`). The slice and not `user@<uid>.service`: it
+holds the user manager (and with it the rootless daemon and every container) and also `factory`'s processes outside
+it, such as a `sudo -u factory` session. The rootless `dockerd` and `containerd` sit inside the same limit, so an
+out-of-memory kill may take the daemon and not only the task's container; where the kernel's choice is not enough,
+the daemon's unit gets a lower `OOMScoreAdjust` or a sub-slice of its own, as opencomputer nests a runners' slice
+under the user's:
+- written by `provision.sh` into a drop-in under `/etc/systemd/`, root's, so a task cannot raise it, as opencomputer
+  does in `deploy/vm/limits.sh` (the user's and the runners' slices, root-owned);
+- the values derived from the VM's memory and CPUs, the way `limits.sh` derives them.
+
+Limits per task container come with #0-285's model, since only a nested runtime would cover a task's test
+containers.
+
+**Acceptance criteria.**
+AC1. `factory`'s user slice has `MemoryMax`, `MemoryHigh` and `TasksMax` below the VM's capacity, in a root-owned
+     drop-in `provision.sh` writes and `verify-pins.sh` or a check reads (test of the derived values).
+AC2. On the build VM, a task's container that allocates past the limit is killed while the dispatcher stays up, and
+     whether `factory`'s daemon survived is recorded; if it did not, the next run's container check stops it rather
+     than running on a half-dead daemon (a VM trial recorded in `m2.md`).
+AC3. README "Infrastructure Hardening" names the limit and that a container's own limits wait for #0-285.
+
+### 0-316. Every agent call reads a 21.5 KB `CLAUDE.md` written as a runbook
+
+**Type:** docs · **Priority:** Medium · **Status:** Open (the review of opencomputer, 2026-11-22;
+`.ai/context/migration/opencomputer.md`).
+**Autopilot:** human-only · **Risk:** low · **Complexity:** medium · **Depends on:** —
+**Touches:** root (CLAUDE.md: owner-only), context (.ai/context/*.md, where the moved text goes)
+
+**Problem.** The plugin's agents read this repository's `CLAUDE.md` first in every call (#0-299, ADR-0060 D5 as
+amended). It is 220 lines and 21.5 KB, and most of it is a runbook: the `Commands` block, CI's local checks, the merge
+procedure. Every call pays for it in tokens, and much of it is not what an agent of the build zone needs.
+
+**Work.** Keep `CLAUDE.md` the durable starting point:
+- what the repository owns, where to look first, the boundaries and contracts, and the rules that must not drift;
+- the runbook parts moved to their sources (`.ai/context/`, README, the scripts' headers), with a pointer each.
+
+This is opencomputer's rule for its root `AGENTS.md` (lines 14-25: "stable and high-level ... should not become a
+runbook"). The "Working style" section stays: it binds interactive sessions.
+
+**Acceptance criteria.**
+AC1. `CLAUDE.md` holds the sections named above, each runbook part replaced by a pointer to where it now lives, and
+     nothing it said before is lost (a diff read in the review).
+AC2. Its size is recorded before and after.
+AC3. One agent call on the VM after the change reads `CLAUDE.md` with the same section for the factory's agents
+     (`### This product, for the factory's agents`).
+
+### 0-317. Nothing keeps `factory`'s modules small
+
+**Type:** ci · **Priority:** Low · **Status:** Open (the review of opencomputer, 2026-11-22;
+`.ai/context/migration/opencomputer.md`).
+**Autopilot:** human-only · **Risk:** low · **Complexity:** low · **Depends on:** —
+**Touches:** the repository `profitbuild/factory` (a script under dispatcher/testing/ or scripts/, its CI job)
+
+**Problem.** `factory`'s modules carry headers that state their invariants, which works while each module is small;
+its longest is 446 lines today. Nothing keeps them so.
+
+**Work.** A check in `factory`'s CI, as opencomputer's `computer/scripts/max-lines.mjs`:
+- a soft limit warns and a hard one fails;
+- a list of files already over it, which may only shrink (a ratchet).
+
+**Acceptance criteria.**
+AC1. `factory`'s CI fails a module over the hard limit, and the ratchet's list may only shrink (tests).
