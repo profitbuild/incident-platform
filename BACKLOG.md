@@ -4272,6 +4272,11 @@ AC2. Auto-merge is not switched on until the eight conditions of `migration.md` 
   record's forms stay the product's (`CLAUDE.md`, `.ai/work/_template/`).
 - The expected Claude Code version and `tools` are the factory's, compared with `.devcontainer/claude-code.pin` in
   Lint Workflows (ADR-0065's open point).
+- **Decided on the review of the factory plan (2026-11-22):** `plugins` holds, besides `factory`, Claude Code's five
+  built-in plugins, which every call loads, kept as a closed list beside the expected version (ADR-0064 point 3 as
+  amended); `mcp_servers` stays strictly empty; and until #0-302 a `--resume` of a task whose `phase` is set is refused
+  ("the task's work is not committed before #0-302: nothing to resume"), since a container lives one run and its
+  uncommitted work is gone with it.
 - The code needs no credential: AC1–AC3, AC5 and AC6 are tests. AC4, the first call on the VM with #0-300's VM part,
   waits for #0-313.
 
@@ -4330,6 +4335,10 @@ AC6. Lint Workflows fails when the factory's expected Claude Code version differ
 
 **Problem.** Today the agents commit with git inside the clone they write, so the trace of who added what is their
 word, and git's writing commands stay within an agent's reach (#0-236). #0-212's trailers have no writer yet.
+
+**Lifts #0-301's refusal (2026-11-22):** until this item, `cli.mjs run --resume` of a task whose `phase` is set is
+refused, as its work is not committed; once the dispatcher commits after each call, a resume continues from the
+branch, and that refusal goes.
 
 **Work.** `migration/m2.md` M2.4. After each call that changed the tree, the dispatcher commits in the task's
 container with its own git flags (`git add -A`, a message from the answer, `Factory-Run` and `Factory-Agent`). It
@@ -4585,7 +4594,8 @@ was planned for M3.5, after M2.
   `~/.config/factory/` (mode 600), never on `factory`;
 - a `node:http` proxy of `dispatcher` on the containers' host-gateway address: only the running task's random token,
   the key swapped in, the response streamed unbuffered (`HEAD /api/hello`, `/v1/messages`; `count_tokens` optional),
-  usage counted per task;
+  usage counted per task; any other path refused and logged by its path alone, so what Claude Code's built-in plugins
+  (telemetry among them) might send goes nowhere through it (review of #0-313's measurement record, 2026-11-22);
 - the token in a file per task, mounted read-only into the task's container (the exact mount comparison and the
   `HostConfig` table), printed by the managed file's `apiKeyHelper`; `ANTHROPIC_BASE_URL` in the call's `env -i`
   list (ADR-0064 point 5 as amended);
@@ -4593,6 +4603,8 @@ was planned for M3.5, after M2.
   held by the dispatcher too (AC6: a marker `create.sh` writes and the first run consumes). Its cost is a VM made anew each
   time, builder-app's key installed again included (#0-284's AC8 record); M2 needs few such runs (#0-301's AC4 and
   M2's exit);
+- the init event's check gains `apiKeySource === "apiKeyHelper"` (measured: `"none"` without a credential and with
+  `ANTHROPIC_AUTH_TOKEN`), so a call that got its credential any other way stops (ADR-0064 point 3 as amended);
 - its pull request in `factory` gets a security review of its own (`/review factory#<n>` with `2` and `7`, by
   `factory.md`): the review #0-301's options asked of the one chosen.
 
@@ -4600,7 +4612,8 @@ was planned for M3.5, after M2.
 AC1. A request without the task's token, with another task's, or after the task ended is refused (tests).
 AC2. The key never appears in a response, a log line or a task's files (tests, and a VM trial recorded).
 AC3. Streaming passes through unchanged against a fake upstream, and usage is summed per task (tests).
-AC4. The two measurements above are recorded in `m2.md` before the proxy's code, and README "Infrastructure
+AC4. The two measurements above are recorded in `m2.md` before the proxy's code (the first, 2026-11-22: `apiKeyHelper`
+     is read under `--restricted`), and README "Infrastructure
      Hardening" names the proxy, the token's channel and what a leaked token yields (the VM only, the task's life).
 AC5. The proxy listens on the containers' host-gateway address only, and the VM's filter keeps it unreachable from
      outside the VM (a test of the bound address, and a VM trial recorded): what AC4's "the VM only" rests on.
