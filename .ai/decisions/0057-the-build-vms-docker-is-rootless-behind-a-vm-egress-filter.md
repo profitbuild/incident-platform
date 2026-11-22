@@ -116,9 +116,12 @@ The owner approved a spike with three criteria before it started (2026-11-14):
   Testcontainers are siblings on the same daemon, so a runaway build or a fork bomb took the VM's memory, the dispatcher
   and the resolver with it (no swap). `provision.sh` writes a root-owned drop-in for `user-<factory's uid>.slice`, the
   unit above `factory`'s user manager that holds its daemon and every container, derived from the VM's memory at every
-  boot by one function, `factory_slice_limits`: `MemoryMax` the VM's memory less max(1.5 GiB, 12 %), `MemoryHigh` 95 %
-  of it, `TasksMax` 16384, and a VM that would leave `factory` under 4 GiB refused. One limit for all of `factory`, not
-  per container or slot (#0-285, M5); measured first on the VM, its reasons and values in `migration/m2.md`.
+  boot by one function, `factory_slice_limits`: `MemoryMax` the VM's memory less max(1.5 GiB, 12 %), `MemoryHigh`
+  `infinity`, `TasksMax` 16384, and a VM that would leave `factory` under 4 GiB refused. One limit for all of `factory`,
+  not per container or slot (#0-285, M5); measured first on the VM, its reasons and values in `migration/m2.md`. First
+  written with `MemoryHigh` at 95 % of `MemoryMax`, reversed by #0-315's AC2 trial the same day: with no swap a runaway
+  container was throttled at it for 15 minutes, never reached `MemoryMax` nor the OOM killer, and the daemon, in the
+  same slice, stopped answering; with `MemoryMax` alone it was OOM-killed in 5 s, the daemon untouched.
 - **`dev` keeps uid 1000** (`"updateRemoteUserUID": false` in `devcontainer.json`): the clone's owner is the
   subordinate uid that uid 1000 maps to, which a CLI renumbering `dev` to `factory`'s uid would miss on a cloud image.
 - **Checked on every VM `create.sh` makes, after its creation and again after a reboot** (what holds only on a fresh

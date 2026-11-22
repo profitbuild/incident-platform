@@ -414,14 +414,17 @@ UNIT
 # The values come from the VM's memory, so a bigger VM (M5's two slots) needs no change here:
 #   - MemoryMax: MemTotal less a reserve of max(1.5 GiB, 12 %) for the system, the resolver and the dispatcher (an idle
 #     VM used 570 MB, 222 MB of it factory's);
-#   - MemoryHigh: 95 % of it. With no swap the band between the two only throttles, so it is kept narrow: a runaway
-#     build ends in an OOM kill of its own process, not in a stall that only the gate's timeout would find;
-#   - TasksMax: 16384, below logind's default of 33 % (31318 on a 12 GiB VM), above the threads a gate takes with
-#     Spring's cached contexts, Kafka and Postgres.
-# An OOM kill inside the slice takes its largest process, a JVM (all of factory's run at oom_score_adj 200), not the
-# daemon, whose unit has OOMPolicy=continue; #0-315's AC2 checks that on the VM. Limits per task container come with
-# #0-285's model. A drop-in under /etc, root's, so factory cannot raise it: its own `systemctl --user set-property`
-# acts below the slice and can only narrow.
+#   - MemoryHigh: infinity, written out so that no other drop-in brings one back. Reversed after #0-315's AC2 trial
+#     (2026-11-22, m2.md), which first ran with MemoryHigh at 95 % of MemoryMax: with no swap, a container allocating
+#     past it was throttled at 10049 MiB, never reached MemoryMax and so never met the OOM killer, for 15 minutes until
+#     it was killed by hand; and since the daemon is in the same slice, `docker` did not answer meanwhile. With
+#     MemoryMax alone the same container was OOM-killed in 5 s (exit 137, OOMKilled), the daemon and a process of the
+#     dispatcher's user untouched. A full gate's peak was 5974 MiB with no throttling, so it never needed a soft limit;
+#   - TasksMax: 16384, below logind's default of 33 % (31318 on a 12 GiB VM), far above a full gate's 313.
+# An OOM kill inside the slice takes its largest process (all of factory's run at oom_score_adj 200), measured as the
+# allocating container's, not the daemon (dockerd's RSS 87 MB in the first probe, m2.md; its unit has
+# OOMPolicy=continue). Limits per task container come with #0-285's model. A drop-in under /etc, root's, so factory
+# cannot raise it: its own `systemctl --user set-property` acts below the slice and can only narrow.
 # create.sh and .github/scripts/test-factory-slice-limits.sh read factory_slice_limits from this file to check the same
 # values, so it stays a function of its argument alone, its body ending at the first line that is `}`.
 factory_slice_limits() {  # <MemTotal in kB>: the drop-in's [Slice] section; fails on a VM too small for the gate
@@ -433,7 +436,7 @@ factory_slice_limits() {  # <MemTotal in kB>: the drop-in's [Slice] section; fai
   if [ "$max" -lt 4194304 ]; then
     echo "provision.sh: a VM of $total kB leaves factory $max kB, below the 4 GiB a gate needs" >&2; return 1
   fi
-  printf '[Slice]\nMemoryHigh=%sK\nMemoryMax=%sK\nTasksMax=16384\n' "$(( max * 95 / 100 ))" "$max"
+  printf '[Slice]\nMemoryHigh=infinity\nMemoryMax=%sK\nTasksMax=16384\n' "$max"
 }
 limits=$(factory_slice_limits "$(awk '$1 == "MemTotal:" { print $2 }' /proc/meminfo)") || exit 1
 install -d -m 0755 -o root -g root "/etc/systemd/system/user-$factory_uid.slice.d"

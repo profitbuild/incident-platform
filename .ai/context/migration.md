@@ -104,8 +104,9 @@ Legend:
   - #0-313 (M2.7, the credential proxy's core before the first real call; split from #0-289, ADR-0063 as amended
     for #0-301, 2026-11-22; widened 2026-11-22 by the review of opencomputer: the task's allowlist without
     Anthropic, the proxy's missing parts, `ANTHROPIC_UNIX_SOCKET` measured);
-  - #0-315 (`factory`'s slice limited, before the next trial on the VM; the review of opencomputer; AC1 and AC3 done
-    2026-11-22, `provision.sh`'s drop-in checked by `create.sh`, AC2 the trial on a VM made anew);
+  - #0-315 (`factory`'s slice limited, before the next trial on the VM; the review of opencomputer; done 2026-11-22:
+    `provision.sh`'s drop-in checked by `create.sh`, PR #699; AC2's trial dropped `MemoryHigh`, which hung a runaway
+    and the daemon instead of an OOM kill);
   - the review of opencomputer (2026-11-22): what it changes and why, `migration/opencomputer.md`.
 - carries too: #0-280 (the gate's schema against `run-tests.sh`; done, PR #680), #0-284 (decided 2026-11-21, ADR-0062 amended; the container checked before anything
   runs; code merged in `factory` PR #22 and #24, pinned `v0.1.3`; done 2026-11-22, AC8's second trial

@@ -335,18 +335,25 @@ check_boundary() {
   # shellcheck disable=SC2016 # the awk program runs in the VM
   mem=$(vm awk '$1 == "MemTotal:" { print $2 }' /proc/meminfo) || boundary_fail "cannot read the VM's MemTotal"
   limits=$(factory_slice_limits "$mem") || boundary_fail "provision.sh's limits refuse this VM's memory ($mem kB)"
+  # Every key of the drop-in's [Slice] section, each value as systemd reports it: a size in kB as bytes, anything else
+  # (MemoryHigh's infinity, TasksMax) as written. No key or value of its own here (review round 1, FAC-A01).
   max_kb=$(sed -n 's/^MemoryMax=\([0-9][0-9]*\)K$/\1/p' <<<"$limits")
-  for p in MemoryHigh MemoryMax; do
-    kb=$(sed -n "s/^$p=\([0-9][0-9]*\)K\$/\1/p" <<<"$limits")
-    got=$(vm systemctl show "user-$uid.slice" -p "$p" --value) || boundary_fail "cannot read $p of user-$uid.slice"
-    [ -n "$kb" ] && [ "$got" = "$(( kb * 1024 ))" ] \
-      || boundary_fail "user-$uid.slice has $p=$got, not ${kb:-?} kB as provision.sh derives from $mem kB"
-  done
-  # TasksMax from the same output, not a literal of its own (review round 1, FAC-A01).
   want_tasks=$(sed -n 's/^TasksMax=\([0-9][0-9]*\)$/\1/p' <<<"$limits")
-  tasks=$(vm systemctl show "user-$uid.slice" -p TasksMax --value) || boundary_fail "cannot read TasksMax of user-$uid.slice"
-  [ -n "$want_tasks" ] && [ "$tasks" = "$want_tasks" ] \
-    || boundary_fail "user-$uid.slice has TasksMax=$tasks, not ${want_tasks:-?} as provision.sh derives"
+  [ -n "$max_kb" ] && [ -n "$want_tasks" ] || boundary_fail "provision.sh's limits name no MemoryMax or TasksMax"
+  # `vm` is limactl shell, which is ssh: it reads stdin, so inside this loop it would drain the rest of $limits and the
+  # loop would stop after the first key (review round 1 of #0-315's MemoryHigh fix). Each call gets /dev/null, and the
+  # keys checked are counted against the keys given, so a loop cut short for any reason fails rather than passes.
+  given=$(grep -c '^[A-Za-z][A-Za-z]*=' <<<"$limits")
+  checked=0
+  while IFS='=' read -r key value; do
+    case $key in '[Slice]' | '') continue ;; esac
+    case $value in *[0-9]K) want=$(( ${value%K} * 1024 )) ;; *) want=$value ;; esac
+    got=$(vm systemctl show "user-$uid.slice" -p "$key" --value </dev/null) || boundary_fail "cannot read $key of user-$uid.slice"
+    [ "$got" = "$want" ] || boundary_fail "user-$uid.slice has $key=$got, not $want as provision.sh derives from $mem kB"
+    checked=$((checked + 1))
+  done <<<"$limits"
+  [ "$given" -gt 0 ] && [ "$checked" = "$given" ] \
+    || boundary_fail "checked $checked of the $given limits of user-$uid.slice that provision.sh derives"
   for want in "root:root 755 /etc/systemd/system/user-$uid.slice.d" \
               "root:root 644 /etc/systemd/system/user-$uid.slice.d/50-factory-limits.conf"; do
     got=$(vm sudo stat -c '%U:%G %a' "${want##* }") || boundary_fail "no ${want##* }"

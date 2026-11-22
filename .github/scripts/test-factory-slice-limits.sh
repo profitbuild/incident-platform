@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # ============================================================
 # Tests for the limits of `factory`'s user slice on the build VM (backlog #0-315): provision.sh's factory_slice_limits,
-# read from the file the way create.sh reads it, derives MemoryMax (MemTotal less max(1.5 GiB, 12 %)), MemoryHigh (95 %
-# of it) and TasksMax (16384) from the VM's memory, and refuses a MemTotal that is not a number or a VM that would leave
+# read from the file the way create.sh reads it, derives MemoryMax (MemTotal less max(1.5 GiB, 12 %)) from the VM's
+# memory, with MemoryHigh written as infinity (no throttling: #0-315's AC2 trial) and TasksMax 16384, and refuses a
+# MemTotal that is not a number or a VM that would leave
 # factory less than 4 GiB; and provision.sh writes the result into a drop-in of user-<factory's uid>.slice under /etc,
 # before the reload and before factory's lingering session starts.
 # Run: .github/scripts/test-factory-slice-limits.sh   (also run by .github/workflows/factory-guards.yml)
@@ -22,11 +23,11 @@ body=$(sed -n '/^factory_slice_limits() {/,/^}$/p' "$PROVISION")
 [ "$(tail -n 1 <<<"$body")" = "}" ] || { echo "::error::no closing line of factory_slice_limits in provision.sh"; exit 1; }
 eval "$body"
 
-# expect <name> <MemTotal kB> <MemoryHigh kB> <MemoryMax kB>
+# expect <name> <MemTotal kB> <MemoryMax kB>
 expect() {
     local out rc want
     out=$(factory_slice_limits "$2" 2>&1); rc=$?
-    want=$(printf '[Slice]\nMemoryHigh=%sK\nMemoryMax=%sK\nTasksMax=16384' "$3" "$4")
+    want=$(printf '[Slice]\nMemoryHigh=infinity\nMemoryMax=%sK\nTasksMax=16384' "$3")
     if [ "$rc" -ne 0 ]; then fail "$1: exit $rc ($out)"
     elif [ "$out" != "$want" ]; then fail "$1: got $(tr '\n' ' ' <<<"$out"), wanted $(tr '\n' ' ' <<<"$want")"
     else ok "$1"; fi
@@ -41,10 +42,10 @@ refused() {
 }
 
 # The build VM as it is (factory-build.yaml's 12 GiB, MemTotal read there on 2026-11-22): 12 % is below 1.5 GiB.
-expect "a 12 GiB VM keeps the 1.5 GiB reserve"           12221396 10116105 10648532
+expect "a 12 GiB VM keeps the 1.5 GiB reserve"           12221396 10648532
 # A 16 GiB VM (M5's two slots): 12 % is above 1.5 GiB and takes over.
-expect "a 16 GiB VM keeps a 12 % reserve"                16777216 14025753 14763951
-expect "a VM that leaves factory exactly 4 GiB passes"    5767168  3984588  4194304
+expect "a 16 GiB VM keeps a 12 % reserve"                16777216 14763951
+expect "a VM that leaves factory exactly 4 GiB passes"    5767168  4194304
 refused "a VM that leaves factory 1 kB under 4 GiB fails" 5767167 "below the 4 GiB a gate needs"
 refused "a 4 GiB VM fails"                                4194304 "below the 4 GiB a gate needs"
 refused "a VM smaller than the reserve fails"             1048576 "below the 4 GiB a gate needs"
