@@ -6,7 +6,9 @@
   2's rule required, accepted by the owner on 2026-11-21 after the spike; points 3 and 5 amended for #0-301
   (2026-11-22: the token's channel through `apiKeyHelper`, the expected version's place); point 3 amended for #0-301
   and #0-313 (2026-11-22: the built-in plugins, `apiKeySource`); point 5 amended on the review of opencomputer
-  (2026-11-22, `.ai/context/migration/opencomputer.md`): `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1` in the list
+  (2026-11-22, `.ai/context/migration/opencomputer.md`): `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1` in the list;
+  points 3 and 4 amended with #0-301's code (2026-11-22, `factory` PR #26, v0.1.5): the built-in agents' closed list,
+  `StructuredOutput` among each agent's tools, the version compared with the pinned `factory`'s
 - **Backlog:** #0-300, #0-301, #0-313
 - **Date:** 2026-11-21
 - **Author:** human (owner's decision on the options of `/research #0-300`, 2026-11-21, drafted in an interactive session)
@@ -212,7 +214,11 @@ It has no field for hooks or for the sources of settings.
      - the init event's `tools` on the VM's Claude Code.
 3. **The init event of every call is checked whole, before its answer is read.** The run stops when anything differs
    from what the dispatcher expects:
-   - `agents` holds `factory:<agent>`, and no plugin agent but the factory's;
+   - `agents` holds `factory:<agent>`, and no plugin agent but the factory's; *amended with #0-301's code
+     (2026-11-22):* besides the factory's, Claude Code's own built-in agents (`claude`, `Explore`, `general-purpose`,
+     `Plan`, `statusline-setup`, `web-fetch` on 2.1.328, the spike of #0-300), equal to a second closed list the
+     factory keeps beside the built-in plugins' (`claude-code/expectations.json`), measured, as that one is, under the
+     whole of point 5's list and re-recorded by #0-301 AC4's first call on the VM;
    - `plugins` is exactly one entry, `factory` at `/opt/factory`, and `plugin_errors` is absent; *amended for #0-301
      (2026-11-22):* besides it, Claude Code's own built-in plugins (`path` `"builtin"`), which every call on 2.1.328
      loads, five of them (the spike's rounds and #0-313's measurement 1): exactly one entry that is not built in,
@@ -227,11 +233,20 @@ It has no field for hooks or for the sources of settings.
      `env -i`, not this check;
    - `tools` equals the expected list for that agent on the pinned Claude Code, re-recorded at a version bump (the
      expected version and these lists are the factory's, beside its managed file; Lint Workflows compares the version
-     with the product's `.devcontainer/claude-code.pin` through `check-factory-copies.rb`, decided for #0-301 on
-     2026-11-22, ADR-0065)
-     (`m2.md` M2.2). Under F3 it is exactly the `--tools` list (D2: Grep and Glob next to Bash, unlike M2.0's call
-     without `--tools`), and nothing else: a tool beyond it, such as an `mcp__…` tool of an account's connectors
-     that appeared in some calls on the owner's login, stops the run;
+     with the product's `.devcontainer/claude-code.pin`, decided for #0-301 on 2026-11-22, ADR-0065; *amended with
+     #0-301's code:* in `factory` at the adapter's `factoryVersion`, the code the build VM runs, not `factory@main`, by
+     `check-claude-code-expectations.sh`, and a difference always fails, ADR-0061 as amended) (`m2.md` M2.2). Under F3
+     it is exactly the `--tools` list (D2: Grep and Glob next to Bash, unlike M2.0's call without `--tools`), and
+     nothing else: a tool beyond it, such as an `mcp__…` tool of an account's connectors that appeared in some calls on
+     the owner's login, stops the run. *Amended with #0-301's code (the owner's measurement of `--json-schema` of
+     2026-11-22, `m2.md`'s Record, #0-301's entry):* the list holds `StructuredOutput`, the tool through which
+     `--json-schema`'s answer comes back as `structured_output`: `--agent` trims the session's tools to the agent's
+     frontmatter, that one included, so each agent's frontmatter names it, and `--tools` with it. It needs no allow rule
+     in the managed settings (it ran under `allowManagedPermissionRulesOnly` and `dontAsk` with no denial). Claude Code
+     validates the answer itself, client-side, as JSON Schema draft-07 (a `$schema` of draft 2020-12 is refused at
+     startup, so the answer schemas carry none), and a refused answer is retried within `--max-turns`; the schema does
+     not reach the API as a structured-outputs format, so the dispatcher's own check of `structured_output`
+     (`validate.mjs`) stays the one this ADR relies on;
    - `mcp_servers` is empty. The factory's plugin carries no MCP server today; a plugin change that adds one needs
      this check amended first;
    - `model` and `permissionMode` are the call's;
@@ -248,7 +263,11 @@ It has no field for hooks or for the sources of settings.
    shows no hooks; only `plugin_errors` shows a hooks file that did not load. The hook's behaviour (M2.0's
    measurements 3, 5, 6) is re-measured at each version bump with the pin, as a step of #0-249/#0-283's bump. So are
    Claude Code's built-in plugins, which every call loads (point 3 as amended for #0-301): the bump records their
-   names and what each carries (hooks, agents, MCP), as nothing in a call shows their hooks.
+   names and what each carries (hooks, agents, MCP), as nothing in a call shows their hooks. *Amended with #0-301's
+   code:* the bump also re-records the built-in agents, each agent's tools (`StructuredOutput` among them: a version
+   that names or needs it otherwise fails every call at the init check, or ends it with no `structured_output`) and
+   whether the answer schemas still load (the draft Claude Code's validator takes), in one change of
+   `claude-code/expectations.json` with `.devcontainer/claude-code.pin`.
 5. **The call's environment is closed.** The task image's `ENV` comes from the product's Dockerfile (or its build
    cache), and ADR-0062's `containerEnv` list does not hold it. So the image could set a variable that moves or adds
    a source of Claude Code's configuration, such as `CLAUDE_CONFIG_DIR`, or a `CLAUDE_CODE_*` variable, around

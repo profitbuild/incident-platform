@@ -807,6 +807,11 @@ jobs:
       - name: Factory copies script tests
         run: .github/scripts/test-check-factory-copies.sh
 
+      # Backlog #0-301 AC6: the cases of the check that the pinned factory expects the Claude Code the images install
+      # (the check itself runs on the pinned version's checkout, after the adapter's step below).
+      - name: Claude Code expectations script tests
+        run: .github/scripts/test-check-claude-code-expectations.sh
+
       # factory@main, cloned without a token (the repository is public). This repository leads (ADR-0061): on a pull
       # request, a difference fails only when the pull request changes a compared file and main (HEAD^1, the merge
       # commit's first parent, checked out beside) does not have it already: the owner mirrors the change in `factory`
@@ -856,8 +861,9 @@ jobs:
       # is read-only: GitHub shows it neither the bypass actors, nor the
       # repository settings, nor the admins, nor the writers (#0-272), so
       # those are compared only when the owner runs it (the summary names
-      # them). Last but two in the job (the adapter's step and the gate
-      # contract's step, #0-280, which run factory's code, follow every
+      # them). Last but three in the job (the adapter's step and the gate
+      # contract's step, #0-280, which run factory's code, and the Claude
+      # Code version's, #0-301, which reads their checkout, follow every
       # step that holds a token, and run even when this one is red: no
       # step that holds a token may come after them), so a GitHub outage
       # or a changed setting hides no lint finding. Its
@@ -881,12 +887,13 @@ jobs:
       # adapter's the only one). `factory` at the tag, fetched without a token (public); a tag is the
       # admin's alone and cannot move (factory's rulesets). The schema checks spelling only: the paths
       # against the base's tree are the dispatcher's check at run time. A refusal names where the adapter
-      # breaks the schema, never a value (SEC-31). Last but one in the job (the gate contract's step, #0-280,
-      # follows and reads this checkout), after every step that holds a token:
+      # breaks the schema, never a value (SEC-31). Last but two in the job (the steps of the Claude Code version,
+      # #0-301, and of the gate contract, #0-280, follow and read this checkout), after every step that holds a token:
       # the step runs `factory`'s code, so what it writes to GITHUB_ENV or GITHUB_PATH reaches no step that
       # holds a token (review round 2 of #0-278; the token is this job's read-only one either way, which a job
-      # of its own would also give its post steps). The one step after it, the gate contract's (#0-280), holds
-      # no token and runs the same pinned code, so it trusts nothing this step could not already do. It runs even when a step above failed (`!cancelled()`):
+      # of its own would also give its post steps). The two steps after it hold no token: the Claude Code
+      # version's (#0-301) reads one value of the checkout, and the gate contract's (#0-280) runs the same pinned code,
+      # so they trust nothing this step could not already do. It runs even when a step above failed (`!cancelled()`):
       # the settings step is red by design until the owner applies a settings change, and a pull request
       # merged past that red must still have had its adapter checked (review round 3 of #0-278).
       - name: The adapter keeps its factory version's schema
@@ -917,14 +924,24 @@ jobs:
           '
           echo "the adapter keeps the schema of factory $version, at FACTORY_COMMIT $pin"
 
+      # Backlog #0-301 AC6, ADR-0061 (amended 2026-11-22): the Claude Code version factory at the adapter's
+      # factoryVersion expects (claude-code/expectations.json, which every agent call's init event is held to) equals
+      # .devcontainer/claude-code.pin's, the version every task container installs; in the checkout the adapter's step
+      # made, never factory@main: the code the build VM runs. Both pins are this repository's, so a difference always
+      # fails (as the gate contract's, #0-280). It reads one JSON value with jq and runs no factory code. It runs even
+      # when a step above failed (`!cancelled()`); without that checkout it fails, as a check not made.
+      - name: The pinned factory expects the pinned Claude Code
+        if: ${{ !cancelled() }}
+        run: .github/scripts/check-claude-code-expectations.sh "${RUNNER_TEMP}/factory-at-version"
+
       # Backlog #0-280, ADR-0061 (amended 2026-11-21): every answer run-tests.sh gives in test-run-tests.sh's cases,
       # the real output of each path, is held to factory's own checkGateAnswer (dispatcher/src/adapter.mjs) in the
-      # checkout the step above made, factory at the adapter's factoryVersion, whose tag is FACTORY_COMMIT: the check
+      # checkout the adapter's step made, factory at the adapter's factoryVersion, whose tag is FACTORY_COMMIT: the check
       # the dispatcher refuses a gate's answer by, never factory@main and no second validator here (one clone, one
       # validator, as above). check-gate-answers.mjs refuses to call a checker that takes a canary answer, and tells a
       # refusal (exit 1) from a check not made (exit 3). Last in the job, after every step that holds a token, for the
-      # step above's reason: it runs factory's code. It runs even when a step above failed (`!cancelled()`); without
-      # the step above's checkout it fails, as a contract not checked.
+      # adapter's step's reason: it runs factory's code. It runs even when a step above failed (`!cancelled()`); without
+      # the adapter's step's checkout it fails, as a contract not checked.
       - name: The test gate's answers keep factory's contract
         if: ${{ !cancelled() }}
         run: FACTORY_CHECKOUT="${RUNNER_TEMP}/factory-at-version" .github/scripts/test-run-tests.sh

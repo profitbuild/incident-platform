@@ -507,7 +507,10 @@ Agent models are full ids in `.claude/agents/*.md`. Claude Code is pinned in `.d
 running version. The pin is no lower than 2.1.295, the first that honours the hooks' `onFailure: "block"` (an older
 one ignores the field silently, ADR-0039). A bump is a pull request changing the pin's lines together (the comment
 at its top gives the command that reads them from the manifest), then the seed-bugs benchmark below and ADR-0064's
-re-measurements on the new version (the agents' `tools`, the plugin's hooks) before it is trusted; Renovate does not
+re-measurements on the new version (the agents' `tools`, `StructuredOutput` among them, the built-in plugins and
+agents, the plugin's hooks, whether the answer schemas still load) before it is trusted, with a `factory` version whose
+`claude-code/expectations.json` expects it, pinned in the same pull request (Lint Workflows fails on a difference,
+`check-claude-code-expectations.sh`, #0-301 AC6); Renovate does not
 propose it, as the release is no GitHub release asset. A new signing key is a new file in `.devcontainer/keys/` after
 the same three-way fingerprint check (its `.source`). The devcontainer's docker-outside-of-docker
 feature is pinned by digest in `.devcontainer/devcontainer-lock.json` (`devcontainer upgrade` moves it; the

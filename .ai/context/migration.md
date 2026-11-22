@@ -42,7 +42,8 @@ Legend:
 - Stages 0 to 3 are done, and stage 4's 4.1, 4.2 and 4.3a–d (records in `stage-1.md` … `stage-4.md`).
 - **M1 done** (4.3d, #0-278, 2026-11-21): `factory` PR #20, PR #678 and its trial on the VM (`stage-4.md` "4.3").
 - **Current: M2** (`migration/m2.md`): M2.0 (#0-299) done 2026-11-21, `factory` PR #21; #0-300 (M2.1's spike) and
-  #0-284 done 2026-11-22; next #0-301, its first decision the agent's credential before M3.5.
+  #0-284 done 2026-11-22; #0-303 done 2026-11-22; #0-301's code done 2026-11-22 (`factory` PR #26, pinned `v0.1.5`),
+  its first call on the VM (AC4) after #0-313; next #0-313 and #0-302.
 - The old path (`/backlog-autopilot` in the VM's devcontainer, the rollback that shares the VM by time) still runs
   until M4.
 
@@ -93,8 +94,8 @@ Legend:
   - #0-300 (M2.1, the spike; decided 2026-11-21, ADR-0064: managed settings, `--restricted` by measurement, the init
     event as the isolation check; spike in `factory`'s container done, F3 chosen, `factory` PR #23; done 2026-11-22,
     its VM part moved to #0-301);
-  - #0-301 (M2.2–M2.3, the agent call and the phases; decided 2026-11-22: K2, f1, g1; its first call on the VM, AC4,
-    after #0-313);
+  - #0-301 (M2.2–M2.3, the agent call and the phases; decided 2026-11-22: K2, f1, g1; code done 2026-11-22,
+    `factory` PR #26, pinned `v0.1.5`, with AC6 against the pinned tag; its first call on the VM, AC4, after #0-313);
   - #0-302 (M2.4, the dispatcher's commits; #0-212 folded in; decided 2026-11-22, ADR-0060 D7 amended);
   - #0-303 (M2.5, per task: the task's lock, its liveness, the state lock, `FACTORY_SLOTS`; its sweep's scope and
     the Maven cache moved to M3.4, #0-285, the owner's option B, 2026-11-21; done 2026-11-22, `factory` PR #25,
@@ -178,6 +179,7 @@ Open factory items no step carries, done when their turn comes in the queue:
 - #0-255, #0-257, #0-221, #0-224, #0-69, #0-2 and #0-152 B;
 - #0-316 (the product's `CLAUDE.md` as a short starting point) and #0-317 (a file-size ratchet in `factory`'s CI),
   from the review of opencomputer (`migration/opencomputer.md`).
+- #0-318 (git's stderr out of a stop's reason in `base-tree.mjs`), from the review of `factory` PR #26 (#0-301).
 
 They were listed in the stage map's "Factory items in no stage" before ADR-0063. Each is re-read against its step
 when it is taken, since a step may have removed what it changes.

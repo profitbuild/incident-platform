@@ -200,6 +200,7 @@ Code, Javadoc, config comments and commits reference items as `backlog #N`.
 | [0-315](#0-315-a-runaway-task-can-take-the-build-vm-and-the-dispatcher-down-with-it) | A runaway task can take the build VM and the dispatcher down with it | ci | High | Open (AC2: the VM trial) |
 | [0-316](#0-316-every-agent-call-reads-a-215-kb-claudemd-written-as-a-runbook) | Every agent call reads a 21.5 KB `CLAUDE.md` written as a runbook | docs | Medium | Open |
 | [0-317](#0-317-nothing-keeps-factorys-modules-small) | Nothing keeps `factory`'s modules small | ci | Low | Open |
+| [0-318](#0-318-a-git-failure-in-the-dispatchers-base-tree-puts-gits-stderr-in-a-stops-reason) | A git failure in the dispatcher's base tree puts git's stderr in a stop's reason | ci | Low | Open |
 | [0-133](#0-133-incidentresolvedevent-carries-no-openedat) | `IncidentResolvedEvent` carries no `openedAt` | tech-debt | Low | Open |
 | [0-134](#0-134-diff-cover-is-installed-by-version-without-hashes) | `diff-cover` is installed by version, without hashes | ci | Low | Open |
 | [0-135](#0-135-kubectl-in-ci-is-downloaded-unverified) | kubectl in CI is downloaded unverified | ci | Low | Open |
@@ -4294,7 +4295,8 @@ AC2. Auto-merge is not switched on until the eight conditions of `migration.md` 
 
 **Type:** ci · **Priority:** High · **Status:** Open (ADR-0063, 2026-11-21).
 **Autopilot:** human-only · **Risk:** high · **Complexity:** high · **Depends on:** #0-300, #0-280, #0-284, #0-249, #0-283
-**Touches:** the repository `profitbuild/factory` (dispatcher/src/flow/, dispatcher/src/container/ for the managed settings' mount, the managed settings file, schemas/answers/, the expected Claude Code version and tools, its tests and fixtures), ci (.github/scripts/check-factory-copies.rb: the expected version against `.devcontainer/claude-code.pin`, owner-only)
+**Touches:** the repository `profitbuild/factory` (dispatcher/src/flow/, dispatcher/src/container/ for the managed settings' mount, the managed settings file, schemas/answers/, the expected Claude Code version and tools, its tests and fixtures), ci (.github/scripts/check-claude-code-expectations.sh and its test, .github/workflows/ci.yml: the expected version of
+`factory` at the pinned tag against `.devcontainer/claude-code.pin`, owner-only; decisions: ADR-0061 amended)
 
 **Decided with the owner (2026-11-22, `/research` of #0-301; ADR-0063 and ADR-0064 points 3 and 5 amended):**
 - **K2, a third option beside (a) and (b) below:** no Claude key in the container. The calls go through the
@@ -4322,6 +4324,17 @@ AC2. Auto-merge is not switched on until the eight conditions of `migration.md` 
   uncommitted work is gone with it.
 - The code needs no credential: AC1–AC3, AC5 and AC6 are tests. AC4, the first call on the VM with #0-300's VM part,
   waits for #0-313.
+- **The code, done 2026-11-22:** `factory` PR #26 (merged as `254afb21`, tag `v0.1.5`, reviewed in four rounds), and
+  AC6 in this repository with the pin's pull request (`ci/factory-v0.1.5`); record in `m2.md` M2.2–M2.3. The owner's
+  measurement of `--json-schema` under F3 before the merge (`m2.md`'s Record, #0-301's entry) found two things every
+  real call needed: no `$schema` of draft 2020-12 in the answer schemas (refused at startup) and `StructuredOutput` in
+  each agent's frontmatter `tools` (`--agent` trims the tools to it; ADR-0064 points 3 and 4 amended). What is left
+  is AC4, after #0-313.
+- **AC6's place, decided on the pin's pull request (2026-11-22, the owner's option B):** the version is compared in
+  `factory` at the adapter's `factoryVersion` (#0-278's checkout, held to `FACTORY_COMMIT`), the code the build VM
+  runs, by a check of its own whose difference always fails (both values are this repository's, as #0-280's), not as
+  a case of `check-factory-copies.rb` against `factory@main`, which would pass while the pinned version expects
+  another Claude Code (ADR-0061 as amended).
 
 **Problem.** After the spike the dispatcher still has no agent call and no phases, and `backlog-autopilot.js`'s
 control flow lives only in incident-platform.
@@ -4366,11 +4379,14 @@ AC4. One call on the VM, in a task container, records #0-300's VM part in `m2.md
      whether any of the planted set takes effect; whether `--plugin-dir` loads under
      `strictKnownMarketplaces: []`; whether the plugin's hook still refuses `run_in_background`; the built-in plugins
      of the init event under ADR-0064 point 5's full list, `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1` included
-     (2026-11-22), and against the closed list of point 3.
+     (2026-11-22), and against the closed list of point 3, and the built-in agents against theirs; which tools of
+     the init event `dontAsk` lets run, each of them, not only Bash (`StructuredOutput` ran with no allow rule, the
+     review of `factory` PR #26); the positive lookahead of the commit message's pattern in Claude Code's validator.
 AC5. Each agent's answer is checked against its schema in `factory`'s `schemas/answers/`, the one passed to
      `--json-schema`, and each agent's "## Answer (JSON)" example passes it (tests).
-AC6. Lint Workflows fails when the factory's expected Claude Code version differs from `.devcontainer/claude-code.pin`
-     (a case of `test-check-factory-copies.sh`), with ADR-0061's list of compared copies amended in the same change.
+AC6. Lint Workflows fails when the expected Claude Code version of `factory` at the adapter's `factoryVersion` differs
+     from `.devcontainer/claude-code.pin` (`check-claude-code-expectations.sh` and its cases, as decided above), with
+     ADR-0061 amended in the same change.
 
 ### 0-302. Agents would commit their own work, with no trailer of run or agent (migration step M2.4)
 
@@ -4919,3 +4935,25 @@ AC2. `create.sh` builds the VM from the private `factory` at the pinned commit, 
      trial recorded in M9's record).
 AC3. ADR-0061 is amended with the token, its scope and where its key lives, and README "Infrastructure Hardening"
      names the token and what a leaked one yields (read access to `factory`, until it expires).
+
+### 0-318. A git failure in the dispatcher's base tree puts git's stderr in a stop's reason
+
+**Type:** ci · **Priority:** Low · **Status:** Open (the owner's decision on the review of `factory` PR #26, 2026-11-22).
+**Autopilot:** human-only · **Risk:** low · **Complexity:** low · **Depends on:** #0-301
+**Touches:** the repository `profitbuild/factory` (dispatcher/src/product/base-tree.mjs, its tests)
+
+**Problem.** When git fails in `base-tree.mjs` (`git ls-tree` or `git cat-file` on the dispatcher's own clone of the
+product, the base's tree read for the gates), the stop's reason quotes the first lines of git's stderr, as it did
+before #0-301. The reason is written to the task's record and shown to
+the owner; git's stderr can carry a path, a remote's URL or text of the repository's configuration. It is not an
+agent's or the daemon's text, so the rule of #0-284 (an agent's output never in a reason) does not cover it, and the
+review of `factory` PR #26 (security, round 2) accepted it for that pull request with this item.
+
+**Work.** As `run-container.mjs` does for the daemon:
+- the reason names the git command and its exit code only;
+- git's stderr goes to a file of the dispatcher's `$FACTORY_STATE_DIR/stderr/` (700, the file 600), which the reason
+  names.
+
+**Acceptance criteria.**
+AC1. A failing git in `base-tree.mjs` gives a reason with the command and exit code and none of its stderr, and the
+     stderr is in the `stderr/` file the reason names (tests with a git that fails and prints a marker).
