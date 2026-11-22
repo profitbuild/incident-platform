@@ -13,7 +13,8 @@
   the dispatcher's mounts gain the factory's managed settings read-only on `/etc/claude-code`; points 4 and 5 amended
   on the review of `factory` PR #22 (2026-11-21): the daemon's options refuse the run before any container of it, and
   the sweep counts volumes (point 5's sweep part; its rollback part lasts until M4); point 7 amended by #0-303
-  (2026-11-21): the whole-daemon sweep only while no other task is live
+  (2026-11-21): the whole-daemon sweep only while no other task is live; point 4 amended by #0-284's AC8 trial
+  (2026-11-22, `factory` PR #24): `OomScoreAdj` held as a range 0–1000 under rootless Docker
 - **Backlog:** #0-277; point 4 amended on #0-282's review and on the review of `factory` PR #18; points 1, 2, 5, 8 and
   the Consequences on the review of #0-277's VM part; their end-state follow-ups #0-284, #0-285; points 4 and 5 amended
   on the review of `factory` PR #22 (#0-284's code)
@@ -138,7 +139,10 @@ Two facts the item had not weighed (the `/research` of 2026-11-20):
        Docker's default; a field the table does not hold with a value
        other than its default refuses the task, so a new Docker version's field fails loudly until the table holds
        it. Not a difference against a reference container made on the same daemon, which would carry the daemon's own
-       defaults (its `daemon.json`, the agent's side) into the reference and hide them.
+       defaults (its `daemon.json`, the agent's side) into the reference and hide them. One field is a range, not a
+       value: `OomScoreAdj`, an integer from 0 to 1000, since rootless Docker raises it at a container's start to no
+       lower than its daemon's own `oom_score_adj` (200 on the build VM, measured in #0-284's AC8 trial), and only a
+       negative value would weaken anything (`factory` PR #22's review and PR #24).
      - **No refusal, `task.json` reason or line of the dispatcher's stderr holds a value the daemon gave:** a label's
        key, a mount's destination, a capability's name, a container's, network's or volume's name. A refusal names a
        position (an index, "an unexpected mount", a count) or an ID the daemon assigns (hex, never chosen by the

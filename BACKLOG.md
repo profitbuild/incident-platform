@@ -3947,8 +3947,8 @@ Removed after the trial: the container, the volume and the directory; nothing le
 ### 0-284. The task container is checked before anything runs in it, and its refusals hold none of the agent side's text
 
 **Type:** ci · **Priority:** Medium · **Status:** Open (found by the review of `factory` PR #18, #0-277, 2026-11-20;
-for migration stage 4, step 4.4). Code: `factory` PR #22, merged as `b3960cd8`, pinned `v0.1.2`; open: AC8, the trial on
-the VM (`m2.md` Record).
+for migration stage 4, step 4.4). Code: `factory` PR #22 (`b3960cd8`) and PR #24 (`e1197081`), pinned `v0.1.3`;
+open: AC8's second trial on the VM, the first refused on `OomScoreAdj` (`m2.md` Record).
 **Autopilot:** human-only · **Risk:** medium · **Complexity:** medium · **Depends on:** #0-277
 **Touches:** the repository `profitbuild/factory` (the dispatcher's task container, `daemon.mjs`'s refusals, its
 starter, and their tests, and its README), decisions (ADR-0062 points 4 and 6, amended before the code), root (README

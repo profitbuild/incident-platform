@@ -818,13 +818,15 @@ security boundary, so every rule that matters is also enforced outside the model
   firewall sudo rule and its Claude Code were #0-283, closed with #0-249 (the two entries of "Network" and "Claude
   Code pinned" above).
 - **The task container checked before anything runs in it** (backlog #0-284, ADR-0062 points 4 and 6 as amended;
-  `factory` PR #22, pinned `v0.1.2`): the daemon's `docker info` security options and default runtime checked before
-  any container of the run, so a `daemon.json` of the agent's side refuses the run; the image built by its own
-  `devcontainer build`, its ID read once and its label held to the factory's list before any container, and the
+  `factory` PR #22 and PR #24, pinned `v0.1.3`): the daemon's `docker info` security options and default runtime
+  checked before any container of the run, so a `daemon.json` of the agent's side refuses the run; the image built by
+  its own `devcontainer build`, its ID read once and its label held to the factory's list before any container, and the
   container started from that ID and held to it; the container's whole `HostConfig` held by a closed table (each field
-  the dispatcher's value or Docker 29.9.3's default); no refusal, reason or sweep output quoting a value the daemon gave
+  the dispatcher's value or Docker 29.9.3's default, `OomScoreAdj` a range 0–1000 since rootless Docker raises it at
+  start); no refusal, reason or sweep output quoting a value the daemon gave
   (positions, counts, hex IDs); a call's stderr returned to no caller, kept in a mode-600 file of the dispatcher's
-  state, and a stderr that cannot be kept refuses the call. Limits: not yet tried on the VM (#0-284 AC8); the stderr
+  state, and a stderr that cannot be kept refuses the call. Limits: the first trial on the VM (2026-11-22) was refused,
+  fail closed, on `OomScoreAdj` and fixed in `v0.1.3`, the second is open (#0-284 AC8); the stderr
   files are never removed and could hold a token a task printed from step 4.6 (#0-308); a volume a task names like a
   secret makes every later sweep, so every run, refuse until the owner removes it (#0-309).
 - **builder-app's push** (backlog #0-276, stage 4.3b, ADR-0060 D7 as amended; `factory` PR #16): no git with the
