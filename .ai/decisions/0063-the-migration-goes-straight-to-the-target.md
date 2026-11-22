@@ -3,7 +3,8 @@
 - **Status:** Accepted (2026-11-21, by the owner, after review round 1 of #0-286); amends ADR-0055 (its stages, order, exits, rollbacks and rules of the migration, and two exceptions to its target's "dispatchers keep no state of their own": a seed run's ground truth until it is scored, and, if GraphQL names no actor of a Project field, the dispatcher's own record of who moved a task to `Ready`), ADR-0060 D7
   (one lock for the whole dispatcher, a push never forced, no merge in a branch) and D8 (the item named by the owner
   until stage 7), and ADR-0062 point 5 (the rollback shares the VM by time); amended for #0-299's plan (the architect's
-  write scope at M2) and for #0-303 (2026-11-21: M2's per-task sweep and caches moved to M3.4, #0-285)
+  write scope at M2) and for #0-303 (2026-11-21: M2's per-task sweep and caches moved to M3.4, #0-285); amended for #0-301
+  (2026-11-22: the credential proxy's core moved into M2 as #0-313, before #0-301's trial)
 - **Backlog:** #0-286 (this replan); the steps' items #0-287 to #0-307 (M2 and M3 split per pull request); #0-303's
   amendment
 - **Date:** 2026-11-21
@@ -151,6 +152,18 @@ a task's liveness by that lock, a state lock and `FACTORY_SLOTS` (1 until M5), w
 no other task is live. The per-task sweep, the orphans and the Maven cache's layout move to M3.4 with #0-285, which
 chooses the daemon's model (G1-b): on a shared daemon a task's code chooses names and labels, so a label-scoped sweep
 is no boundary, and under a daemon per task most of it would be thrown away. G1's slots in M5 rest on both steps.
+
+**Amended (2026-11-22, #0-301's `/research`, the owner's options K2, f1, g1): the credential proxy's core moves into
+M2.** M2's exit and #0-301's trial (with #0-300's VM part) are real agent calls in a task container on the VM, and
+ADR-0060 D4 keeps Claude's credential out of it. So the proxy's core, M3.5's first half, comes before that trial as
+an item of its own, #0-313 (M2.7): a `node:http` proxy of `dispatcher` on the containers' host-gateway address that
+accepts only the running task's random token, swaps in the Console key (a workspace with a spend limit) and streams
+to `api.anthropic.com`, counting usage per task. M3.4 (#0-285) still comes before the rest of M3.5; until it does,
+a run that holds a token runs only on a VM made anew (`delete.sh`, `create.sh`) that has run nothing before it, so
+nothing an earlier task left as `factory` meets one (one of #0-285's own options, for M2's few owner-named runs). Not a bare Console key
+in the container, which ADR-0060 rejected: a leaked key works anywhere until revoked, a leaked task token only from
+the VM and only while its task runs. The architect's write scope stays M2.4's (#0-302), with no check of its own in
+#0-301 (f1): until #0-302 nothing is committed or pushed, and #0-302 is part of M2's exit.
 
 ## Alternatives considered
 

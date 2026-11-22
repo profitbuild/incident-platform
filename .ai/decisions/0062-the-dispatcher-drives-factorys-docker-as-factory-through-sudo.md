@@ -14,10 +14,13 @@
   on the review of `factory` PR #22 (2026-11-21): the daemon's options refuse the run before any container of it, and
   the sweep counts volumes (point 5's sweep part; its rollback part lasts until M4); point 7 amended by #0-303
   (2026-11-21): the whole-daemon sweep only while no other task is live; point 4 amended by #0-284's AC8 trial
-  (2026-11-22, `factory` PR #24): `OomScoreAdj` held as a range 0–1000 under rootless Docker
+  (2026-11-22, `factory` PR #24): `OomScoreAdj` held as a range 0–1000 under rootless Docker; points 4 and 5 amended
+  by ADR-0064 for #0-301 and #0-313 (2026-11-22): a task's container gains its token file for the dispatcher's proxy,
+  read-only, the one credential on the daemon, valid only for its task and only through the proxy
 - **Backlog:** #0-277; point 4 amended on #0-282's review and on the review of `factory` PR #18; points 1, 2, 5, 8 and
   the Consequences on the review of #0-277's VM part; their end-state follow-ups #0-284, #0-285; points 4 and 5 amended
-  on the review of `factory` PR #22 (#0-284's code)
+  on the review of `factory` PR #22 (#0-284's code); points 4 and 5 amended for #0-301 and #0-313 (the task's token
+  file, ADR-0064)
 - **Date:** 2026-11-20
 - **Author:** human (the owner chose the options of a `/research` of #0-277 in an interactive session); written by
   Claude Code
@@ -161,7 +164,11 @@ Two facts the item had not weighed (the `/research` of 2026-11-20):
        build VM, Docker 29.9.3: `["name=seccomp,profile=builtin","name=rootless","name=cgroupns"]`).
      - **What this does not reach:** a default of `factory`'s daemon that neither `HostConfig` nor `docker info` shows
        is the image store's and daemon's residual already accepted below and kept for #0-285.
-5. **No credential lives on `factory`'s daemon while the dispatcher runs; the rollback shares the VM by time.** A
+5. **No credential lives on `factory`'s daemon while the dispatcher runs; the rollback shares the VM by time.**
+   *Amended (2026-11-22, ADR-0064 point 5 for #0-301, built by #0-313):* one exception, a task's token for the
+   dispatcher's proxy, mounted read-only into that task's container. It is no Claude key: it is valid only through
+   the proxy, which listens on the containers' host-gateway address alone, and only while its task runs. Until
+   #0-285, a run that holds a token runs only on a VM made anew that has run nothing before it. A
    test with the Docker socket (`docker-outside-of-docker`, for Testcontainers) can mount any volume of that daemon
    itself, whatever the dispatcher mounts. So the rollback (today's `/backlog-autopilot` in the VM's devcontainer)
    runs only while no dispatcher run is active, with the owner's logins entered again before it:

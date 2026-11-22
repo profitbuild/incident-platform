@@ -3,8 +3,9 @@
 - **Status:** Accepted (2026-11-21, by the owner, before the spike); amends ADR-0062 point 4 (the dispatcher's mounts
   gain `/etc/claude-code`); points 1, 2, 3 and 5 amended by the spike's result (2026-11-21, `factory` PR #23, rounds
   A–D in `factory`'s container): the call is F3, `--restricted` with `--add-dir /workspace`, the new decision point
-  2's rule required, accepted by the owner on 2026-11-21 after the spike
-- **Backlog:** #0-300
+  2's rule required, accepted by the owner on 2026-11-21 after the spike; points 3 and 5 amended for #0-301
+  (2026-11-22: the token's channel through `apiKeyHelper`, the expected version's place)
+- **Backlog:** #0-300, #0-301, #0-313
 - **Date:** 2026-11-21
 - **Author:** human (owner's decision on the options of `/research #0-300`, 2026-11-21, drafted in an interactive session)
 - **Reversible:** yes — one mounted directory, the call's environment and flags, and one check of the dispatcher's
@@ -211,7 +212,10 @@ It has no field for hooks or for the sources of settings.
    from what the dispatcher expects:
    - `agents` holds `factory:<agent>`, and no plugin agent but the factory's;
    - `plugins` is exactly one entry, `factory` at `/opt/factory`, and `plugin_errors` is absent;
-   - `tools` equals the expected list for that agent on the pinned Claude Code, re-recorded at a version bump
+   - `tools` equals the expected list for that agent on the pinned Claude Code, re-recorded at a version bump (the
+     expected version and these lists are the factory's, beside its managed file; Lint Workflows compares the version
+     with the product's `.devcontainer/claude-code.pin` through `check-factory-copies.rb`, decided for #0-301 on
+     2026-11-22, ADR-0065)
      (`m2.md` M2.2). Under F3 it is exactly the `--tools` list (D2: Grep and Glob next to Bash, unlike M2.0's call
      without `--tools`), and nothing else: a tool beyond it, such as an `mcp__…` tool of an account's connectors
      that appeared in some calls on the owner's login, stops the run;
@@ -249,7 +253,8 @@ It has no field for hooks or for the sources of settings.
    - `DISABLE_AUTOUPDATER=1` and `DISABLE_UPDATES=1`, the image's (ADR-0065), which `env -i` would otherwise drop, so
      Claude Code does not update itself during a run and fail point 3's version check;
    - `CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD=1`, for F3's `--add-dir /workspace` (point 2, as amended);
-   - what the call itself needs to reach the model, which #0-301 names.
+   - what the call itself needs to reach the model: `ANTHROPIC_BASE_URL`, the proxy's address (decided for #0-301,
+     below); the task's token is not in this list.
 
    `CLAUDE_CODE_MANAGED_SETTINGS_PATH` is one of the variables this closes. Claude Code 2.1.328 reads it as the
    folder of its managed settings, so an image's `ENV` could move them. The spike measured that `env -i` keeps it
@@ -259,6 +264,18 @@ It has no field for hooks or for the sources of settings.
    `/proc/<pid>/cmdline`), and so can anyone holding the socket. So the list is for values that are not secret. A
    credential, should the call ever need one in the container, never goes in an argument: #0-301 decides its channel.
    (Today the container holds none, ADR-0060.)
+
+   **Decided for #0-301 (2026-11-22, the owner's K2; built by #0-313; amends ADR-0062 points 4 and 5: one more mount,
+   and the one credential on the daemon):** the container holds no Claude key, only its
+   task's token for the dispatcher's proxy (ADR-0060 D4). `ANTHROPIC_BASE_URL`, the proxy's address, is a literal of
+   the list (no secret). The token reaches Claude Code through `apiKeyHelper` in the managed settings, a command that
+   prints a file the dispatcher mounts read-only into the task's container (its path in the managed file, its mount in
+   the exact comparison and the `HostConfig` table), so it is in no argument and no environment `env -i` would clear.
+   Claude Code sends the helper's output in both `Authorization` and `x-api-key` (its authentication documentation),
+   and the proxy reads either. Code a call runs can read the file, as it can read anything of its container: what a
+   leaked token yields is the proxy's, from the VM only and only while the task runs. #0-313 measures first that
+   `apiKeyHelper` from the managed settings is read under F3's `--restricted`; if it is not, this point is amended
+   before any code.
 
    This is an allowlist, not a denylist, as `factory`'s `childEnv` (`dispatcher/src/process/child-env.mjs`, #0-276)
    builds every child process's environment on the VM. One difference: there the values come from the dispatcher's
@@ -334,7 +351,7 @@ It has no field for hooks or for the sources of settings.
 - point 2's VM part: the exact F3 argv with `--agent` through `docker exec`, its `result.subtype`, and the VM's Claude
   Code (#0-300 AC3), moved to #0-301's first call on the VM (2026-11-22): it needs a Claude credential in the task
   container, which ADR-0062 point 5 keeps off the daemon until M3.5's proxy; how that call gets one is #0-301's first
-  decision;
+  decision, taken on 2026-11-22: the task's token for #0-313's proxy (point 5 as amended);
 - `CLAUDE.md` in a clone's subdirectories, which F3 does not load;
 - Claude Code's own defaults that no source shows;
 - Claude Code from a factory-provided read-only mount (#0-249, #0-283);
