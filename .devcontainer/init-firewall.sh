@@ -3,8 +3,15 @@
 # Outbound firewall of the factory's devcontainer: default deny, then an allow-list. Modelled on the
 # reference devcontainer of Claude Code (github.com/anthropics/claude-code, .devcontainer/), adapted to
 # this project. Run as root at container start (postStartCommand). Needs NET_ADMIN and NET_RAW. The dispatcher's task
-# container runs it too (task.json, backlog #0-282); `dev` may add hosts to it through sudo, within the VM's egress
-# list (backlog #0-283).
+# container runs it too (task.json, backlog #0-282). `dev` may run it through sudo, without arguments only (the
+# Dockerfile's sudoers line), and it takes none: run again, it builds the same list anew.
+#
+# Fixed (backlog #0-283): it added every argument to its allow-list, and the sudoers line allowed any arguments, so
+# code in a container opened any host by `sudo init-firewall.sh <host>` (FAC-S02; on the VM only within its egress
+# list). The one extra host, the owner's ntfy server, is read from /etc/factory-firewall/extra-hosts, which the image
+# writes at build time (root's; absent in a task container). Not an argument checked by sudo instead: a server changed
+# on the host without a rebuild would then make sudo refuse, the script would never start, and the container would
+# run with no firewall at all, as nothing would set this script's fail-closed trap.
 #
 # IPv4 only: every allowed service is reached over IPv4, so IPv6 allows loopback and nothing else (without
 # this, a container with an IPv6 route would bypass the whole allow-list). If the container has IPv6 and
@@ -12,8 +19,9 @@
 # Allowed: DNS to the container's own resolver only (no direct queries to outside resolvers); the
 # Anthropic API and login; GitHub (its published IP ranges); Maven Central; the advisory hosts the verifier
 # agent may fetch from (OSV, Tomcat's and Spring's security pages: backlog #0-160, ADR-0037); the Docker host
-# (Testcontainers' mapped ports, and Ollama on the host for the optional local model); extra hosts given as
-# arguments (the ntfy server, when notifications are on). Everything else from this container is rejected.
+# (Testcontainers' mapped ports, and Ollama on the host for the optional local model); the hosts of
+# /etc/factory-firewall/extra-hosts (the ntfy server, when the image was built with one). Everything else from this
+# container is rejected.
 # The advisory hosts are open to every process in the container, not only to the verifier (whose WebFetch a hook
 # narrows to a path prefix), and by IP: a CDN or Google's front end serves other sites from the same addresses,
 # reachable by their own name (SNI/Host) once the IP is open. That is why its allow-list is short. .github/scripts/check-web-access.sh fails when
@@ -25,7 +33,7 @@
 # firewall narrows exfiltration; it does not make it impossible (docs/ai-factory.md, "What isolates what").
 # Domains are resolved once, at start: a CDN that moves IPs needs a container restart.
 #
-# Usage: init-firewall.sh [extra-host ...]
+# Usage: init-firewall.sh   (no arguments; one given fails closed, below)
 # ============================================================
 set -euo pipefail
 
@@ -56,6 +64,10 @@ fail_closed() {
 }
 trap fail_closed EXIT
 
+# After the trap, so a call with arguments (an old devcontainer.json, or root by hand) ends with every policy DROP, not
+# with the policies it found.
+[ $# -eq 0 ] || { echo "init-firewall.sh takes no arguments (backlog #0-283): extra hosts come from /etc/factory-firewall/extra-hosts" >&2; exit 1; }
+
 # Required: the run cannot work without them, so one that does not resolve stops the setup (fail closed).
 # The build VM filters everything its rootless Docker sends with a copy of this list and a list of its own
 # (factory-egress.sh in scripts/factory-admin/build-vm/provision.sh, ADR-0057): a domain added here or removed from here
@@ -68,12 +80,19 @@ ALLOWED_DOMAINS=(
 )
 # Optional (telemetry): allowed when they resolve, skipped with a warning when not.
 OPTIONAL_DOMAINS=(statsig.anthropic.com)
-for extra in "$@"; do
-    case "$extra" in
-        *[!A-Za-z0-9.-]*|'') echo "ignored extra host: $extra" >&2 ;;
-        *) ALLOWED_DOMAINS+=("$extra") ;;
-    esac
-done
+# The image's extra hosts, one per line (the Dockerfile writes at most one, the ntfy server's); required like the
+# rest once listed. A line that is not a plain host name is ignored, as an argument was, and so is one starting with a
+# hyphen, which `dig` would read as an option.
+EXTRA_HOSTS_FILE=/etc/factory-firewall/extra-hosts
+if [ -f "$EXTRA_HOSTS_FILE" ]; then
+    while IFS= read -r extra || [ -n "$extra" ]; do
+        case "$extra" in
+            '') ;;
+            *[!A-Za-z0-9.-]*|-*) echo "ignored extra host: $extra" >&2 ;;
+            *) ALLOWED_DOMAINS+=("$extra") ;;
+        esac
+    done < "$EXTRA_HOSTS_FILE"
+fi
 
 # Only the filter table is reset. The nat table is left alone: Docker's embedded DNS (127.0.0.11) lives
 # there, and flushing it would break name resolution in the container.

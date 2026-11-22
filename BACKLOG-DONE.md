@@ -169,6 +169,8 @@ resolvable.
 | 0-278 | the product's code from `main` only, never as `dispatcher` (step 4.3d, M1): the adapter `.factory/adapter.json` read from the base, the commands in the task container, the `trustedPaths` refusal, the item lock's cases shared, the adapter checked against its version's tag at `FACTORY_COMMIT`, tried on the VM; details in [the section](#0-278-the-products-code-runs-only-from-main-step-43d) | `factory` PR #20; PRs #678, #679 |
 | 0-280 | the test gate's answers held to `factory`'s own `checkGateAnswer` at the adapter's pinned tag, every path of `run-tests.sh` in Lint Workflows (M2's precondition); details in [the section](#0-280-the-gates-schema-in-factory-and-run-testssh-here-are-checked-against-each-other-by-nothing) | PR #680 |
 | 0-299 | the build agents (`factory:architect`, `factory:implementer`, `factory:implementer-light`) product-neutral in `factory`'s plugin with its foreground-Bash hook (factory PR #21), and `CLAUDE.md`'s pointers for them; M2.0's measurements recorded (with Bash an agent loses Grep and Glob); details in [the section](#0-299-the-build-agents-definitions-are-not-in-factorys-plugin-migration-step-m20) | PR #683 |
+| 0-249 | Claude Code in the devcontainer image pinned (2.1.328) from Anthropic's signed manifest, root's `/usr/local/bin/claude`, the preflight holding the exact version (ADR-0065, with #0-283); details in [the section](#0-249-claude-code-in-the-devcontainer-image-is-whatever-version-was-current-at-build-time) | PR #688 |
+| 0-283 | the firewall's sudo rule takes no arguments, its one extra host (ntfy) written into the image, `dev` out of `sudo` (ADR-0065, with #0-249); details in [the section](#0-283-the-devcontainer-image-lets-dev-widen-its-firewall-and-installs-claude-code-unpinned) | PR #688 |
 
 Items completed before `BACKLOG.md` existed are not listed.
 
@@ -4882,3 +4884,107 @@ AC3. `CLAUDE.md` names, for the factory's agents, where this product keeps a pla
 AC4. The old path is untouched: `.claude/agents/architect.md`, `implementer.md`, `implementer-light.md` and their
      tests (`test-autopilot-workflow.mjs`, `check-hook-entries.rb`, `check-agent-commands.rb`) are unchanged and pass;
      #0-290 (M4) removes them.
+
+### 0-249. Claude Code in the devcontainer image is whatever version was current at build time
+
+**Type:** ci · **Priority:** Medium · **Status:** Done, PR #688 (2026-11-21), with #0-283 (ADR-0065). Found with #0-248 (owner, 2026-11-14).
+**Option to weigh (ADR-0064 point 5, 2026-11-21):** Claude Code run by absolute path from a read-only, root-owned
+mount the factory provides, at the pinned version, rather than installed by the product's image into the agent
+user's `~/.local/bin`. It would close the binary's part of ADR-0064's residual. It would also amend ADR-0062 point 4
+again (a new mount) and tie a factory-supplied binary to the image's userland.
+**Autopilot:** human-only · **Risk:** medium · **Complexity:** low · **Depends on:** —
+**Touches:** factory (.devcontainer/Dockerfile, owner-only), the repository `profitbuild/factory` (.devcontainer/Dockerfile,
+which installs Claude Code the same way since #0-269), docs (docs/ai-factory.md "Pinned versions"), root
+(.ai/decisions/ ADR-0039 amended, if the floor 2.1.295 becomes a pin)
+
+**Migration (ADR-0063, 2026-11-21):** step M2, with #0-283.
+
+**Problem.** `.devcontainer/Dockerfile` installs Claude Code with `curl -fsSL https://claude.ai/install.sh | bash`, the
+newest release at the moment the image is built; `DISABLE_AUTOUPDATER` only stops it from moving afterwards. So two
+images built on different days run different versions, and nothing records which: the build VM's image (built
+2026-11-14) runs 2.1.325, the Mac's devcontainer an older one, and the isolation check that passed on the Mac failed
+on the VM (#0-248). `docs/ai-factory.md` "Pinned versions" says Claude Code "is pinned to the version the
+devcontainer image was built with", which is true of one image, not of the factory; a change of agent behaviour
+arrives with a rebuild, unreviewed, while every other tool of the factory is pinned and bumped in a PR (ADR-0033).
+
+**Approach.** Install an exact version (the native installer takes one: `bash -s <version>`), held in one place the
+Dockerfile reads, bumped in a PR like the other pins, with the seed-bugs benchmark run before a bump is trusted (as
+"Pinned versions" already asks); check it in the preflight (the floor of ADR-0039 becomes the pinned version, or the
+pin is checked beside it) and, if Renovate can read it, let it propose bumps. Decide whether the installer script
+itself, fetched from claude.ai at build time, is checked against a digest.
+
+AC1. Two images built from the same commit run the same Claude Code version, the one named in the repository.
+AC2. A bump is a change to that one place, in a PR; `docs/ai-factory.md` "Pinned versions" says how.
+AC3. The preflight refuses a Claude Code other than the pinned version (or below it, if the owner keeps a floor), and
+says which it found.
+
+**Decided with the owner (2026-11-21, `/research 0-249 0-283`):** option A, the pin in the image from Anthropic's
+signed manifest, the binary root's in `/usr/local/bin`; an exact version in the preflight. Not the factory's mount
+(ADR-0064 point 5), left open: the owner's container has no such mount, so the image needs the pin anyway (ADR-0065).
+
+**Resolution.** `.devcontainer/claude-code.pin` holds the version (2.1.328, the version spike #0-300 measures on),
+the key's fingerprint and the linux-x64 and linux-arm64 SHA-256; `.devcontainer/install-claude-code.sh` installs only
+from a manifest that key signed (key in `.devcontainer/keys/`, its fingerprint matched at its URL, in the
+documentation and on keys.openpgp.org), the binary's hash compared with the pin before it runs, as root's
+`/usr/local/bin/claude`; `DISABLE_UPDATES=1`, `~/.local/bin` no longer first on the image's `PATH` (`dev`'s own shell files can still put it
+there, ADR-0065). ADR-0039 point 3 amended.
+- AC1: the image installs the pin's binary or fails its build (trial 2026-11-21 on the Mac, arm64: `claude --version`
+  2.1.328, `/usr/local/bin/claude` root's 0755, not writable by `dev`; `claude update` answers "Updates are disabled").
+- AC2: `docs/ai-factory.md` "Pinned versions" says how to bump; Lint Workflows' `--check` (`ci.yml`) holds the pin to the signed
+  manifest (passes on 2.1.328), `test-install-claude-code.sh` the script's refusals (a hash the manifest does not
+  list, a tampered or foreign-signed or other-version manifest, a revoked key, a key file holding another key, a
+  served binary not the pin's, the pin's forms).
+- AC3: the preflight refuses a running version other than the pin's, naming both, and a pin below 2.1.295
+  (`test-preflight.sh`).
+- `profitbuild/factory`'s own `.devcontainer/Dockerfile` (in Touches) is #0-311: another repository, changed in its
+  own pull request.
+- The key's weekly watch is #0-312 (review round 1, architecture: `watch-signing-keys.sh` reads `.github/keys/` and
+  GitHub sources only).
+
+### 0-283. The devcontainer image lets `dev` widen its firewall and installs Claude Code unpinned
+
+**Type:** ci · **Priority:** Medium · **Status:** Done, PR #688 (2026-11-21), with #0-249 (ADR-0065). Found by the review of #0-282, 2026-11-20.
+**Option to weigh:** Claude Code from a factory-provided read-only mount instead of the image's install (ADR-0064
+point 5, #0-249's note).
+**Autopilot:** human-only · **Risk:** medium · **Complexity:** low · **Depends on:** —
+**Touches:** factory (.devcontainer/Dockerfile, .devcontainer/init-firewall.sh, their checks: owner-only), README
+"Infrastructure Hardening"
+
+**Migration (ADR-0063, 2026-11-21):** step M2, with #0-249.
+
+**Problem.** The image `.devcontainer/Dockerfile` builds is the owner's container and, since #0-282, every task
+container. Two things in it predate that and now reach every task:
+- the sudoers line lets `dev` run `/usr/local/bin/init-firewall.sh` with any arguments, and the script adds each host
+  argument to its allow-list, so code in a container opens a host by `sudo /usr/local/bin/init-firewall.sh <host>`
+  (FAC-S02; on the VM the egress chain still bounds it to the VM's list);
+- Claude Code is installed by `curl -fsSL https://claude.ai/install.sh | bash`, no version or checksum pinned.
+
+**Work.** The sudo rule held to the arguments the owner's container passes (the ntfy host) and none in a task
+container (for example a fixed argument list, or the script ignoring arguments when the task's label is set); Claude
+Code installed at a pinned version with its checksum, bumped as the other pins are.
+
+**Acceptance criteria.**
+AC1. In a task container, `sudo /usr/local/bin/init-firewall.sh <host>` opens no host (a test or a VM trial, recorded).
+AC2. The owner's container still opens its ntfy host.
+AC3. Claude Code's install is pinned by version and checksum, and the pin is checked as the other tools' are.
+
+**Decided with the owner (2026-11-21, `/research 0-249 0-283`):** S2, not two sudoers lines with the ntfy host baked
+in: a server changed on the host without a rebuild would make sudo refuse, the script would never start and the
+container would run with no firewall, as nothing would set its fail-closed trap. The host in a root-owned file of the
+image makes that mismatch impossible (ADR-0065).
+
+**Resolution.** Sudoers `dev ALL=(root) NOPASSWD: /usr/local/bin/init-firewall.sh ""` (no arguments, `visudo -c`);
+the script refuses an argument after its trap (all DROP) and reads its one extra host from
+`/etc/factory-firewall/extra-hosts`, written at build from `FACTORY_NTFY_SERVER` (`devcontainer.json`'s `build.args`;
+`task.json` passes none); `notify.sh` has no default server. Found by the trial: `dev` was still in the base image's
+`sudo` group (uid 1000 renamed from `ubuntu`); it leaves `sudo` and `admin`. Claude Code: #0-249.
+Trial 2026-11-21 on the Mac (`docker build`, test tags, `--cap-add NET_ADMIN,NET_RAW`, as `dev`):
+- AC1: the image built without a server (a task container's): `sudo -l` lists only `init-firewall.sh ""`;
+  `sudo -n /usr/local/bin/init-firewall.sh example.com` is refused ("a password is required", exit 1);
+  `/etc/factory-firewall/` holds no file; `sudo init-firewall.sh` brings the firewall up and `ntfy.sh` and
+  `example.com` are refused. Root running the script with an argument ends with every policy DROP.
+- AC2: built with `FACTORY_NTFY_SERVER=https://ntfy.sh/`: `extra-hosts` holds `ntfy.sh` (root's, 0644), the firewall
+  opens it (HTTP 200) and still refuses `example.com`; an invalid server (`https://bad_host!x/`) fails the build.
+- AC3: #0-249.
+Not tried on the VM: it holds spike #0-300; the trial of the dispatcher's task container is #0-284's AC8, on a VM made
+anew from `v0.1.2` after the spike.

@@ -200,6 +200,10 @@ It has no field for hooks or for the sources of settings.
    version, would close the binary's part of that residual. That is the direction for #0-249/#0-283, which change
    how Claude Code is installed and pinned anyway. It does not close the in-container root through the socket
    (#0-285).
+   *ADR-0065 (2026-11-21, #0-249/#0-283)* took the binary's part without a mount: the image installs the pinned
+   version from Anthropic's signed manifest as root's `/usr/local/bin/claude`, `~/.local/bin` is off `PATH`, and
+   `DISABLE_UPDATES=1` is set. The call names `/usr/local/bin/claude` by absolute path (a login shell's `~/.profile`
+   still adds `~/.local/bin`). The mount stays an option, for one source of the version.
 6. **Where it is written:**
    - #0-301 writes:
      - the managed file in `factory` (it replaces the `settings/autopilot.json` #0-301 named);

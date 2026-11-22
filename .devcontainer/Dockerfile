@@ -28,15 +28,50 @@ RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg -o 
     && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" > /etc/apt/sources.list.d/github-cli.list \
     && apt-get update && apt-get install -y --no-install-recommends gh && rm -rf /var/lib/apt/lists/*
 
-# Non-root user; sudo only for the firewall script. The container's main process still runs as root
+# Non-root user; sudo only for the firewall script, and only without arguments: `""` is sudoers' "no arguments"
+# (backlog #0-283). The script used to add every argument to its allow-list, so `sudo init-firewall.sh <host>` let code
+# in the container open any host (FAC-S02); the one host the owner's container needs comes from the image now (the
+# ntfy server, below), never from the caller. The base image's uid 1000 is `ubuntu`, in the group `sudo` among others,
+# and renaming it to `dev` kept them: `%sudo ALL=(ALL:ALL) ALL` needs a password, which `dev` does not have (locked),
+# but one set later, or a NOPASSWD rule for the group, would give `dev` every command. So `dev` leaves `sudo`, and
+# `admin`, the other group /etc/sudoers grants every command to, should a base image put it there (found by #0-283's
+# trial, 2026-11-21). `adm`, which reads logs and grants no command, stays. The container's main process still runs as root
 # ("containerUser" in devcontainer.json, for the Docker socket proxy): see the comment there and #0-116.
 RUN (getent group ${USER_GID} || groupadd --gid ${USER_GID} ${USERNAME}) \
     && (id -u ${USER_UID} >/dev/null 2>&1 && usermod -l ${USERNAME} -d /home/${USERNAME} -m $(id -nu ${USER_UID}) || useradd --uid ${USER_UID} --gid ${USER_GID} -m -s /bin/bash ${USERNAME}) \
-    && echo "${USERNAME} ALL=(root) NOPASSWD: /usr/local/bin/init-firewall.sh" > /etc/sudoers.d/${USERNAME} \
-    && chmod 0440 /etc/sudoers.d/${USERNAME}
+    && for g in sudo admin; do if id -nG ${USERNAME} | tr ' ' '\n' | grep -qx "$g"; then gpasswd -d ${USERNAME} "$g"; fi; done \
+    && echo "${USERNAME} ALL=(root) NOPASSWD: /usr/local/bin/init-firewall.sh \"\"" > /etc/sudoers.d/${USERNAME} \
+    && chmod 0440 /etc/sudoers.d/${USERNAME} \
+    && visudo -cf /etc/sudoers.d/${USERNAME}
+
+# Claude Code at claude-code.pin's version, from the manifest Anthropic signed, root's and read-only to `dev` in
+# /usr/local/bin (backlog #0-249, #0-283, ADR-0065). It was `curl -fsSL https://claude.ai/install.sh | bash` as `dev`:
+# whatever version was newest the day the image was built (two images, two versions: #0-248), into `dev`'s ~/.local,
+# where code an agent ran could replace the binary of the next call (ADR-0064's residual). Before the firewall
+# script's layer, so a change there does not download the binary again.
+COPY claude-code.pin install-claude-code.sh /usr/local/share/claude-code/
+COPY keys/ /usr/local/share/claude-code/keys/
+RUN /usr/local/share/claude-code/install-claude-code.sh --pin /usr/local/share/claude-code/claude-code.pin \
+        --keys /usr/local/share/claude-code/keys --into /usr/local/bin
 
 COPY init-firewall.sh /usr/local/bin/
 RUN chmod 0755 /usr/local/bin/init-firewall.sh
+
+# The one extra host the firewall opens, from the image and never from the caller (backlog #0-283): the ntfy server
+# of the owner's container, a build argument devcontainer.json takes from the host's FACTORY_NTFY_SERVER. Empty (the
+# task container, as task.json passes none; the VM's rollback, whose `up` runs with none of the owner's variables): no
+# file, no extra host. A host, not a URL, is written: the scheme, any port and any path are cut, and anything but
+# letters, digits, dots and hyphens, or one starting with a hyphen (it would reach `dig` as an option) or holding an empty label (`..`), fails the build. A server changed on the host takes a rebuild; until then
+# notifications fail and the firewall still comes up (a host given as an argument and held by sudo would have failed
+# the firewall itself on such a change, leaving the network open).
+ARG FACTORY_NTFY_SERVER=""
+RUN mkdir -p /etc/factory-firewall \
+    && if [ -n "${FACTORY_NTFY_SERVER}" ]; then \
+        host=$(printf '%s' "${FACTORY_NTFY_SERVER}" | sed -E 's#^https?://##; s#[/:].*##') \
+        && case "$host" in *[!A-Za-z0-9.-]*|-*|''|*..*) echo "FACTORY_NTFY_SERVER '${FACTORY_NTFY_SERVER}' has no valid host" >&2; exit 1 ;; esac \
+        && printf '%s\n' "$host" > /etc/factory-firewall/extra-hosts; \
+    fi \
+    && chmod -R go-w /etc/factory-firewall
 
 # The workspace is the host's directory, mounted, and Docker Desktop can report it under another owner
 # than `dev`: git then refuses every command there ("detected dubious ownership"), and gh, which asks git
@@ -59,9 +94,10 @@ WORKDIR /home/${USERNAME}
 # this, ~/.m2 and ~/.config/gh were root-owned: Maven could not write its cache, gh could not store the login.
 RUN mkdir -p /home/${USERNAME}/.m2 /home/${USERNAME}/.config/gh /home/${USERNAME}/.claude
 
-# Claude Code, native installer. Updates are off in the container (DISABLE_AUTOUPDATER): the version the
-# autopilot runs is the one this image was built with — rebuild the image to upgrade, then run the
-# seed-bugs benchmark before trusting the new version (docs/ai-factory.md, "Pinned versions").
-RUN curl -fsSL https://claude.ai/install.sh | bash
-ENV PATH="/home/${USERNAME}/.local/bin:${PATH}" \
-    DISABLE_AUTOUPDATER=1
+# Claude Code updates nothing in the container: DISABLE_AUTOUPDATER stops the background check only, and
+# `claude update` or `claude install` would still lay a newer version out under ~/.local; DISABLE_UPDATES blocks every
+# path (Claude Code's setup documentation). ~/.local/bin is no longer put first on PATH: the installed binary is
+# /usr/local/bin/claude (above), and a `claude` an agent left in ~/.local/bin must not shadow it. A bump is a change to
+# claude-code.pin (docs/ai-factory.md "Pinned versions").
+ENV DISABLE_AUTOUPDATER=1 \
+    DISABLE_UPDATES=1
