@@ -4791,7 +4791,8 @@ AC8. A client's `Authorization`, `X-Api-Key` and `Cookie` never reach upstream; 
      429 with `Retry-After`; a refusal is logged at most once per 10 s per task and reason; the rate-limit headers
      reach the dispatcher per task; a stream is not buffered (tests).
 AC9. Whether the pinned Claude Code routes its calls through `ANTHROPIC_UNIX_SOCKET` under F3 is recorded in `m2.md`
-     for #0-285 (a measurement).
+     for #0-285 (a measurement; done 2026-11-22: it does, as a transport only, with an `http://` base URL and
+     `apiKeyHelper` still needed, and a missing socket does not fall back to TCP; `m2.md` Record, measurement 3).
 
 ### 0-315. A runaway task can take the build VM and the dispatcher down with it
 

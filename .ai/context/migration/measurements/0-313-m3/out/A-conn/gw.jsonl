@@ -1,0 +1,16 @@
+{"t":"2026-11-22T15:06:27.959Z","ready":"/sock/api.sock"}
+{"t":"2026-11-22T15:06:30.565Z","conn":"open"}
+{"t":"2026-11-22T15:06:30.566Z","clientError":"HPE_INVALID_METHOD"}
+{"t":"2026-11-22T15:06:30.566Z","conn":"close"}
+{"t":"2026-11-22T15:06:31.179Z","conn":"open"}
+{"t":"2026-11-22T15:06:31.180Z","clientError":"HPE_INVALID_METHOD"}
+{"t":"2026-11-22T15:06:31.180Z","conn":"close"}
+{"t":"2026-11-22T15:06:32.290Z","conn":"open"}
+{"t":"2026-11-22T15:06:32.291Z","clientError":"HPE_INVALID_METHOD"}
+{"t":"2026-11-22T15:06:32.292Z","conn":"close"}
+{"t":"2026-11-22T15:06:34.340Z","conn":"open"}
+{"t":"2026-11-22T15:06:34.341Z","clientError":"HPE_INVALID_METHOD"}
+{"t":"2026-11-22T15:06:34.341Z","conn":"close"}
+{"t":"2026-11-22T15:06:38.988Z","conn":"open"}
+{"t":"2026-11-22T15:06:38.988Z","clientError":"HPE_INVALID_METHOD"}
+{"t":"2026-11-22T15:06:38.988Z","conn":"close"}

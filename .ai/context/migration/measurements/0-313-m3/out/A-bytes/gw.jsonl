@@ -1,0 +1,13 @@
+{"t":"2026-11-22T15:06:58.361Z","ready":"/sock/api.sock"}
+{"t":"2026-11-22T15:07:00.918Z","conn":"open"}
+{"t":"2026-11-22T15:07:00.919Z","clientError":"HPE_INVALID_METHOD","first":"16030105df010005","sni":"api.anthropic.com"}
+{"t":"2026-11-22T15:07:00.920Z","conn":"close"}
+{"t":"2026-11-22T15:07:01.537Z","conn":"open"}
+{"t":"2026-11-22T15:07:01.538Z","clientError":"HPE_INVALID_METHOD","first":"16030105df010005","sni":"api.anthropic.com"}
+{"t":"2026-11-22T15:07:01.538Z","conn":"close"}
+{"t":"2026-11-22T15:07:02.755Z","conn":"open"}
+{"t":"2026-11-22T15:07:02.755Z","clientError":"HPE_INVALID_METHOD","first":"16030105df010005","sni":"api.anthropic.com"}
+{"t":"2026-11-22T15:07:02.756Z","conn":"close"}
+{"t":"2026-11-22T15:07:05.096Z","conn":"open"}
+{"t":"2026-11-22T15:07:05.096Z","clientError":"HPE_INVALID_METHOD","first":"16030105df010005","sni":"api.anthropic.com"}
+{"t":"2026-11-22T15:07:05.096Z","conn":"close"}

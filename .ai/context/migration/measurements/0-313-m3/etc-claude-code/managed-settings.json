@@ -1,0 +1,7 @@
+{
+  "allowManagedPermissionRulesOnly": true,
+  "strictPluginOnlyCustomization": true,
+  "strictKnownMarketplaces": [],
+  "disableAllHooks": false,
+  "apiKeyHelper": "cat /run/factory/token"
+}
