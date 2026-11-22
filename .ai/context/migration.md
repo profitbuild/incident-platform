@@ -189,7 +189,8 @@ when it is taken, since a step may have removed what it changes.
 ### M9–M12: `migration/m9-m12.md` (#0-298, split into items as each step comes)
 - **M9, private on GitHub Team (9):**
   - related: #0-230, #0-231, #0-232 (CI minutes, measured first), #0-264;
-  - the VM's anonymous clone becomes a token's clone.
+  - the VM's anonymous clone becomes a token's clone;
+  - carries: #0-314 (`factory` private too, its anonymous fetches with a read token).
 - **M10, holdout (H).**
 - **M11, the cloud (C):**
   - carries: #0-116's remaining part;
