@@ -1,10 +1,11 @@
 # ADR-0057: The build VM's Docker is rootless, and everything it sends passes a VM egress filter
 
 - **Status:** Accepted (2026-11-14, by the owner, after PR #632 merged); amended by backlog #0-247 (2026-11-14: the
-  allow-list is kept by the VM's resolver, which adds what it answers, not by a set resolved every 30 minutes)
+  allow-list is kept by the VM's resolver, which adds what it answers, not by a set resolved every 30 minutes); amended
+  by backlog #0-315 (2026-11-22: `factory`'s user slice is limited in memory and tasks)
 - **Amends:** ADR-0056 (the build VM's Docker Engine: Docker CE run rootless for `factory`, not Ubuntu's `docker.io`
   run by root with `factory` in the docker group)
-- **Backlog:** #0-116, #0-240, #0-247
+- **Backlog:** #0-116, #0-240, #0-247, #0-315
 - **Date:** 2026-11-14
 - **Author:** human (the owner's spike of 2026-11-14, drafted in an interactive session)
 - **Reversible:** yes. The VM is recreated from `provision.sh`; going back is the previous `provision.sh` (rootful
@@ -110,6 +111,14 @@ The owner approved a spike with three criteria before it started (2026-11-14):
   equal both ways, required to required and optional to optional, and `VM_ONLY_DOMAINS` apart from it; Factory guards
   runs it on every pull request and `create.sh` before every VM, so a host added to or removed from `init-firewall.sh`
   alone fails CI, not the running VM (FAC-A01, review rounds 1 and 2).
+- **Amended by #0-315 (2026-11-22): what `factory` may use is limited.** Rootless Docker bounds what a container can
+  reach, not what it uses: the containers run with no limit (`factory`'s `host-config.mjs` until #0-285) and a task's
+  Testcontainers are siblings on the same daemon, so a runaway build or a fork bomb took the VM's memory, the dispatcher
+  and the resolver with it (no swap). `provision.sh` writes a root-owned drop-in for `user-<factory's uid>.slice`, the
+  unit above `factory`'s user manager that holds its daemon and every container, derived from the VM's memory at every
+  boot by one function, `factory_slice_limits`: `MemoryMax` the VM's memory less max(1.5 GiB, 12 %), `MemoryHigh` 95 %
+  of it, `TasksMax` 16384, and a VM that would leave `factory` under 4 GiB refused. One limit for all of `factory`, not
+  per container or slot (#0-285, M5); measured first on the VM, its reasons and values in `migration/m2.md`.
 - **`dev` keeps uid 1000** (`"updateRemoteUserUID": false` in `devcontainer.json`): the clone's owner is the
   subordinate uid that uid 1000 maps to, which a CLI renumbering `dev` to `factory`'s uid would miss on a cloud image.
 - **Checked on every VM `create.sh` makes, after its creation and again after a reboot** (what holds only on a fresh
@@ -120,7 +129,10 @@ The owner approved a spike with three criteria before it started (2026-11-14):
   its image pulled again each time: the resolver active and running as `dnsmasq`, the DNS rewrite and the set's rule in
   place, an answer for a listed name in `factory-dns` and `example.com`'s not, a query to 8.8.8.8 answered by the
   resolver, `example.com` refused, the resolver closed to the VM's network, the private and reserved networks rejected,
-  and its configuration holding `stop-dns-rebind` and `max-cache-ttl=300`.
+  and its configuration holding `stop-dns-rebind` and `max-cache-ttl=300`. Since #0-315: the limits of `factory`'s
+  slice in effect, read from systemd, equal to what `factory_slice_limits` (read from `provision.sh`) derives from the
+  VM's memory, their drop-in and its directory root's, and the daemon's cgroup inside the slice; Factory guards tests
+  the derivation (`test-factory-slice-limits.sh`).
 
 ### What the spike showed (2026-11-14, VM `rootless-spike`, then `factory-build` from `create.sh`)
 
