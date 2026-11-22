@@ -4410,7 +4410,11 @@ from 4.3a's review" state.
 **Acceptance criteria.**
 AC1. A BLOCKED reason never holds text from GitHub's response (test).
 AC2. A task is resumed by its `runId`, and a new task is refused while one is `running` on the same item (tests).
-AC3. A block counts toward the breaker, and a retried mint revokes the token it can find (tests).
+     Since #0-303 (`factory` PR #25) an item is held by a running task on a branch, or a live one with none yet; a dead
+     task with no branch holds nothing (#0-277 AC13), which this AC keeps.
+AC3. A block counts toward the breaker, and a retried mint revokes the token it can find (tests). Since #0-303 a new
+     task whose start sweep fails, or whose task lock cannot be taken, ends BLOCKED: this AC decides whether those
+     environment refusals count, since in M5 they could trip the breaker for every run.
 AC4. `pushTask`'s production caller binds `repoDir` to the adapter's repository and passes no test-only option (test).
 
 ### 0-305. The dispatcher pushes nothing and opens no pull request (migration steps M3.1–M3.2)

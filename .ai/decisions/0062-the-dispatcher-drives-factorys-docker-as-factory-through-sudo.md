@@ -13,7 +13,9 @@
   the dispatcher's mounts gain the factory's managed settings read-only on `/etc/claude-code`; points 4 and 5 amended
   on the review of `factory` PR #22 (2026-11-21): the daemon's options refuse the run before any container of it, and
   the sweep counts volumes (point 5's sweep part; its rollback part lasts until M4); point 7 amended by #0-303
-  (2026-11-21): the whole-daemon sweep only while no other task is live; point 4 amended by #0-284's AC8 trial
+  (2026-11-21): the whole-daemon sweep only while no other task is live, and again with its code (2026-11-22,
+  `factory` PR #25, `v0.1.4`): the slot section counts the live tasks before the run's own task lock, and a run's end
+  that cannot take the dispatcher's lock removes the run's own objects; point 4 amended by #0-284's AC8 trial
   (2026-11-22, `factory` PR #24): `OomScoreAdj` held as a range 0–1000 under rootless Docker; points 4 and 5 amended
   by ADR-0064 for #0-301 and #0-313 (2026-11-22): a task's container gains its token file for the dispatcher's proxy,
   read-only, the one credential on the daemon, valid only for its task and only through the proxy
@@ -222,12 +224,37 @@ Two facts the item had not weighed (the `/research` of 2026-11-20):
    **Amended (2026-11-21, #0-303, the owner's option B):** that sweep of the whole daemon runs at a run's start and
    end only while no other task is live (its lock held, ADR-0060 D7 as amended), which is always while
    `FACTORY_SLOTS` is 1; otherwise a run removes only what carries its own label, and nothing of a live task's. A run
-   takes its own task lock first, then checks the others' liveness and sweeps at its start under the dispatcher's
+   takes its own task lock first (order superseded below, with #0-303's code), then checks the others' liveness and sweeps at its start under the dispatcher's
    lock, and checks again and sweeps at its end under that lock too, before it releases its task lock; `cli.mjs sweep`
    refuses while any task's lock is held, naming that task's `runId`, and `--force` does not override it (`--force` is
    for a container a killed run left labelled as the rollback's, not for a live task). The sweep's scope when two tasks
    can be live, the orphans, the Maven cache's layout and the removal of volumes without their names (#0-309) are
    decided with the daemon's model in #0-285 (M3.4).
+
+   **Amended with #0-303's code** (2026-11-22, `factory` PR #25, merged as `5576c992`, `v0.1.4`; the owner's decisions
+   on its review rounds 1 and 2):
+   - **The slot section,** under the dispatcher's lock, runs in this order:
+     1. the breaker;
+     2. the fetch of `main` into the shared `FACTORY_REPO_DIR`;
+     3. the item and its base, with the check that no task holds the item;
+     4. the count of the live tasks, refused when `FACTORY_SLOTS` are full;
+     5. the daemon's options and the rollback's refusal;
+     6. only then the task's record and its task lock;
+     7. the start's sweep.
+
+     This replaces "takes its own task lock first". Counting first is safe because a task becomes live only under
+     the dispatcher's lock (outside it a task can only stop being live: its run killed, or its end releasing the task
+     lock): every call of `acquireTaskLock`, `isLive` and `liveTasks` is in `cli.mjs`, under
+     it, held by `factory`'s static test `task-lock-static.test.mjs`. A killed run can only lower the count. So a
+     refusal before step 6 leaves no task.
+   - **A task holds its item** while it is running on a branch, or live with none yet: ADR-0060 D8 as amended with
+     #0-303's code, where the rule lives.
+   - **The run's end:** a run holds its own task lock while it waits for the dispatcher's, for up to 30 minutes. If it
+     cannot take it, it removes its own labelled containers, networks and volumes (`removeOwnObjects`) under its task
+     lock before releasing it, so no task container is left running without a run.
+   - **No cycle:**
+     - no one waits for a task lock, it is only tried;
+     - no one waits for the dispatcher's lock while holding the state's.
 8. **New source of software for the VM:** `buildpack-deps:noble-scm` from Docker Hub, pinned by digest as
    `provision.sh`'s `HELPER_IMAGE` and checked by `verify-pins.sh` (an index Docker Hub serves for arm64 and amd64), its update path #0-281's with the other
    `ubuntu`-based digest.

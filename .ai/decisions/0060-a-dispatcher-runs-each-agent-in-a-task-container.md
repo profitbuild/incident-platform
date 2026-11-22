@@ -10,7 +10,9 @@
   `dispatcher`; the path checks are its own code; the owner names the item until stage 7); D7 and D8 amended on
   2026-11-21 by ADR-0063 (a lock per task, `--force-with-lease` to `factory/**` for a rebase, the base checked as
   current `main`; the owner names the item until M5, the queue's step); D7 amended on 2026-11-21 by #0-303 (the lock
-  per task, a task's liveness by its lock, the state lock, `FACTORY_SLOTS`); its 4.4–4.7 plan replaced by ADR-0063's
+  per task, a task's liveness by its lock, the state lock, `FACTORY_SLOTS`); D7 and D8 amended on 2026-11-22 by
+  #0-303's code (`factory` PR #25, `v0.1.4`: the run's end takes the dispatcher's lock too; an item held by a task on
+  a branch or live); its 4.4–4.7 plan replaced by ADR-0063's
   M2/M3
 - **Backlog:** #0-267 (stage 4.1); stage 4's later items are created as their turn comes, each from its step of the
   plan `.ai/context/migration/stage-4.md`
@@ -143,6 +145,10 @@ and `--plugin-dir` (code.claude.com/docs/en/headless.md, cli-reference.md).
   run while as many tasks are live. Since that lock no longer spans a run, `cli.mjs sweep` refuses while any task's lock
   is held, naming that task's `runId`, and `--force` does not override it (`--force` is for a container a killed run
   left labelled as the rollback's, not for a live task).
+  **Amended with #0-303's code (2026-11-22, `factory` PR #25, `v0.1.4`):** the dispatcher's lock is also taken at a
+  run's end, for its sweep: the run waits for it while holding its own task lock, up to 30 minutes, and if it cannot
+  take it, it removes its own labelled objects under its task lock (ADR-0062 point 7 as amended with the code, where
+  the slot section's order is).
   **Amended (2026-11-20, #0-276, the owner): where the checks and the push run.** No git with the dispatcher's
   rights runs in a repository an agent wrote (its config, attributes and hooks can make git run a program as the uid
   that reads builder-app's key). The task's commits leave its container only as a bundle on `docker exec`'s stdout,
@@ -178,6 +184,11 @@ and `--plugin-dir` (code.claude.com/docs/en/headless.md, cli-reference.md).
   - "One of its own tasks not ended" is a task `running` **with a branch**: a task killed before its branch was
     recorded stays `running` for ever (#0-261's resume by `runId` is M2's, #0-304), so counting it would lock its item
     for good; its remedy is `run --resume <branch>`.
+    **Amended with #0-303's code (2026-11-22, `factory` PR #25, `v0.1.4`, the owner's decision on its review round 1):**
+    a task `running` **on a branch, or live with none yet** (its task lock held, D7 as amended for #0-303), holds its
+    item. That closes two live runs of one item when `FACTORY_SLOTS` is above 1. A killed run's task with no branch
+    is not live and still holds nothing (#0-277 AC13). The check runs in the slot section, under the dispatcher's
+    lock, the only lock under which liveness is read (the slot section, the run's end and `cli.mjs sweep`).
   - The update of the clone before a run is a **fast-forward only**, `refs/heads/main:refs/heads/main` without `+`
     (#0-278 AC7 had named `+refs/heads/main:refs/heads/main`): a `main` that is not a descendant of the clone's is a
     refusal, never a forced move of the base every later check reads.
