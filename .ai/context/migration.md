@@ -101,7 +101,10 @@ Legend:
     pinned `v0.1.4`);
   - #0-304 (M2.6, what 4.3a–c left);
   - #0-313 (M2.7, the credential proxy's core before the first real call; split from #0-289, ADR-0063 as amended
-    for #0-301, 2026-11-22).
+    for #0-301, 2026-11-22; widened 2026-11-22 by the review of opencomputer: the task's allowlist without
+    Anthropic, the proxy's missing parts, `ANTHROPIC_UNIX_SOCKET` measured);
+  - #0-315 (`factory`'s slice limited, before the next trial on the VM; the review of opencomputer);
+  - the review of opencomputer (2026-11-22): what it changes and why, `migration/opencomputer.md`.
 - carries too: #0-280 (the gate's schema against `run-tests.sh`; done, PR #680), #0-284 (decided 2026-11-21, ADR-0062 amended; the container checked before anything
   runs; code merged in `factory` PR #22 and #24, pinned `v0.1.3`; done 2026-11-22, AC8's second trial
   passed after the first was refused on `OomScoreAdj`; follow-ups #0-308 and #0-310,
@@ -115,9 +118,10 @@ Legend:
   - #0-305 (M3.1–M3.2, the checks before a push, push and PR);
   - #0-306 (M3.3, the trace and `audit-data.sh`; #0-204 folded in);
   - #0-285 (M3.4, what a task leaves for the next task's credential, before the proxy; with it the daemon's model,
-    the orphans' sweep, the Maven cache and #0-309, from #0-303);
-  - #0-289 (M3.5, what is left of the proxy after #0-313: other Anthropic hosts, #0-274, the shared daemon's
-    token, the transcripts);
+    the orphans' sweep, the Maven cache and #0-309, from #0-303; nested rootless Podman added as an option to compare,
+    with limits per container and a socket per task, 2026-11-22);
+  - #0-289 (M3.5, what is left of the proxy after #0-313: #0-274, the shared daemon's token, the transcripts; the
+    task allow-list without Anthropic's hosts moved to #0-313's AC7 on 2026-11-22);
   - #0-307 (M3.6, the factory pin from one source).
 - the dispatcher's pull requests are held by the required `Factory guards` (rules 1, 2, 4), so the plugin's
   implementer needs no `guard-tests`/`guard-migrations` hook (`m3.md` "Before").
@@ -170,7 +174,9 @@ Legend:
 
 ### Factory items in no step
 Open factory items no step carries, done when their turn comes in the queue:
-- #0-255, #0-257, #0-221, #0-224, #0-69, #0-2 and #0-152 B.
+- #0-255, #0-257, #0-221, #0-224, #0-69, #0-2 and #0-152 B;
+- #0-316 (the product's `CLAUDE.md` as a short starting point) and #0-317 (a file-size ratchet in `factory`'s CI),
+  from the review of opencomputer (`migration/opencomputer.md`).
 
 They were listed in the stage map's "Factory items in no stage" before ADR-0063. Each is re-read against its step
 when it is taken, since a step may have removed what it changes.
@@ -189,7 +195,8 @@ when it is taken, since a step may have removed what it changes.
   - carries: #0-116's remaining part;
   - deferred here (D6): #0-239, #0-242, #0-243, #0-244, #0-274, #0-279, #0-281.
 - **Before M12, with #0-285's way: tasks isolated from each other (ADR-0063 G1-b phase 2).** A Sysbox spike on Lima
-  arm64; if it passes, Sysbox; else a VM user and rootless daemon per slot.
+  arm64; if it passes, Sysbox; else a VM user and rootless daemon per slot. #0-285 also compares nested rootless
+  Podman in the task container (2026-11-22, `migration/opencomputer.md`); choosing it would amend G1-b.
 - **M12, auto-merge on the low-risk lane (10).** The conditions below.
 - **T** (template of a product repository) and **N** (the new application) as ADR-0055.
   - T carries #0-272's five rulesets as the template's, with every app listed as an `Integration` and a file under

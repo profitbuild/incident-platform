@@ -5,7 +5,8 @@
   A–D in `factory`'s container): the call is F3, `--restricted` with `--add-dir /workspace`, the new decision point
   2's rule required, accepted by the owner on 2026-11-21 after the spike; points 3 and 5 amended for #0-301
   (2026-11-22: the token's channel through `apiKeyHelper`, the expected version's place); point 3 amended for #0-301
-  and #0-313 (2026-11-22: the built-in plugins, `apiKeySource`)
+  and #0-313 (2026-11-22: the built-in plugins, `apiKeySource`); point 5 amended on the review of opencomputer
+  (2026-11-22, `.ai/context/migration/opencomputer.md`): `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1` in the list
 - **Backlog:** #0-300, #0-301, #0-313
 - **Date:** 2026-11-21
 - **Author:** human (owner's decision on the options of `/research #0-300`, 2026-11-21, drafted in an interactive session)
@@ -267,6 +268,13 @@ It has no field for hooks or for the sources of settings.
    - `DISABLE_AUTOUPDATER=1` and `DISABLE_UPDATES=1`, the image's (ADR-0065), which `env -i` would otherwise drop, so
      Claude Code does not update itself during a run and fail point 3's version check;
    - `CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD=1`, for F3's `--add-dir /workspace` (point 2, as amended);
+   - `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1` (amended 2026-11-22, on the review of opencomputer): Claude Code's
+     own traffic beside the model calls (its telemetry among the built-in plugins #0-313 measured, remote settings)
+     would go straight to Anthropic, around the proxy, which the VM's filter keeps open until #0-313 takes
+     Anthropic's hosts out of the task's allowlist and closes them to `factory`'s uid (its AC7). opencomputer sets it for the same reason (`model-env.ts:38`). Point 3's closed list
+     of built-in plugins is measured under this whole list, this variable included: the first call on the VM (#0-301
+     AC4) records the init event's built-in plugins with it, and if they differ from the list measured without it,
+     the list is amended before any run (a run would otherwise stop at point 3's check, as it should);
    - what the call itself needs to reach the model: `ANTHROPIC_BASE_URL`, the proxy's address (decided for #0-301,
      below); the task's token is not in this list.
 
