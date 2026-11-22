@@ -1,0 +1,6 @@
+{
+  "allowManagedPermissionRulesOnly": true,
+  "strictPluginOnlyCustomization": true,
+  "strictKnownMarketplaces": [],
+  "disableAllHooks": false
+}

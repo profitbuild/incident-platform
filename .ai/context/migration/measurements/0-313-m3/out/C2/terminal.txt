@@ -1,0 +1,14 @@
+Copied by hand from the measuring session's terminal (2026-11-22): C2 was run by a one-off command (README.md,
+"C2 and its control"), not by run.sh, so its gateway log and its control were printed, not written to a file.
+Nothing below was edited.
+
+C2 (ANTHROPIC_UNIX_SOCKET=/run/sock/missing.sock, ANTHROPIC_BASE_URL=http://m313-gw:8080, one --internal network):
+exit=124
+{"t":"2026-11-22T15:09:05.091Z","ready":"/sock/api.sock"}
+{"t":"2026-11-22T15:09:05.095Z","ready":"tcp:8080"}
+api_retry events in stream.jsonl: 6
+
+Its control (no socket variable, the same network and base URL), result line of its stream-json:
+{"subtype":"success","is_error":false,"result":"ok-m313"}
+The gateway's last request line after the control:
+{"t":"2026-11-22T15:09:38.080Z","via":"tcp","method":"POST","path":"/v1/messages?beta=true","host":"m313-gw:8080","authorization":"bearer=token","xApiKey":"token","bodyBytes":18664}

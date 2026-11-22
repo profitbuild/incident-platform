@@ -1,0 +1,4 @@
+{"t":"2026-11-22T15:07:18.510Z","ready":"/sock/api.sock"}
+{"t":"2026-11-22T15:07:20.996Z","conn":"open"}
+{"t":"2026-11-22T15:07:20.998Z","via":"unix","method":"POST","path":"/v1/messages?beta=true","host":"proxy.invalid:8080","authorization":"bearer=token","xApiKey":"token","bodyBytes":18664}
+{"t":"2026-11-22T15:07:21.047Z","conn":"close"}
