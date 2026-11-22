@@ -1,6 +1,6 @@
 # ADR-0062: The dispatcher drives `factory`'s Docker as `factory`, through one sudo rule, and hands it the task's clone as a bundle
 
-- **Status:** Accepted (2026-11-20, by the owner; points 2 to 5 and 7 completed on review round 1, points 2, 4, 5, 6 and
+- **Status:** Accepted (2026-11-20, by the owner; one `factory` user to be replaced by a user per slot by #0-285's ADR, ADR-0063 as amended for the new product, 2026-11-22; points 2 to 5 and 7 completed on review round 1, points 2, 4, 5, 6 and
   8 on review round 2, points 4 and 5 on review round 3, points 4, 5 and 7 on review round 4, points 5 and 7 on review round 5, the same day, before any code; point 4 amended on #0-282's review, the same day,
   with what the feature contributes to the image's label; points 1, 2, 5 and 8 and two Consequences amended on the
   review of #0-277's VM part, the same day: the rule's own environment, where the helper's pin lives, the rollback's

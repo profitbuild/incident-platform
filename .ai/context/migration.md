@@ -46,6 +46,14 @@ Legend:
   its first call on the VM (AC4) after #0-313; next #0-313 and #0-302.
 - The old path (`/backlog-autopilot` in the VM's devcontainer, the rollback that shares the VM by time) still runs
   until M4.
+- **Order after M4 since 2026-11-22 (ADR-0063 as amended for the new product):** M5 with #0-285 (a user per slot,
+  wiped after each task) and #0-289's rest; M9 alongside M5; then T, the new product's adapter, the `react` profile
+  and the review rules split; M8 for the new product; N's first tasks; M6-lite (M6.4b, audits and `/seed-bugs` as
+  task kinds, after M12); M12 right after it (low lane). Deferred:
+  M7, M10, M11, #0-259,
+  #0-260, #0-307, #0-306's thresholds. The new product's foundation (N), led by the owner, runs from now on.
+  incident-platform stays public always; on the host's 32 GB, two slots in a 16 GiB build VM, each slot limited, and
+  M6's review VM balanced again when it comes (R4).
 
 ## Done
 
@@ -119,12 +127,13 @@ Legend:
 - umbrella: #0-288. Split into one item per pull request (2026-11-21), in order:
   - #0-305 (M3.1–M3.2, the checks before a push, push and PR);
   - #0-306 (M3.3, the trace and `audit-data.sh`; #0-204 folded in);
-  - #0-285 (M3.4, what a task leaves for the next task's credential, before the proxy; with it the daemon's model,
+  - #0-285 (moved to M5 on 2026-11-22, before its two slots, decided as a user per slot wiped after each task; was
+    M3.4, what a task leaves for the next task's credential, before the proxy; with it the daemon's model,
     the orphans' sweep, the Maven cache and #0-309, from #0-303; nested rootless Podman added as an option to compare,
     with limits per container and a socket per task, 2026-11-22);
-  - #0-289 (M3.5, what is left of the proxy after #0-313: #0-274, the shared daemon's token, the transcripts; the
+  - #0-289 (moved to M5 with #0-285 on 2026-11-22; was M3.5, what is left of the proxy after #0-313: #0-274, the shared daemon's token, the transcripts; the
     task allow-list without Anthropic's hosts moved to #0-313's AC7 on 2026-11-22);
-  - #0-307 (M3.6, the factory pin from one source).
+  - #0-307 (M3.6, the factory pin from one source; deferred on 2026-11-22, no step).
 - the dispatcher's pull requests are held by the required `Factory guards` (rules 1, 2, 4), so the plugin's
   implementer needs no `guard-tests`/`guard-migrations` hook (`m3.md` "Before").
 - related: #0-256 (the PR description opens with the problem).
@@ -153,12 +162,12 @@ Legend:
 
 ### M6. The review zone and the lanes (5 + 6a): `migration/m6.md`
 - carries:
-  - #0-294 (the review VM, review-app, the dispatcher's review, reviewers without Bash, two slots; `/seed-bugs` and
-    `/audit` off `factory-ops`, which then goes; audits as task kinds, their report an `Audit` issue: ADR-0063 G5);
+  - #0-294 (the review VM, review-app, the dispatcher's review, reviewers without Bash, two slots; since 2026-11-22
+    M6-lite: `/seed-bugs` and `/audit` as task kinds and `factory-ops`' removal, M6.4b, after M12);
   - #0-295 (`factory/lane`, `factory-trace`, `factory/human-gate`, CODEOWNERS, `/human-review`);
   - #0-153 (the paths that need the owner);
   - #0-262 (review-app's comment format);
-  - #0-259 and #0-260 (a second model, disputes with evidence).
+  - #0-259 and #0-260 (a second model, disputes with evidence; deferred since 2026-11-22).
 - before: #0-171, #0-190, #0-218, #0-219 (the `/seed-bugs` items) and #0-178.
 - superseded: #0-183, #0-167, #0-227.
 - review-app's required status is bound to it by `integration_id`. Every ruleset refuses review-app until it is
@@ -170,8 +179,8 @@ Legend:
 - ADR-0054 and ADR-0050 are amended.
 
 ### M8. Planning and features (8): `migration/m8.md`
-- carries: #0-297 (`bc-app`, `/plan-feature` and `feature-planner`, the brief, `FeatureFlags` in `shared`, the
-  `Feature:` trailer).
+- carries: #0-297 (`bc-app`, `/plan-feature` and `feature-planner`, the brief, the `Feature:` trailer; for the new
+  product since 2026-11-22, without `FeatureFlags` in incident-platform's `shared` and without M8.4's check).
 - An autonomous planner has no step. It enters when build slots stand idle for lack of Ready tasks (ADR-0063 G3).
 
 ### Factory items in no step
@@ -190,15 +199,18 @@ when it is taken, since a step may have removed what it changes.
 - Each removes its rule from the prompts. None blocks a step.
 
 ### M9–M12: `migration/m9-m12.md` (#0-298, split into items as each step comes)
-- **M9, private on GitHub Team (9):**
-  - related: #0-230, #0-231, #0-232 (CI minutes, measured first), #0-264;
-  - the VM's anonymous clone becomes a token's clone;
+- **M9, private on GitHub Team (9):** since 2026-11-22 alongside M5; private are the new product and `factory`,
+  incident-platform stays public always; the new product's CI on GitHub's runners, its minutes measured after the
+  first month (ADR-0063 as amended for the new product, R2);
+  - related: #0-264; #0-230, #0-231, #0-232 no longer a condition (incident-platform's CI stays on GitHub's runners);
+  - `factory`'s anonymous fetches become a token's (#0-314); incident-platform's clone stays anonymous;
   - carries: #0-314 (`factory` private too, its anonymous fetches with a read token).
 - **M10, holdout (H).**
 - **M11, the cloud (C):**
   - carries: #0-116's remaining part;
   - deferred here (D6): #0-239, #0-242, #0-243, #0-244, #0-274, #0-279, #0-281.
-- **Before M12, with #0-285's way: tasks isolated from each other (ADR-0063 G1-b phase 2).** A Sysbox spike on Lima
+- **Before M12, with #0-285's way: tasks isolated from each other (ADR-0063 G1-b phase 2; done by #0-285 in M5 since
+  2026-11-22, a user per slot wiped after each task, so what follows is the record of the options).** A Sysbox spike on Lima
   arm64; if it passes, Sysbox; else a VM user and rootless daemon per slot. #0-285 also compares nested rootless
   Podman in the task container (2026-11-22, `migration/opencomputer.md`); choosing it would amend G1-b.
 - **M12, auto-merge on the low-risk lane (10).** The conditions below.

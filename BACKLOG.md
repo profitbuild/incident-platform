@@ -3961,7 +3961,8 @@ Removed after the trial: the container, the volume and the directory; nothing le
 Consequences, or a new ADR), the repository `profitbuild/factory` (the dispatcher's sweep), root (README
 "Infrastructure Hardening")
 
-**Migration (ADR-0063, 2026-11-21):** step M3, before #0-289's proxy. Its way is chosen knowing ADR-0063 G1-b phase 2: Sysbox's daemon inside the task container would also isolate concurrent tasks (`migration/m3.md` M3.4).
+**Migration (ADR-0063 as amended for the new product, 2026-11-22):** with M5, before `FACTORY_SLOTS=2`; its way decided
+(below). Was: step M3, before #0-289's proxy. Its way is chosen knowing ADR-0063 G1-b phase 2: Sysbox's daemon inside the task container would also isolate concurrent tasks (`migration/m3.md` M3.4).
 
 **Problem.** A task's code holds the Docker socket (docker-outside-of-docker, ADR-0057), so it can write, as
 `factory`, everything `factory` can reach: its home (`~/.docker` with CLI plugins and credential helpers the docker
@@ -4013,6 +4014,34 @@ option to compare, and what the chosen model also decides.
   - and whether the proxy is reached by a unix socket per task (#0-313's AC9 measurement), which becomes a boundary
     between tasks only once a task holds no host daemon socket.
 
+**Decided 2026-11-22 (the owner; ADR-0063 as amended for the new product, R1):** a VM user and rootless daemon per
+slot, each slot wiped after each task. No Sysbox or nested-Podman spike; the options above stay a record.
+- **Slots:** users `factory-1` and `factory-2` (`FACTORY_SLOTS` of them), each with its own rootless daemon, its own
+  `user-<uid>.slice` limit (#0-315's, per slot) and its own sudo rule for the dispatcher; a task gets its slot's socket
+  only, so it cannot reach another task's container or token (`docker inspect`).
+- **The wipe, after every task, by a root script the dispatcher runs through a sudo rule of its own, in this order**
+  (review round 1 of ADR-0063's amendment, security):
+  1. the slot's user manager kept from starting again (its linger off or `user@<uid>.service` masked), then the slot
+     user's processes ended (`loginctl terminate-user`) and its manager stopped, so a user unit the task planted
+     cannot run again before step 3;
+  2. removed: its home, its Docker data-root (images, build cache, volumes, the Maven cache among them), its files in
+     `/tmp`, `/var/tmp`, `/dev/shm`, `/dev/mqueue` and `/run/user/<uid>`, its cron and at spools, and any other file it
+     owns in a directory every user can write (found by `find -xdev -uid`), and every file owned by the slot's
+     subordinate uids and gids (its `/etc/subuid` and `/etc/subgid` ranges: what a container's non-root user writes
+     on the host, review round 2 of ADR-0063's amendment, security), the two slots' ranges disjoint, so a container
+     user of one slot is never a host uid of the other;
+  3. its home made anew from a root-owned template (`~/.docker`, systemd user units, `~/.config/docker/daemon.json`),
+     mode 0700, so the other slot's daemon cannot mount it; the manager allowed and started again;
+  4. the slot marked clean by a root-owned mark outside every slot user's reach (the old AC6 marker's rule); a task's
+     token is issued only on a clean slot, and issuing it uses the mark up, so a slot is clean for one task only;
+     this replaces #0-313 AC6's fresh VM.
+- **The network between slots:** a slot's containers do not reach the ports another slot's tasks publish
+  (Testcontainers' PostgreSQL and Kafka through rootlesskit on the VM), whatever address they try.
+- **Images after a wipe:** loaded from a root-owned tarball, or a local mirror, chosen by the time measured.
+- **The Maven cache:** per slot, wiped with it, seeded read-only if the time measured needs it (`maven.repo.local.tail`).
+- **Not closed:** ADR-0064's residual within one task (root in its own container through its slot's socket).
+- **Its ADR amends ADR-0062** (one `factory` user), and this item comes before M5's `FACTORY_SLOTS=2`.
+
 **Acceptance criteria.**
 AC1. An ADR (or an amendment of ADR-0062) records what persists across tasks as `factory`, what of it can reach a
      task's credential, and the way chosen, the owner's choice.
@@ -4020,6 +4049,13 @@ AC2. What a task planted in `factory`'s Docker configuration, the daemon's unit,
      shared `factory-dispatcher-m2` volume does not reach the next task's credential, each by the way AC1 chose (a
      test or a VM trial, recorded).
 AC3. README "Infrastructure Hardening" names what still persists across tasks.
+AC4. A test of task A that tries `docker exec` into task B's container, one that connects to a port B's task
+     published, a systemd user unit A plants to run after the wipe, and a file A plants for the next task in its
+     slot (in the home, the daemon's configuration, the image store or the Maven cache), all fail (a VM trial with two
+     slots, recorded; `migration/m9-m12.md`'s exit of the isolation, met here).
+AC5. A token is never issued on a slot not wiped since its last task, and issuing one uses its clean mark up (tests);
+     the two slots' subordinate id ranges are disjoint (a check `provision.sh` runs); the time a wipe and the images'
+     reload take is recorded.
 
 ### 0-287. The dispatcher calls no agent yet (migration step M2)
 
@@ -4069,6 +4105,9 @@ AC1. One PR opened by builder-app from a dispatcher run, through the proxy, with
 **Type:** security · **Priority:** High · **Status:** Open (ADR-0063, 2026-11-21).
 **Autopilot:** human-only · **Risk:** high · **Complexity:** medium · **Depends on:** #0-287, #0-285, #0-313
 **Touches:** the repository `profitbuild/factory` (dispatcher/src/proxy/), factory (scripts/factory-admin/build-vm/provision.sh: owner-only), root (README "Infrastructure Hardening")
+
+**Moved 2026-11-22 (ADR-0063 as amended for the new product, R2):** with #0-285 into M5, before its two slots. With
+a user per slot, "what a token yields on M5's shared daemon" becomes what it yields within one slot's task.
 
 **Problem.** A task's agents need Claude. Today the login lives in the devcontainer's volumes; a token inside the task
 container is readable by every test it runs, and nothing counts what a run costs.
@@ -4259,6 +4298,10 @@ AC3. A seeded series (weakened test, edited migration, protected path) is still 
 **Type:** design · **Priority:** Medium · **Status:** Open (ADR-0063, 2026-11-21).
 **Autopilot:** human-only · **Risk:** high · **Complexity:** high · **Depends on:** #0-293, #0-295
 **Touches:** GitHub (bc-app: owner), .github/repository-settings/apps/, .github/workflows/ (the trace's feature check): owner-only; the repository `profitbuild/factory` (the skill `/plan-feature`, the agent `feature-planner`, the writer script); shared (a `FeatureFlags` interface and its tests: all 7 services); root (README "Infrastructure Hardening": bc-app)
+
+**Narrowed 2026-11-22 (ADR-0063 as amended for the new product, R2):** for the new product, after M5, M9, T and its
+adapter; without `FeatureFlags` in incident-platform's `shared` (a new product's flags are its foundation's decision)
+and without M8.4's `factory-trace` check (the `Feature:` trailer only, until M6).
 
 **Problem.** An item is written one at a time by `/ready`; nothing turns the owner's request for a feature into a
 brief and a set of tasks with dependencies, keeps unfinished work unreachable on `main`, or gives a feature's history.
@@ -4528,7 +4571,7 @@ AC4. `pushTask`'s production caller binds `repoDir` to the adapter's repository 
 
 **Type:** ci · **Priority:** High · **Status:** Open (ADR-0063, 2026-11-21).
 **Autopilot:** human-only · **Risk:** high · **Complexity:** medium · **Depends on:** #0-287
-**Touches:** the repository `profitbuild/factory` (dispatcher/src/github/, flow/), factory (.github/repository-settings/apps/profitbuild-builder.json: owner-only), root (README "Infrastructure Hardening": builder-app's Issues permission, `--force-with-lease` to `factory/**`)
+**Touches:** the repository `profitbuild/factory` (dispatcher/src/github/, flow/), factory (.github/repository-settings/apps/profitbuild-builder.json, and repository.json's `allow_auto_merge: true` with this item's first PR, ADR-0063 R2.7: owner-only), root (README "Infrastructure Hardening": builder-app's Issues permission, `--force-with-lease` to `factory/**`)
 
 **Problem.** M2's branch stays in the task's repository on the VM. ADR-0060 D7's checks before a push are not built,
 and nothing opens a PR.
@@ -4562,7 +4605,8 @@ AC4. The dispatcher's `protectedPaths` parser is tested against a copy of `.ai/r
 gives the trace one event per model call: time to first byte, status, the rate-limit headers and refusals. A
 thresholds file, which a threshold may only lower, is read by `audit-data.sh`, as opencomputer's
 `telemetry/thresholds.json` holds `min(budget, trailing p95 × 1.25)`. A note of the plan, not yet an acceptance
-criterion: its ACs are written when this item is made ready.
+criterion: its ACs are written when this item is made ready. Deferred on 2026-11-22 (ADR-0063 as amended for the new product, R3): the
+thresholds file waits; the events per model call stay.
 
 **Work.** `migration/m3.md` M3.3:
 - one row per agent call in a `<details>` block of the PR body (agent, phase, round, duration, tokens, commits
@@ -4582,6 +4626,8 @@ AC3. `audit-data.sh` counts a PR by `app/profitbuild-builder` (its test).
 **Type:** ci · **Priority:** Low · **Status:** Open (ADR-0063, 2026-11-21).
 **Autopilot:** human-only · **Risk:** medium · **Complexity:** low · **Depends on:** #0-278
 **Touches:** factory (scripts/factory-admin/build-vm/provision.sh, .github/scripts/check-factory-copies.rb and its test: owner-only), .factory/adapter.json
+
+**Deferred 2026-11-22 (ADR-0063 as amended for the new product, R3):** no step until the owner names one.
 
 **Problem.** `FACTORY_COMMIT` in `provision.sh` and the adapter's `factoryVersion` are held equal by hand, and
 `check-factory-copies.rb` (#0-268, ADR-0061) compares the copies with `factory@main`, not with the version this
@@ -4793,7 +4839,8 @@ AC4. The two measurements above are recorded in `m2.md` before the proxy's code 
      Hardening" names the proxy, the token's channel and what a leaked token yields (the VM only, the task's life).
 AC5. The proxy listens on the containers' host-gateway address only, and the VM's filter keeps it unreachable from
      outside the VM (a test of the bound address, and a VM trial recorded): what AC4's "the VM only" rests on.
-AC6. Until #0-285, the dispatcher refuses to issue a task's token on a VM that has run anything before: a marker
+AC6. Until #0-285 (whose clean slot then replaces the marker, ADR-0063 as amended for the new product), the dispatcher
+     refuses to issue a task's token on a VM that has run anything before: a marker
      `create.sh` writes (root's, outside `factory`'s reach) and the first run consumes, so a skipped rebuild stops the
      run instead of exposing the next task's token to what an earlier one left (tests; review round 3 of #0-301's
      decisions, security).

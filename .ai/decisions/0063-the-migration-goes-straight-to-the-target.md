@@ -4,7 +4,9 @@
   (one lock for the whole dispatcher, a push never forced, no merge in a branch) and D8 (the item named by the owner
   until stage 7), and ADR-0062 point 5 (the rollback shares the VM by time); amended for #0-299's plan (the architect's
   write scope at M2) and for #0-303 (2026-11-21: M2's per-task sweep and caches moved to M3.4, #0-285); amended for #0-301
-  (2026-11-22: the credential proxy's core moved into M2 as #0-313, before #0-301's trial)
+  (2026-11-22: the credential proxy's core moved into M2 as #0-313, before #0-301's trial); amended for the new
+  private product (2026-11-22, the owner: the order after M4, #0-285's way decided as a user per slot, the steps a
+  first product does not need deferred; "Amended (2026-11-22, the new product)" below)
 - **Backlog:** #0-286 (this replan); the steps' items #0-287 to #0-307 (M2 and M3 split per pull request); #0-303's
   amendment
 - **Date:** 2026-11-21
@@ -165,6 +167,84 @@ in the container, which ADR-0060 rejected: a leaked key works anywhere until rev
 the VM and only while its task runs. The architect's write scope stays M2.4's (#0-302), with no check of its own in
 #0-301 (f1): until #0-302 nothing is committed or pushed, and #0-302 is part of M2's exit.
 
+**Amended (2026-11-22, the owner, in an interactive session: the new product).** The owner's next goal is a new
+application, private, built through the factory: a Java and Spring Boot backend with a React frontend (ADR-0055 N).
+The steps are reordered towards it, so the factory is whole when the product's first task comes and nothing is built
+twice (a `backlog-md` queue for the new product, then its move to Issues; `/plan-feature` writing to `BACKLOG.md`, then
+rewritten):
+- **R1. #0-285's way is decided: a VM user and rootless daemon per slot, each slot wiped after each task** (G1-b's phase
+  2 becomes its only phase; no Sysbox or nested-Podman spike). The wipe, by a root script after every task: the slot
+  user's processes ended (`loginctl terminate-user`), its home made anew from a template (`~/.docker`, systemd user
+  units, `daemon.json`), its Docker data-root removed (images, build cache, volumes), its files in `/tmp`, `/var/tmp`
+  and `/dev/shm` removed; the order, the mark of a clean slot and the full list of places are #0-285's (review round
+  1 of this amendment, security: the user manager kept down until the home is made anew, so a planted user unit never
+  runs again; the mark root's; `/run/user/<uid>`, `/dev/mqueue`, the cron and at spools and every other directory a
+  slot user can write; each slot's home 0700, out of the other slot's mounts; and a task's published ports out of the
+  other slot's reach). This reverses the alternative rejected below, "a VM user per slot from M5", whose reason was
+  that it "closes only concurrent tampering, not what a task leaves for the next": with the wipe it closes that too,
+  and it ends #0-313 AC6's fresh VM before every run with a token, which a factory that takes its own work cannot
+  keep (each VM made anew needs builder-app's key from the owner's Mac). What it does not close is ADR-0064's residual
+  (a task's code is root in its own container through its slot's socket), within one task, as today; a nested runtime
+  may come later as a further layer. Its cost, images and caches per slot and pulled again after a wipe, is measured
+  in #0-285's trial (a root-owned image tarball or a local mirror). #0-285's ADR amends ADR-0062 (one `factory` user).
+- **R2. The order after M4:**
+  1. **M5 with #0-285 and #0-289's rest**: the queue in Issues for incident-platform (#0-291, #0-292, #0-293), its two
+     slots on two slot users; #0-285 merged before `FACTORY_SLOTS=2`. M3 keeps #0-305 and #0-306;
+  2. **M9 (Team) alongside M5**, before the new product: a private repository's ruleset needs GitHub Team, and the
+     factory's controls rest on the ruleset (on Free a private repository has none, so builder-app could push to its
+     `main`). Private are **the new product and `factory`** only; **incident-platform stays public, always** (the
+     owner, 2026-11-22), so its CI keeps GitHub's runners without a minute limit. One seat, the owner's (the apps take
+     none). **The new product's CI runs on GitHub's runners**, within Team's included usage and paid past it (about
+     3,000–4,500 minutes a month at two slots, estimated, so a few dollars past the included amount): its runners are
+     fresh for each job, it runs while the owner's Mac is off, and it leaves the Mac's memory to two slots (R4). Its
+     minutes are measured after the first month. A self-hosted runner in a CI VM of its own on the Mac is an option
+     for that measure, not a step: one job per runner (just-in-time), a fresh environment per job (a lasting runner
+     could be poisoned by one PR and pass the next ones' bad code, the gate the factory rests on), none of the owner's
+     keys, an egress filter, never on macOS itself and never in the build VM;
+  3. **T, the new product's adapter, the `react` profile and the review rules split** into the factory's core, a
+     profile and the product's own (the rules' part of ADR-0055 stage 5, moved before M6; the review VM stays M6). The
+     new product's queue is Issues from its first item: no new code for the `backlog-md` kind (the reviewer's sign
+     below holds);
+  4. **M8 for the new product**: `bc-app`, `/plan-feature` and `feature-planner` writing to Issues. Not in it:
+     `FeatureFlags` in incident-platform's `shared` (a new product's flags are a decision of its foundation) and M8.4's
+     `factory-trace` check (the `Feature:` trailer only, until M6);
+  5. **N**: the new product's first tasks through the factory. Its foundation, led by the owner, runs from now on, as
+     ADR-0055 allows (it needs no factory);
+  6. **M6, narrowed (M6-lite),** after N's first tasks: reviewers without Bash (M6.2), the review VM and review-app
+     (M6.3), the dispatcher's review mode (M6.4), `factory/review` required (M6.5), the lanes, trace and human gate
+     (M6.6); M6.1 came before N (step 3). M6.4b (audits and `/seed-bugs` as task kinds of the dispatchers,
+     `factory-ops` removed) moves after M12: until then the owner starts the audits by hand and `factory-ops` stays.
+     M6's exit keeps its `/seed-bugs` measure in a simpler form: the patterns planted by today's `/seed-bugs`, pushed
+     as draft PRs labelled `seed` and reviewed by the review zone, each finding scored by the owner's session against
+     the ground truth, which never reaches the review zone;
+  7. **M12 right after M6**, on the low-risk lane alone with 10–20% sampled after merge: the owner's reading of every
+     PR is the factory's bottleneck, and only M12 removes it. It needs M6 (its eight conditions: review-app approves,
+     not the author; statuses bound to their apps; an approval bound to the head's SHA), not M11. **Until M12 the
+     owner reads every PR's whole diff**, as D6's premise requires (review round 1 of this amendment, architecture
+     and security: a summary read instead would let a PR opened with a leaked builder-app key, or a diff whose text
+     steers the panel, merge on a summary, and D6's deferred items were never re-checked against that). What
+     changes before M12 is the waiting only: GitHub's own auto-merge (`gh pr merge --auto`) merges a PR the owner
+     approved once its checks pass, which relaxes nothing, since `main`'s ruleset already dismisses a stale approval
+     and requires the last push's (`repository-settings/rulesets/main.json`). It needs `allow_auto_merge: true` in
+     `repository-settings/repository.json`, the owner's `plan` and `apply`, with M3's first PR by builder-app.
+- **R3. Deferred, with no step until the owner names one:** M7, M10, M11, #0-259 and #0-260 (M6's second model and
+  disputes), #0-307, and #0-306's thresholds file. M12 is not deferred (R2.7); its eighth condition ("none while tasks
+  on a shared daemon can change each other or leave state for a later task") is met by R1, and each D6 item is
+  re-checked before it, as `m9-m12.md` states.
+- **R4. The host's memory (32 GB) sets the slots in use.** macOS and the sessions take about 10–14 GB, so with CI on
+  GitHub's runners the build VM takes 16 GiB for two slots (about 7 each, a multi-module Maven build with PostgreSQL
+  and Kafka in Testcontainers), each slot user's slice limited (#0-315's, per slot) so one build cannot starve the
+  other; not the 20 GiB M5 first planned. M6's review VM (3–4 GB) does not fit beside it: when M6 comes, the memory is
+  balanced again before its plan is written (one slot during reviews, more memory, M11's cloud, or the review zone on
+  GitHub's runners, which would put review-app's Claude key in CI and is a decision of its own).
+- **R5. A trial VM of the factory.** The factory's changes that a VM shows (the proxy's address, the slots, a slot's
+  wipe) are tried on a VM made for the trial from the same `create.sh` and `provision.sh`, then deleted, not on the
+  VM the factory works on; it needs `create.sh` and `delete.sh` to take the instance's name (an item when #0-285's
+  trial comes), and on 32 GB it runs while `factory-build` is stopped. Until then a measurement that needs the VM runs
+  on `factory-build` while no run is live, with a temporary user it removes. A product's own test or staging
+  environment is the product's, defined in its repository and run by the owner or its own CI/CD: the factory builds
+  and never deploys, and holds no credential of it.
+
 ## Alternatives considered
 
 - **ADR-0055's way unchanged.** It is safe, with a runnable rollback at every stage. It costs the work listed in
@@ -179,6 +259,8 @@ the VM and only while its task runs. The architect's write scope stays M2.4's (#
   at once help most.
 - **A VM user per slot from M5.** It costs about one item the size of 4.3c, plus images and caches ×N. It closes
   only concurrent tampering, not what a task leaves for the next (#0-285), and each PR is still read by the owner.
+  **Reversed on 2026-11-22** ("Amended (2026-11-22, the new product)", R1): with each slot wiped after each task it
+  closes what a task leaves for the next too, and it is what #0-285 now builds.
 - **A merge commit `main` into the branch instead of a rebase.** It needs D7's "no merge" check loosened and
   leaves a non-linear history. `factory/**` belongs to builder-app alone, so a forced update there gives it
   nothing.
