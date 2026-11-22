@@ -171,7 +171,6 @@ Code, Javadoc, config comments and commits reference items as `backlog #N`.
 | [0-279](#0-279-the-dev-apps-ids-and-permissions-are-kept-in-two-places-with-no-check) | The dev app's ids and permissions are kept in two places with no check | ci | Low | Open |
 | [0-281](#0-281-the-dispatchers-credential-checks-are-held-at-the-call-that-sends-them-and-its-static-scans-close-their-bounds) | The dispatcher's credential checks are held at the call that sends them, and its static scans close their bounds | ci | Medium | Open |
 | [0-282](#0-282-incident-platform-ships-a-task-configuration-for-the-dispatchers-container) | incident-platform ships a task configuration for the dispatcher's container | ci | High | Open |
-| [0-284](#0-284-the-task-container-is-checked-before-anything-runs-in-it-and-its-refusals-hold-none-of-the-agent-sides-text) | The task container is checked before anything runs in it, and its refusals hold none of the agent side's text | ci | Medium | Open |
 | [0-285](#0-285-what-a-task-leaves-in-factorys-reach-outside-the-daemon-is-decided-before-a-task-holds-a-credential) | What a task leaves in `factory`'s reach outside the daemon is decided before a task holds a credential | ci | High | Open |
 | [0-287](#0-287-the-dispatcher-calls-no-agent-yet-migration-step-m2) | The dispatcher calls no agent yet (migration step M2) | ci | High | Open |
 | [0-288](#0-288-the-dispatcher-opens-no-pull-request-and-leaves-no-trace-of-its-agent-calls-migration-step-m3) | The dispatcher opens no pull request and leaves no trace of its agent calls (migration step M3) | ci | High | Open |
@@ -185,7 +184,6 @@ Code, Javadoc, config comments and commits reference items as `backlog #N`.
 | [0-296](#0-296-the-factorys-sessions-still-depend-on-hooks-that-match-the-text-of-an-agents-commands-migration-step-m7) | The factory's sessions still depend on hooks that match the text of an agent's commands (migration step M7) | ci | Medium | Open |
 | [0-297](#0-297-a-feature-cannot-be-planned-with-the-owner-cut-into-tasks-and-traced-across-its-prs-migration-step-m8) | A feature cannot be planned with the owner, cut into tasks and traced across its PRs (migration step M8) | design | Medium | Open |
 | [0-298](#0-298-the-private-repository-holdout-cloud-and-auto-merge-steps-have-no-items-migration-steps-m9m12) | The private repository, holdout, cloud and auto-merge steps have no items (migration steps M9–M12) | design | Low | Open |
-| [0-300](#0-300-how-a-plugins-agent-runs-as-claude--ps-main-thread-is-not-known-migration-step-m21) | How a plugin's agent runs as `claude -p`'s main thread is not known (migration step M2.1) | ci | High | Open |
 | [0-301](#0-301-the-dispatcher-runs-no-phase-of-a-task-migration-steps-m22m23) | The dispatcher runs no phase of a task (migration steps M2.2–M2.3) | ci | High | Open |
 | [0-302](#0-302-agents-would-commit-their-own-work-with-no-trailer-of-run-or-agent-migration-step-m24) | Agents would commit their own work, with no trailer of run or agent (migration step M2.4) | ci | High | Open |
 | [0-303](#0-303-the-dispatchers-lock-sweep-and-caches-assume-one-task-at-a-time-migration-step-m25) | The dispatcher's lock, sweep and caches assume one task at a time (migration step M2.5) | ci | Medium | Open |
@@ -3944,86 +3942,6 @@ as `factory` (the dispatcher's own call is `--config` since #0-277's first trial
   point 4 as amended).
 Removed after the trial: the container, the volume and the directory; nothing left on the daemon.
 
-### 0-284. The task container is checked before anything runs in it, and its refusals hold none of the agent side's text
-
-**Type:** ci · **Priority:** Medium · **Status:** Open (found by the review of `factory` PR #18, #0-277, 2026-11-20;
-for migration stage 4, step 4.4). Code: `factory` PR #22 (`b3960cd8`) and PR #24 (`e1197081`), pinned `v0.1.3`;
-open: AC8's second trial on the VM, the first refused on `OomScoreAdj` (`m2.md` Record).
-**Autopilot:** human-only · **Risk:** medium · **Complexity:** medium · **Depends on:** #0-277
-**Touches:** the repository `profitbuild/factory` (the dispatcher's task container, `daemon.mjs`'s refusals, its
-starter, and their tests, and its README), decisions (ADR-0062 points 4 and 6, amended before the code), root (README
-"Infrastructure Hardening", the pin and the tag once `factory` holds the code, `.ai/context/migration/m2.md`)
-
-**Migration (ADR-0063, 2026-11-21):** step M2 (was 4.4), before #0-301's first agent call.
-
-**Problem.** The dispatcher checks the image's `devcontainer.metadata` label and the container's mounts, privilege and
-capabilities only after `devcontainer up` has built the image, created and started the container and run the
-configuration's `postCreateCommand` and `postStartCommand` with the merged metadata. An entry the closed list would
-refuse (`privileged`, `mounts`, `securityOpt`, from a Dockerfile `LABEL` or a poisoned build cache of `factory`'s
-daemon) has taken effect by then, inside ADR-0057's boundary. The check after `up` reads `Privileged`, `CapAdd` and
-`Mounts` only, not `HostConfig.SecurityOpt`, `PidMode`, `NetworkMode`, `IpcMode`, `Devices` or `UsernsMode`.
-The same checks' refusals (round 2 of PR #18's review) still quote text the agent's side can shape through `factory`'s
-image store and daemon: a label's keys and a mount's destination reach `task.json`'s reason, container and volume names
-the dispatcher's stderr; from 4.6 a task holds a token such text could carry. Nothing holds the rule PR #18 set (no
-stderr of that side in a refusal or a record): the starter still returns a call's stderr, so 4.4's phases could quote it
-unnoticed, and `factory`'s README says a static test holds it, which checks only the one starter. With stderr dropped,
-the owner sees only a failed call's command and exit code on the VM. And the refusal of a feature's label entry names
-its id and digest, not the differing keys ADR-0062 point 4 says.
-
-**Decided with the owner (2026-11-21, `/research` of #0-284, option A with A1; ADR-0062 points 4 and 6 amended):**
-- `devcontainer build` with an `--image-name` unique per `runId`, the image's ID read once from it, then everything by
-  the ID: the label held to the closed list, the ID recorded, `devcontainer up` from a configuration holding only
-  `{ image: <ID> }` (no `build`, no `features`, which would build another image on the checked one), and after it the
-  container's `Image` equal to the ID. Nothing of the label or the configuration runs before the check, and a new task
-  and a resumed one take one path. A retag of the name between the build and the read is, from M5, part of the shared
-  daemon's risk ADR-0063 G1-b accepts (review round 1 of these decisions). Not the dispatcher making the container itself (`docker create`,
-  then the lifecycle by `docker exec`), which would rewrite the devcontainer spec's merging, the feature's entrypoint and
-  the hooks, and reverse ADR-0062's `devcontainer` without the end state needing it (stage C pulls the image by digest,
-  and `up` from it stays).
-- `HostConfig` held whole by a closed table of its fields (the dispatcher's value or Docker's default, `Runtime` `runc`
-  among them; a field off the table with a value other than its default refuses), not by a difference against a
-  reference container, which would carry `factory`'s `daemon.json` into the reference and hide it.
-- The daemon's own options read before `up`: `docker info`'s `SecurityOptions` hold `seccomp` with `profile=builtin`,
-  `rootless` and `cgroupns`, and its default runtime is `runc` (probed on the build VM, Docker 29.9.3), so a `daemon.json`
-  the agent's side wrote refuses the task before any container.
-- Refusals name a position, a count or an ID the daemon assigns, never a name, key, path or capability it returned;
-  the sweep's refusals in `daemon.mjs` name containers, networks and volumes by ID. The rollback's refusal is left as it
-  is: it goes with the rollback at M4 (#0-290), and the intermediate state gets no work it does not need.
-- The starter keeps a call's stderr from every caller: bounded, in a mode-600 file under the run's state directory, its
-  path in the refusal of a failed call.
-- A feature's differing entry is refused naming the keys of the factory's list whose values differ and the count of
-  keys off the list (those are the daemon's text, not named), so AC7 and AC4 do not contradict each other.
-- Not reached here, kept for #0-285: a daemon default that neither `HostConfig` nor `docker info` shows.
-
-**Work.** In `factory`: `devcontainer build` under `--config` (where its lockfile goes, tried on the VM as #0-277's
-`up` was), the label checked, the image's ID recorded in `task.json`, then `up` from it; `checkContainer` holding
-`HostConfig` by the table; every refusal of `task-container.mjs`, `task-config.mjs`'s `checkImageMetadata` and
-`daemon.mjs` reworded to positions, counts and IDs; the starter returning no stderr, only the path of its bounded copy;
-`factory`'s README naming what holds it. Here, once `factory` holds the code: `factoryVersion` and `FACTORY_COMMIT` moved
-together, README "Infrastructure Hardening", a trial on the VM.
-
-**Acceptance criteria.**
-AC1. No lifecycle command of a task configuration, and no entry of the image's label, takes effect before the label
-     passed the closed list: the build is a call of its own, under an image name unique per `runId`, and a label the
-     list refuses ends the task before any container exists (a test).
-AC2. A new task and a resumed one start their container the same way, from the image ID: `up`'s configuration holds
-     `image` and no `build` or `features`, and a container whose `Image` is not the recorded ID is refused (tests).
-AC3. The container's `HostConfig` is held by a closed table: each field the dispatcher's value or Docker's default
-     (`Runtime` among them), a field the table does not hold refused unless it has its default (each a test, one with a
-     field the table lacks); and before `up`, a daemon whose `docker info` security options or default runtime are not
-     the expected ones refuses the task (tests with each changed).
-AC4. No refusal, `task.json` reason or line of the dispatcher's stderr holds a label key, a mount destination, a
-     capability or an object name the daemon gave, the sweep's refusals in `daemon.mjs` included, the rollback's not
-     (it goes at M4) (tests with a planted secret-shaped value in each).
-AC5. No module of `src/` but the starter can read a call's stderr: the starter returns none (a test of its result's
-     shape), and `factory`'s README says so.
-AC6. A failed call's stderr is kept, bounded, in a mode-600 file of the run's state directory, which the refusal names
-     by path (a test).
-AC7. The refusal of a feature's label entry names the keys of the factory's list that differ and counts the keys off
-     the list, naming none of them (a test).
-AC8. A trial on the VM starts a task's container through the new order, from the factory version that holds it
-     (recorded in `m2.md`).
-
 ### 0-285. What a task leaves in `factory`'s reach outside the daemon is decided before a task holds a credential
 
 **Type:** ci · **Priority:** High · **Status:** Open (found by the reviews of #0-277's VM part and of `factory` PR #18,
@@ -4323,96 +4241,6 @@ outline; the isolation before M12 starts with a Sysbox spike unless #0-285's way
 AC1. Each of M9, M10, M11, the isolation and M12 has its full plan and its items before its first item starts.
 AC2. Auto-merge is not switched on until the eight conditions of `migration.md` hold, each recorded.
 
-### 0-300. How a plugin's agent runs as `claude -p`'s main thread is not known (migration step M2.1)
-
-**Type:** ci · **Priority:** High · **Status:** Open (ADR-0063, 2026-11-21). The spike in `factory`'s container is
-done (`factory` PR #23, 2026-11-21): F3 chosen, ADR-0064 amended (AC1, AC4, AC2 and AC3 for that container). The VM's
-part of AC2 and AC3 is open.
-**Autopilot:** human-only · **Risk:** medium · **Complexity:** low · **Depends on:** #0-299
-**Touches:** the repository `profitbuild/factory` (a spike script under dispatcher/testing/), context (.ai/context/migration/m2.md's Record), decisions (ADR-0064, amended with the spike's result)
-
-**Problem.** M2's agent call needs the plugin's `implementer` as the main thread of `claude -p` in a task container,
-with no setting of the clone's taking effect while its `CLAUDE.md` still loads. Each call is a new session, and it
-reads two places the previous call of the same task can write:
-- the clone's `/workspace/.claude/` (Claude Code's "project" and "local" sources);
-- the run's volume `/home/<user>/.claude`, mounted by `dispatcherMounts` (the "user" source).
-
-From there a branch could set `disableAllHooks: true` and drop `foreground-bash` (#0-206's turn budget), add hooks,
-allow rules or an agent, or change `model`. And Claude Code ties the clone's `CLAUDE.md` to the same "project"
-source as its settings and agents, so `--setting-sources user` drops it.
-
-**Answered already** (2026-11-21, #0-299's measurements, `m2.md` Record): `-p --agent factory:implementer` runs the
-plugin's agent, its init event lists the agents, tools and no `plugin_errors`, and the plugin's hook runs in it.
-
-**Decided with the owner** (2026-11-21, `/research` of #0-300; ADR-0064):
-- **Managed settings.** The factory's managed settings are mounted read-only on the task container's whole
-  `/etc/claude-code`, which also covers a `managed-settings.d/` an image could carry. They hold:
-  - `allowManagedPermissionRulesOnly: true`, so the call's permission rules live there only;
-  - `strictPluginOnlyCustomization: true` (the object form is invalid on Claude Code 2.1.328, the spike);
-  - `disableAllHooks: false`;
-  - never `allowManagedHooksOnly` (it blocks plugin hooks) or `disableSideloadFlags` (it rejects `--plugin-dir`).
-- **The call's environment closed:** `docker exec … env -i` with a list of the variables the call needs, as
-  `factory`'s `childEnv` does, so the image's `ENV` (`CLAUDE_CONFIG_DIR`, a `CLAUDE_CODE_*` variable) cannot move a
-  source of configuration around the managed settings (review round 1 of these decisions).
-- The managed settings' mount amends ADR-0062 point 4's list of mounts. They also hold `strictKnownMarketplaces: []`,
-  and the init event's `plugins` must be exactly the factory's.
-- The call's environment list also carries the accepted `containerEnv` and `DISABLE_AUTOUPDATER=1` as literals.
-  `timeout` and `env -i` are run by absolute path.
-- What it protects against: configuration left in files, not code a previous call of the same run ran in the container
-  (`claude` in the agent user's `~/.local/bin`, root through the socket).
-  - A run is one `cli.mjs run` invocation. Its container dies with it, a resume makes a new one, and review fixes
-    are a new run.
-  - Across runs that code still reaches through `~/.m2` and the daemon's image store and build cache, which
-    ADR-0062 accepted (#0-285).
-  - The boundaries against it are outside the container: the dispatcher's commit check, the PR's CI, the review and
-    the push. The gates inside the container count only against honest code.
-  - The `env -i` literals are not secret.
-  - Claude Code from a read-only mount is the direction for #0-249/#0-283.
-- **`--restricted` on top**, only if the spike shows it keeps the clone's `CLAUDE.md`, `--plugin-dir`,
-  `--agent factory:<name>` and the plugin's hook, with Bash named in `--tools`. Otherwise the call runs on the managed
-  settings alone, and ADR-0064's amendment lists the keys they pin.
-- **The probe's successor.** The call's `stream-json` init event, checked whole before the answer, is ADR-0058's
-  successor on the dispatcher's path:
-  - `agents`, `plugins`, no `plugin_errors`;
-  - `tools`, `model` and `permissionMode`;
-  - `claude_code_version`.
-
-  The plugin's hooks are measured at each pinned Claude Code version, not probed per call.
-- **Not taken:**
-  - the clone's `CLAUDE.md` as `--append-system-prompt-file`, a copy that loses subdirectories, imports and rules;
-  - hiding `/workspace/.claude` under a mount, which shows as deletions in the clone;
-  - `allowManagedHooksOnly` with the hook moved into managed settings;
-  - a `SessionStart` liveness hook.
-
-**Work.** `migration/m2.md` M2.1: the spike in `factory`'s container (after #0-284's code leaves it), then the same
-on the VM in a task container, in one session with #0-284's AC8. What it measures, with a planted clone:
-- its `.claude/settings.json` and `~/.claude/settings.json` each hold `disableAllHooks: true`, a hook of their own,
-  an `implementer.md`, an `env` block (`CLAUDE_CONFIG_DIR`, a `CLAUDE_CODE_*` variable), and a second plugin through
-  `extraKnownMarketplaces` and `enabledPlugins`;
-- `~/.claude/CLAUDE.md`, `~/.claude/rules/`, an output style and `~/.claude.json` are planted;
-- its `CLAUDE.md` holds a marker.
-
-The steps:
-1. under the managed file alone: the marker repeated, the planted hook and agent with no effect, the plugin's hook
-   refusing `run_in_background`;
-2. the same with `--restricted` and `--tools` naming each tool of the agent's frontmatter;
-3. the init event of each, with the agent with and without Bash.
-
-ADR-0064 is then amended with the chosen form. #0-301 writes the managed file, its mount, the flags and the check.
-
-**Acceptance criteria.**
-AC1. `m2.md`'s Record holds the chosen form of the call (with or without `--restricted`, by ADR-0064 point 2's rule)
-     and the init event of one recorded call.
-AC2. The successor of ADR-0058's probe is decided (ADR-0064, done in this item's decisions) and the spike records the
-     init event's fields it checks, on the VM's Claude Code.
-AC3. The spike records, for each form measured, on `factory`'s container's Claude Code and on the VM's:
-     - whether the clone's `CLAUDE.md` loads;
-     - whether any of the planted set takes effect;
-     - whether `--plugin-dir` loads under `strictKnownMarketplaces: []`;
-     - whether the plugin's hook still refuses `run_in_background`.
-AC4. ADR-0064 is amended with the result: the form chosen, and without `--restricted` the settings keys the managed
-     file pins.
-
 ### 0-301. The dispatcher runs no phase of a task (migration steps M2.2–M2.3)
 
 **Type:** ci · **Priority:** High · **Status:** Open (ADR-0063, 2026-11-21).
@@ -4438,11 +4266,29 @@ control flow lives only in incident-platform.
   (ADR-0064's Consequences); the call's flags as
   #0-300's spike decided; and the init event checked whole before the answer (ADR-0064 point 3). No earlier item
   writes them.
+- **Taken over from #0-300 (2026-11-22, the owner's decision):** the VM's part of its AC2 and AC3, measured by this
+  item's first call on the VM (the exact F3 argv with `--agent` through `docker exec`, its `result.subtype`, the VM's
+  Claude Code, the init event's tools with and without Bash, `CLAUDE.local.md`). That call needs a Claude credential
+  in the task container, which ADR-0062 point 5 keeps off the daemon until M3.5's proxy (#0-289), and so does M2's
+  exit: **this item's `/research` decides first how a call gets its credential before M3.5**. The options as they
+  stand (review round 1 of #0-284's and #0-300's close):
+  - (a) a dedicated Console key with a spend limit, passed per call and revoked after the trials: it amends ADR-0062
+    point 5 (no credential on the daemon while the dispatcher runs), ADR-0060 (the task container holds no Claude
+    credential), ADR-0063's order (#0-285 before any task holds a credential) and ADR-0064's premise, and accepts
+    #0-285's residual (what an earlier task left running as `factory` could read the key);
+  - (b) #0-285 and #0-289 moved before M2's exit: #0-289 depends on #0-287, which depends on this item, so the
+    dependencies are cut first, and ADR-0063's step table (M2, M3) is amended;
+  - whichever is chosen gets a security review of its own.
 
 **Acceptance criteria.**
 AC1. A call with no `structured_output`, or an init event with `plugin_errors` or not the expected agent and tools, stops the task (tests with recorded `stream-json` fixtures); the expected tools are the pinned Claude Code's for that agent: under ADR-0064's F3 exactly the `--tools` list, built from the agent's frontmatter `tools` (Grep and Glob next to Bash), and `mcp_servers` empty (`m2.md` M2.2).
 AC2. Whole runs against a fake agent reach each stop through `stopItem` with its stage (`node:test`, ported from `test-autopilot-workflow.mjs`).
 AC3. `MAX_TEST_FIXES`, `MAX_ROUNDS` and `MAX_AGENT_CALLS` each stop a run that exceeds them (tests).
+AC4. One call on the VM, in a task container, records #0-300's VM part in `m2.md`'s Record, its credential as decided
+     above: the init event's fields and its tools with and without Bash; `result.subtype`; the VM's Claude Code;
+     whether the clone's `CLAUDE.md` loads (what F3's `--add-dir /workspace` is for) and whether `CLAUDE.local.md` does;
+     whether any of the planted set takes effect; whether `--plugin-dir` loads under
+     `strictKnownMarketplaces: []`; whether the plugin's hook still refuses `run_in_background`.
 
 ### 0-302. Agents would commit their own work, with no trailer of run or agent (migration step M2.4)
 
