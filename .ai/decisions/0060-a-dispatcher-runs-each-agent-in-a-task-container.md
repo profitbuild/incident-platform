@@ -12,7 +12,9 @@
   current `main`; the owner names the item until M5, the queue's step); D7 amended on 2026-11-21 by #0-303 (the lock
   per task, a task's liveness by its lock, the state lock, `FACTORY_SLOTS`); D7 and D8 amended on 2026-11-22 by
   #0-303's code (`factory` PR #25, `v0.1.4`: the run's end takes the dispatcher's lock too; an item held by a task on
-  a branch or live); its 4.4–4.7 plan replaced by ADR-0063's
+  a branch or live); D7 amended on 2026-11-22 by #0-302's decisions (before its code: the commit's git and message,
+  its trailers read back, the scope as an allowlist with modes, the task's lasting repository and the resume); its
+  4.4–4.7 plan replaced by ADR-0063's
   M2/M3
 - **Backlog:** #0-267 (stage 4.1); stage 4's later items are created as their turn comes, each from its step of the
   plan `.ai/context/migration/stage-4.md`
@@ -172,6 +174,38 @@ and `--plugin-dir` (code.claude.com/docs/en/headless.md, cli-reference.md).
   template of a product repository (stage T) writes it. CI's "Changes that need the owner" stays the gate that
   counts; the dispatcher's check stops a task before it costs a review round. The product's `changed-paths.sh`
   stays advisory (areas, rule files, reviewers), run in the task's container.
+  **Amended (2026-11-22, #0-302's decisions, the owner, before its code): how that commit is made and read, and the
+  resume.**
+  - **The task's git, with the dispatcher's flags:** `/usr/bin/env -i` (an empty `HOME`, `GIT_CONFIG_NOSYSTEM=1`,
+    `GIT_CONFIG_GLOBAL=/dev/null`, the dispatcher's author and committer), `/usr/bin/git -c core.hooksPath=/dev/null
+    -c core.fsmonitor=false -c commit.gpgsign=false -c commit.cleanup=verbatim -c gc.auto=0`, then `add -A` and
+    `commit --no-verify`.
+    - The repository's own config and attributes stay the agent's.
+    - The read-back holds the result: one commit, its parent, author, committer and trailers.
+    - A filter that makes the commit differ from the tested tree is the residual CI's fresh runner holds (ADR-0064).
+  - **The message and the trailers:**
+    - the message is the answer's `commitMessage`, held to its shape (a subject line of at most 100 characters, a
+      body of a few KB, printable, no line shaped like a dispatcher's trailer), the shape in its answer schema
+      (#0-301, g1);
+    - the trailers (`Factory-Run`, `Factory-Agent`, from M5 `Task:` and `Feature:`) are appended by the dispatcher
+      as text of the message, never by `commit --trailer` (which would run the repository's `trailer.<key>.cmd`), and
+      parsed back in its repository (`git interpret-trailers --parse`) as exactly that set.
+  - **The identity:** author and committer are one fixed identity (builder-app's bot). The agent is named in
+    `Factory-Agent` only.
+  - **The scope:**
+    - each call's changed paths are listed with `--raw`;
+    - they are held to the agent's `writeScopes` entry as an allowlist, by a second predicate (`insideEntry`) of the
+      one path module, `product/trusted-paths.mjs`;
+    - a gitlink is refused for every agent, and a symlink for a scoped one.
+  - **The task's repository lasts** for its task (`tasks/<runId>/repo`, made as `withTaskObjects` makes one) and is
+    removed with its record, so a BLOCKED task can be resumed.
+    - Each call's bundle is read first into a one-read `withTaskObjects` repository, and only after every check
+      fetched into the lasting one, since `loadBundle` indexes a pack before its ref checks.
+    - A resume fills the new container's work directory by ADR-0062 point 2's helper (`makeWorkDir`), from a whole
+      bundle of a branch at the recorded head made in the lasting repository, so the workspace is that head by
+      construction and nothing is read back from the container.
+    - A push is still #0-276's: a push repository made fresh and filled by a bundle of the lasting repository, never
+      pushed from it.
 - **D8. v0 starts by hand** (`dispatcher run [#0-N]`), one task at a time, in shadow; a timer comes with stage 7's
   queue. #0-261's restart and idempotence requirements hold from v0 (an existing PR for the branch is reused).
   **Amended (2026-11-21, #0-278, the owner): in v0 the owner always names the item,** `run --item 0-N`, until stage

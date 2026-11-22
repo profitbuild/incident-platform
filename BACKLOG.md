@@ -4340,6 +4340,69 @@ word, and git's writing commands stay within an agent's reach (#0-236). #0-212's
 refused, as its work is not committed; once the dispatcher commits after each call, a resume continues from the
 branch, and that refusal goes.
 
+**Decided with the owner (2026-11-22, `/research` of #0-302; ADR-0060 D7 amended):**
+1. **`writeScopes` is an allowlist, held by the one path module.**
+   - `product/trusted-paths.mjs` gains a second predicate, `insideEntry`, beside `changesEntry`, with one parser of
+     entries, and `checkChangedPaths` takes the agent's scope as a second list. There is never a second module.
+   - An entry is `*` alone, a directory `dir/` (a prefix) or a file (the exact name).
+   - A file put in place of a scope directory (`.ai/work` for `.ai/work/`) is outside it: fail closed. "Touches an
+     entry" is the denylist's question, and "lies inside one" is the allowlist's.
+2. **Modes.** The call's changes are listed with `git diff-tree -r -z --raw --no-renames` (same flags otherwise), so
+   modes are seen:
+   - a gitlink (160000) is refused for every agent;
+   - a symlink (120000) is refused for an agent whose scope is not `["*"]`.
+3. **The commit message is the answer's `commitMessage`, held to a shape by the dispatcher, with its trailers the
+   dispatcher's.**
+   - **Shape:** a subject of one line of at most 100 characters, a blank line, a body of a few KB at most, printable
+     characters and `\n` only, and no line shaped like a trailer the dispatcher writes (`Factory-…:`, `Task:`,
+     `Feature:`).
+   - **Trailers:** the dispatcher appends `Factory-Run` and `Factory-Agent` (and from M5 `Task:` and `Feature:`) as
+     text of the message it builds, never with `git commit --trailer`, which would run the repository's
+     `trailer.<key>.cmd` in the container.
+   - **Read back:** `git interpret-trailers --parse`, in the dispatcher's repository, must give exactly that set.
+   - **Where the shape lives:** it belongs to `commitMessage`'s schema in `schemas/answers/` (#0-301, g1), and this
+     item uses it. If #0-301 is not merged when this is read, its answer schema carries the shape, as the owner told
+     its plan's review.
+   - **Not checked:** the product's own convention (Conventional Commits, `CLAUDE.md`) is the agent's and the
+     review's.
+4. **The dispatcher's git in the task container.**
+   - **The command:**
+     - `docker exec <task ID> /usr/bin/timeout … /usr/bin/env -i <a closed list> /usr/bin/git -c core.hooksPath=/dev/null -c core.fsmonitor=false -c commit.gpgsign=false -c commit.cleanup=verbatim -c gc.auto=0 …`
+     - then `add -A` and `commit --no-verify`.
+   - **The list:** `HOME` an empty directory, `GIT_CONFIG_NOSYSTEM=1`, `GIT_CONFIG_GLOBAL=/dev/null`, and
+     `GIT_AUTHOR_*`/`GIT_COMMITTER_*` set to the dispatcher's identity.
+   - **What it cannot reach:** the repository's own `.git/config` and `.gitattributes`. Everything else is held by the
+     read-back (`loadBundle`, the one commit, its parent, author, committer, trailers).
+   - **Accepted residual:** a clean filter or attribute of the agent's can make the commit differ from the working tree
+     the in-container gate tested. The boundary that counts is the pull request's CI on a fresh runner (ADR-0064:
+     the gates in the container count only against honest code).
+5. **A call that changed nothing makes no commit;** the flow (#0-301, #0-304) decides whether that stops the task.
+6. **The identity** of author and committer is one fixed identity, builder-app's bot (`<name>[bot]`, GitHub's noreply
+   address), and the agent is named in `Factory-Agent` only. `main`'s ruleset requires no signed commit.
+7. **The schema of `writeScopes`:**
+   - its keys are only the agents the factory calls (`architect`, `implementer`, `implementer-light`), and an unknown
+     key is refused;
+   - its entries are relative, with no `..` and no leading `/`, and `*` only alone.
+
+   So a typo fails CI's adapter step instead of leaving an agent uncalled.
+8. **Resume (lifting #0-301's refusal, #694):**
+   - **The task's repository is lasting:** `$FACTORY_STATE_DIR/tasks/<runId>/repo`, made as `withTaskObjects` makes
+     one (config held to the reference's, alternates on `FACTORY_REPO_DIR`).
+   - **Each call's bundle is read first into a one-read `withTaskObjects` repository.** Only once every check has
+     passed (`loadBundle`, the one commit, its parent, trailers, scope, modes) is it fetched from there into the
+     lasting one. `loadBundle` indexes a pack before its ref and ancestry checks, so a refused bundle's objects never
+     reach the repository that lasts.
+   - **On `run --resume`:** the new container's work directory is filled by ADR-0062 point 2's helper, exactly as a
+     new task's (`makeWorkDir`: stdin to a file, `git clone -b`, `chown -R -h 1000:1000`). Its bundle is a whole
+     bundle of a branch at the recorded head, made by the dispatcher's git in the lasting repository (the base's
+     history through its alternates), instead of `refs/heads/base` of `FACTORY_REPO_DIR`. The workspace is then the
+     recorded head by construction, and no `HEAD` is read back from the container; the next call's parent check holds
+     it again. ADR-0062 point 2 is amended to say so.
+   - **Its removal:** the lasting repository is removed with its task's record. So a BLOCKED task keeps it and can
+     be resumed. What a killed run left is kept until a resume, or until the owner's or #0-285's cleanup.
+   - **The push (#0-305) is still #0-276's:** a push repository made fresh for each push and filled by a bundle the
+     dispatcher makes from the lasting repository. Nothing is ever pushed from the lasting repository itself.
+
 **Work.** `migration/m2.md` M2.4. After each call that changed the tree, the dispatcher commits in the task's
 container with its own git flags (`git add -A`, a message from the answer, `Factory-Run` and `Factory-Agent`). It
 reads the commit back as a bundle into the task's own repository (alternates onto `FACTORY_REPO_DIR`, config held as
@@ -4361,6 +4424,16 @@ AC4. An architect's commit that changes a path outside its `writeScopes` entry s
      move from outside into the scope is seen with both paths; an agent with no entry is not called, and `["*"]` is no
      limit (tests); the schema accepts `writeScopes` and this repository's adapter
      names the architect's scope (CI's adapter step).
+AC5. A file put in place of a scope directory, a gitlink for any agent, and a symlink for a scoped agent are refused;
+     the schema refuses an unknown agent key, a `..` or absolute entry, and `*` beside another entry (tests).
+AC6. A `commitMessage` off its shape, or holding a line shaped like a dispatcher's trailer, is refused, and the
+     commit's trailers read back are exactly the dispatcher's (tests).
+AC7. The dispatcher's git in the container runs with no hook, fsmonitor or signing of the repository's (a planted
+     pre-commit and commit-msg hook and `core.fsmonitor` take no effect), and a call that changed nothing makes no
+     commit (tests).
+AC8. A task stopped after a commit and resumed continues in a new container at the recorded head: its work directory
+     is filled by `makeWorkDir` from a bundle of the lasting repository, and `run --resume` of a task whose `phase` is
+     set is no longer refused. A call's bundle that fails a check leaves no object in the lasting repository (tests).
 
 ### 0-304. What the reviews of 4.3a–c left for the control flow is not built (migration step M2.6)
 
