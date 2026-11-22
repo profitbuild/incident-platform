@@ -1,0 +1,16 @@
+# The Claude Code the devcontainer image installs, and so every task container (backlog #0-249, #0-283, ADR-0065).
+# Read, never sourced, by install-claude-code.sh (the image's build, and CI's --check) and by
+# scripts/factory/preflight.sh, which refuses any other running version. One KEY=value per line; a ` # comment` may
+# follow a value (the secret scan's allow comment on the key's line: a fingerprint is no secret, ADR-0036).
+#
+# A bump is a pull request that changes these lines together, then the seed-bugs benchmark and ADR-0064's
+# re-measurements before it is trusted (docs/ai-factory.md "Pinned versions"):
+#   v=<version>; curl -fsS https://downloads.claude.ai/claude-code-releases/$v/manifest.json \
+#     | jq -r '.version, .platforms["linux-x64"].checksum, .platforms["linux-arm64"].checksum'
+# CI's install-claude-code.sh --check then holds them to the manifest Anthropic signed with CLAUDE_CODE_KEY
+# (.devcontainer/keys/<fingerprint>.asc), so a hash copied from a tampered download fails there.
+# 2.1.328: the version spike #0-300 measures ADR-0064's settings and hooks on (the build VM, 2026-11-21).
+CLAUDE_CODE_VERSION=2.1.328
+CLAUDE_CODE_KEY=31DDDE24DDFAB679F42D7BD2BAA929FF1A7ECACE  # gitleaks:allow: the public fingerprint of Anthropic's signing key, no secret
+CLAUDE_CODE_SHA256_LINUX_X64=a982d38030b97e750848add2cbb2df6d9a70d5544a22ca9b216a349ba25865e8
+CLAUDE_CODE_SHA256_LINUX_ARM64=307f8bada27b37db7553fac75e86004e3dbff5a931ffc611b54fe710ce1eb521

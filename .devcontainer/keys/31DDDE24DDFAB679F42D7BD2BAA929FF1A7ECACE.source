@@ -1,0 +1,7 @@
+https://downloads.claude.ai/keys/claude-code.asc
+# Anthropic's Claude Code release signing key (backlog #0-249, ADR-0065), committed on 2026-11-21 after its
+# fingerprint matched in three places: the URL above (the file, imported), Claude Code's documentation
+# (https://code.claude.com/docs/en/setup, "Binary integrity and code signing": 31DD DE24 DDFA B679 F42D 7BD2 BAA9 29FF
+# 1A7E CACE) and keys.openpgp.org (by fingerprint; it publishes no user ID for it). RSA 4096, created 2026-03-30, no
+# expiry, no subkeys. A new key is a new file here and a CLAUDE_CODE_KEY change in claude-code.pin, after the same
+# check.

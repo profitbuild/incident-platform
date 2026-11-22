@@ -18,6 +18,7 @@
 # owner's scan of a seed run's transcripts (backlog #0-179). The tests of the agent command check run only when a
 # pull request changes one of their inputs, or on any other event (backlog #0-241, run-agent-command-tests.sh). And
 # that the build VM's copy of the devcontainer's allow-list equals it both ways (backlog #0-116, check-allowlists.sh).
+# And the tests of the devcontainer's Claude Code installer (backlog #0-249, ADR-0065).
 #
 # A required check of main (its ruleset, .github/repository-settings/rulesets/main.json, backlog #0-113,
 # ADR-0034). On its own it binds nobody who can change check-factory-guards.sh, since a pull request runs its
@@ -173,6 +174,17 @@ jobs:
       # The check itself on the repository, a step of its own as the other structural checks are (review round 3).
       - name: Build VM allow-list copy equals the devcontainer's
         run: scripts/factory-admin/build-vm/check-allowlists.sh
+
+      # Backlog #0-249, #0-283 (ADR-0065): the devcontainer image installs Claude Code only from a manifest the pinned
+      # key signed, at the pin's version and checksums; the tests serve signed releases from a directory (no network).
+      # The pin itself is checked against Anthropic's manifest in ci.yml's lint-workflows job, which has the network.
+      - name: Claude Code install tests
+        run: .github/scripts/test-install-claude-code.sh
+
+      # Backlog #0-283: notify.sh has no default server (the firewall opens only the one the image was built with), and
+      # its answers keep the shape the autopilot's workflow reads.
+      - name: Notification script tests
+        run: .github/scripts/test-notify.sh
 
       # Backlog #0-272: the script that puts builder-app's key on the build VM sends it on stdin only, checks the modes
       # and owners factory's env file needs, and deletes the downloaded key only after check-app passed there.

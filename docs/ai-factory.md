@@ -119,9 +119,13 @@ has no item yet: `.ai/context/migration.md`.
    public docs we checked), and the call shape of `parallel()` in `runAll()`. The preflight's isolation
    check stops the run if the first is wrong: it reads the agent type Claude Code gave review-general's probe
    command (backlog #0-252).
-5. Optional: export `FACTORY_NTFY_TOPIC` (a long random string) on the host before starting the
-   container, for phone notifications; the container passes it on and the firewall then allows the ntfy
-   host (`FACTORY_NTFY_SERVER`, default ntfy.sh). Only event names and item/PR numbers are sent.
+5. Optional: export `FACTORY_NTFY_TOPIC` (a long random string) and `FACTORY_NTFY_SERVER` (e.g. `https://ntfy.sh`)
+   on the host before building the container, for phone notifications. The container passes both on; the server's
+   host is written into the image at build time (`build.args`, `/etc/factory-firewall/extra-hosts`), the one host the
+   firewall adds to its list. It has no default since backlog #0-283: without `FACTORY_NTFY_SERVER` no host is opened
+   and `notify.sh` answers that it cannot send. A server changed later takes a rebuild ("Rebuild Container"), and
+   until then notifications fail while the firewall still comes up. The topic stays out of the image (a build
+   argument is readable in its history). Only event names and item/PR numbers are sent.
 
 ## Build VM
 
@@ -358,8 +362,9 @@ an exit criterion (`.ai/rules/planning.md`): if it never teaches anything, it go
 phone). The preflight also refuses to start when: main's CI is red (the latest run of a push to main; a
 fork pull request's run from a branch named `main` does not count, backlog #0-148), the working tree is
 dirty, 2 items in a row were BLOCKED, an audit is due, the daily merge limit (5) is reached, another run
-holds the lock (`scripts/factory/state.sh unlock` clears a stale one), or Claude Code is older than 2.1.295
-(the hooks' `onFailure: "block"`, backlog #0-162, ADR-0039).
+holds the lock (`scripts/factory/state.sh unlock` clears a stale one), or the running Claude Code is not the version
+`.devcontainer/claude-code.pin` names (rebuild the container from `main`; the pin itself is no lower than 2.1.295, the
+hooks' `onFailure: "block"`: backlog #0-162, #0-249, ADR-0039, ADR-0065).
 
 The breaker and the audit counter are reset only by the owner, outside the autopilot session (which may
 not run `scripts/factory-admin/`): after resolving the BLOCKED items, delete `.ai/STOP` and run
@@ -494,9 +499,17 @@ The agents' instructions are not a boundary; these are, each with its limit:
 
 ## Pinned versions
 
-Agent models are full ids in `.claude/agents/*.md`; Claude Code is pinned to the version the
-devcontainer image was built with (`DISABLE_AUTOUPDATER=1`). The preflight refuses one older than 2.1.295, the
-first that honours the hooks' `onFailure: "block"` (an older one ignores the field silently, ADR-0039). The devcontainer's docker-outside-of-docker
+Agent models are full ids in `.claude/agents/*.md`. Claude Code is pinned in `.devcontainer/claude-code.pin`
+(backlog #0-249, ADR-0065): its version and the SHA-256 of its linux-x64 and linux-arm64 binaries, which
+`.devcontainer/install-claude-code.sh` holds to the manifest Anthropic signed (key `31DD DE24 … 1A7E CACE`,
+`.devcontainer/keys/`) when the image is built and in Lint Workflows (`--check`, `ci.yml`). The image installs it as root's
+`/usr/local/bin/claude`, with `DISABLE_AUTOUPDATER=1` and `DISABLE_UPDATES=1`, and the preflight refuses any other
+running version. The pin is no lower than 2.1.295, the first that honours the hooks' `onFailure: "block"` (an older
+one ignores the field silently, ADR-0039). A bump is a pull request changing the pin's lines together (the comment
+at its top gives the command that reads them from the manifest), then the seed-bugs benchmark below and ADR-0064's
+re-measurements on the new version (the agents' `tools`, the plugin's hooks) before it is trusted; Renovate does not
+propose it, as the release is no GitHub release asset. A new signing key is a new file in `.devcontainer/keys/` after
+the same three-way fingerprint check (its `.source`). The devcontainer's docker-outside-of-docker
 feature is pinned by digest in `.devcontainer/devcontainer-lock.json` (`devcontainer upgrade` moves it; the
 dispatcher's task container, `.devcontainer/task.json`, takes the feature's digest from this same lockfile: the
 dispatcher reads it from the base and names the feature by that digest in the configuration it writes, which the CLI

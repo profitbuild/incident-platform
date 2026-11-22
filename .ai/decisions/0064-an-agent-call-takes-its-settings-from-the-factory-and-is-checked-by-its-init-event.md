@@ -42,7 +42,9 @@ depend on the factory's version, not on what a branch left in `.claude/`.
   which see them in the branch's diff. `CLAUDE.local.md`, which is not tracked, was not measured under F3. The VM's
   trial measures it (#0-300 AC3).
 - It does not hold against code a previous call of the same run ran in the container:
-  - `claude` is installed by the image under `/home/<user>/.local/bin`, which the agent's user owns;
+  - `claude` was installed by the image under `/home/<user>/.local/bin`, which the agent's user owns. Since ADR-0065
+    it is root's `/usr/local/bin/claude`, which the agent's user cannot write, but root in the container can (next
+    line);
   - the agent holds the Docker socket, so it can act as root in its own container (ADR-0057, #0-285).
 
   Such code can change the next call's binary, and with it the init event point 3 reads. The init event is evidence
@@ -187,7 +189,8 @@ It has no field for hooks or for the sources of settings.
    - **Decided: the call is F3:**
      ```
      docker exec <task ID> /usr/bin/timeout … /usr/bin/env -i <point 5's list>
-       claude -p --plugin-dir /opt/factory --agent factory:<agent> --restricted --tools <the agent's frontmatter tools>
+       /usr/local/bin/claude -p --plugin-dir /opt/factory --agent factory:<agent> --restricted
+       --tools <the agent's frontmatter tools>
        --add-dir /workspace --output-format stream-json --verbose --json-schema <schema> --permission-mode dontAsk
        --max-turns <n>
      ```
@@ -237,11 +240,13 @@ It has no field for hooks or for the sources of settings.
 
    The list holds, each as a literal the dispatcher writes, never a value read back from the container:
    - `HOME` and the locale;
-   - a `PATH` the dispatcher sets: the system directories and the directory of the image's Claude Code;
+   - a `PATH` the dispatcher sets: the system directories only, with no `~/.local/bin` (ADR-0065: `claude` is
+     `/usr/local/bin/claude`, and the call names it by absolute path);
    - the `containerEnv` keys and values ADR-0062 point 4's list accepted, from the task configuration the dispatcher
      checked. Today these are `TESTCONTAINERS_HOST_OVERRIDE` and `TESTCONTAINERS_RYUK_DISABLED`, without which the
      agent's own Testcontainers tests fail under rootless Docker while the gate's pass;
-   - `DISABLE_AUTOUPDATER=1`, so Claude Code does not update itself during a run and fail point 3's version check;
+   - `DISABLE_AUTOUPDATER=1` and `DISABLE_UPDATES=1`, the image's (ADR-0065), which `env -i` would otherwise drop, so
+     Claude Code does not update itself during a run and fail point 3's version check;
    - `CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD=1`, for F3's `--add-dir /workspace` (point 2, as amended);
    - what the call itself needs to reach the model, which #0-301 names.
 
@@ -258,12 +263,16 @@ It has no field for hooks or for the sources of settings.
    builds every child process's environment on the VM. One difference: there the values come from the dispatcher's
    own environment; here they come from its configuration.
 
-   The directory of `claude` is in `PATH` because the image installs it there (`.devcontainer/Dockerfile`, native
-   installer, `~/.local/bin`). That directory is the agent user's, which is the residual named in the Context.
+   Until ADR-0065, the image installed `claude` with the native installer in `~/.local/bin`, which is the agent
+   user's: the binary's part of the residual named in the Context.
    Claude Code run by absolute path from a read-only mount the factory provides, owned by root and at the pinned
    version, would close the binary's part of that residual. That is the direction for #0-249/#0-283, which change
    how Claude Code is installed and pinned anyway. It does not close the in-container root through the socket
    (#0-285).
+   *ADR-0065 (2026-11-21, #0-249/#0-283)* took the binary's part without a mount: the image installs the pinned
+   version from Anthropic's signed manifest as root's `/usr/local/bin/claude`, `~/.local/bin` is off `PATH`, and
+   `DISABLE_UPDATES=1` is set. The call names `/usr/local/bin/claude` by absolute path (a login shell's `~/.profile`
+   still adds `~/.local/bin`). The mount stays an option, for one source of the version.
 6. **Where it is written:**
    - #0-301 writes:
      - the managed file in `factory` (it replaces the `settings/autopilot.json` #0-301 named);

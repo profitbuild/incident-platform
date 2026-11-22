@@ -15,9 +15,10 @@
 # Factory guards on every pull request, as its own step and as its test's last case, so a drift fails CI, not the
 # running VM.
 # What it reads is the array literals `NAME=( ... )` and the jq key selection; a host appended elsewhere (`NAME+=(...)`)
-# is not seen: init-firewall.sh appends only the hosts passed as arguments, below.
-# Hosts passed to init-firewall.sh as arguments (FACTORY_NTFY_SERVER) are in neither file: docs/ai-factory.md
-# "Build VM" says to add one by hand; ntfy.sh is a publishing service, so it is not allowed for the VM by default.
+# is not seen: init-firewall.sh appends only the hosts of the image's /etc/factory-firewall/extra-hosts, below.
+# That file's host (the owner's FACTORY_NTFY_SERVER, written at the image's build since backlog #0-283; no file in a
+# task container or the VM's rollback) is in neither list: docs/ai-factory.md "Build VM" says to add one by hand;
+# ntfy.sh is a publishing service, so it is not allowed for the VM by default.
 #
 #   check-allowlists.sh [<repository root>]     exit 0 and one line when the lists agree, 1 naming each difference
 # Tested by .github/scripts/test-check-allowlists.sh.

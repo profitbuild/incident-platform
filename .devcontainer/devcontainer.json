@@ -2,7 +2,14 @@
   // The owner's interactive container. The dispatcher's task container is task.json beside it (backlog #0-282).
   "name": "incident-platform AI factory",
   "build": {
-    "dockerfile": "Dockerfile"
+    "dockerfile": "Dockerfile",
+    // The firewall's one extra host, written into the image (backlog #0-283): the host's FACTORY_NTFY_SERVER, for phone
+    // notifications (docs/ai-factory.md, Setup 5). Unset: no extra host, and notify.sh reports it cannot send. Not the
+    // topic: a build argument stays readable in the image's history, and the topic is what lets anyone read the
+    // notifications. A server changed on the host takes a rebuild of the container.
+    "args": {
+      "FACTORY_NTFY_SERVER": "${localEnv:FACTORY_NTFY_SERVER}"
+    }
   },
   "runArgs": [
     "--cap-add=NET_ADMIN",
@@ -53,7 +60,8 @@
     "FACTORY_NTFY_TOPIC": "${localEnv:FACTORY_NTFY_TOPIC}",
     "FACTORY_NTFY_SERVER": "${localEnv:FACTORY_NTFY_SERVER}"
   },
-  "postStartCommand": "sudo /usr/local/bin/init-firewall.sh ${FACTORY_NTFY_TOPIC:+$(echo ${FACTORY_NTFY_SERVER:-https://ntfy.sh} | sed -E 's#^https?://##; s#/.*##')}",
+  // No arguments: sudo allows none, and the ntfy host comes from the image (build.args above, backlog #0-283).
+  "postStartCommand": "sudo /usr/local/bin/init-firewall.sh",
   "hostRequirements": {
     "memory": "16gb"
   },

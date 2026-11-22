@@ -718,6 +718,16 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: .github/scripts/check-pinned-tools.sh
 
+      # The devcontainer's Claude Code pin (backlog #0-249, ADR-0065) against
+      # its publisher, as the step above does for the CI tools: the manifest
+      # of the pinned version, signed by the key in .devcontainer/keys/, must
+      # list the pin's version and both checksums, so a hash in the pin that
+      # did not come from Anthropic's signed manifest fails here, not at the
+      # next image build. Here and not in Factory guards, whose steps need no
+      # network (ci-local.sh runs them with none).
+      - name: The devcontainer's Claude Code pin matches Anthropic's signed manifest
+        run: .devcontainer/install-claude-code.sh --pin .devcontainer/claude-code.pin --keys .devcontainer/keys --check
+
       # Every key under .github/keys/ names where its publisher keeps it (a
       # <fingerprint>.source), offline: the weekly watch, signing-keys.yml,
       # needs it, and a key added without one fails its pull request here, not
