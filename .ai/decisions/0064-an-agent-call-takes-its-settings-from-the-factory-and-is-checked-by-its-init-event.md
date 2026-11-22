@@ -4,7 +4,8 @@
   gain `/etc/claude-code`); points 1, 2, 3 and 5 amended by the spike's result (2026-11-21, `factory` PR #23, rounds
   A–D in `factory`'s container): the call is F3, `--restricted` with `--add-dir /workspace`, the new decision point
   2's rule required, accepted by the owner on 2026-11-21 after the spike; points 3 and 5 amended for #0-301
-  (2026-11-22: the token's channel through `apiKeyHelper`, the expected version's place)
+  (2026-11-22: the token's channel through `apiKeyHelper`, the expected version's place); point 3 amended for #0-301
+  and #0-313 (2026-11-22: the built-in plugins, `apiKeySource`)
 - **Backlog:** #0-300, #0-301, #0-313
 - **Date:** 2026-11-21
 - **Author:** human (owner's decision on the options of `/research #0-300`, 2026-11-21, drafted in an interactive session)
@@ -211,7 +212,18 @@ It has no field for hooks or for the sources of settings.
 3. **The init event of every call is checked whole, before its answer is read.** The run stops when anything differs
    from what the dispatcher expects:
    - `agents` holds `factory:<agent>`, and no plugin agent but the factory's;
-   - `plugins` is exactly one entry, `factory` at `/opt/factory`, and `plugin_errors` is absent;
+   - `plugins` is exactly one entry, `factory` at `/opt/factory`, and `plugin_errors` is absent; *amended for #0-301
+     (2026-11-22):* besides it, Claude Code's own built-in plugins (`path` `"builtin"`), which every call on 2.1.328
+     loads, five of them (the spike's rounds and #0-313's measurement 1): exactly one entry that is not built in,
+     `factory` at `/opt/factory` (`factory@inline`), and the built-in ones equal to a closed list of their names the
+     factory keeps beside its expected Claude Code version (an entry carries `name`, `path` and `source`, no version),
+     re-measured at a version bump; any other entry stops the run;
+   - from #0-313 on, `apiKeySource` is `"apiKeyHelper"`. Measured 2026-11-22: `"apiKeyHelper"` for the managed helper
+     (also with a planted user-settings helper, which `--restricted` ignores), `"none"` without a credential and
+     `"none"` with `ANTHROPIC_AUTH_TOKEN` in the environment, whose Bearer header is still sent. So the field shows a
+     missing or replaced helper, not every credential that leaves: `ANTHROPIC_API_KEY`, and an environment token next
+     to the helper, were not measured. What keeps a credential of the environment out of the call is point 5's
+     `env -i`, not this check;
    - `tools` equals the expected list for that agent on the pinned Claude Code, re-recorded at a version bump (the
      expected version and these lists are the factory's, beside its managed file; Lint Workflows compares the version
      with the product's `.devcontainer/claude-code.pin` through `check-factory-copies.rb`, decided for #0-301 on
@@ -233,7 +245,9 @@ It has no field for hooks or for the sources of settings.
    under the same name or label is not the one the call reaches, and the call fails.
 4. **The plugin's hooks are measured once per pinned Claude Code version, not probed in every call.** The init event
    shows no hooks; only `plugin_errors` shows a hooks file that did not load. The hook's behaviour (M2.0's
-   measurements 3, 5, 6) is re-measured at each version bump with the pin, as a step of #0-249/#0-283's bump.
+   measurements 3, 5, 6) is re-measured at each version bump with the pin, as a step of #0-249/#0-283's bump. So are
+   Claude Code's built-in plugins, which every call loads (point 3 as amended for #0-301): the bump records their
+   names and what each carries (hooks, agents, MCP), as nothing in a call shows their hooks.
 5. **The call's environment is closed.** The task image's `ENV` comes from the product's Dockerfile (or its build
    cache), and ADR-0062's `containerEnv` list does not hold it. So the image could set a variable that moves or adds
    a source of Claude Code's configuration, such as `CLAUDE_CONFIG_DIR`, or a `CLAUDE_CODE_*` variable, around
