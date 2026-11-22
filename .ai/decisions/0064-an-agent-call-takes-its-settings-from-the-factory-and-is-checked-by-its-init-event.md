@@ -39,8 +39,8 @@ depend on the factory's version, not on what a branch left in `.claude/`.
   amended) loads the clone's `CLAUDE.md`, `.claude/CLAUDE.md` and `.claude/rules/*.md` by design, and those lie in the
   `/workspace` that a call can write. They are instructions, never a ground for the dispatcher's decisions (ADR-0060
   D6). They are tracked files, so the boundary against them is the dispatcher's commit check (#0-302) and the review,
-  which see them in the branch's diff. `CLAUDE.local.md`, which is not tracked, was not measured under F3. The VM's
-  trial measures it (#0-300 AC3).
+  which see them in the branch's diff. `CLAUDE.local.md`, which is not tracked, was not measured under F3. #0-301's
+  first call on the VM measures it (its AC4, moved from #0-300 AC3 on 2026-11-22).
 - It does not hold against code a previous call of the same run ran in the container:
   - `claude` was installed by the image under `/home/<user>/.local/bin`, which the agent's user owns. Since ADR-0065
     it is root's `/usr/local/bin/claude`, which the agent's user cannot write, but root in the container can (next
@@ -199,7 +199,8 @@ It has no field for hooks or for the sources of settings.
    - **Known limit:** a `CLAUDE.md` in a subdirectory of the clone loads in none of the forms. Today this product has
      none (one root `CLAUDE.md`, no `@` imports, no `.claude/rules/`). A product that relies on subdirectories'
      `CLAUDE.md` would not reach its agents through them.
-   - **Not measured in `factory`'s container, measured on the VM in a task container (#0-300 AC3):**
+   - **Not measured in `factory`'s container, measured on the VM in a task container (#0-301 AC4, moved from #0-300
+     AC3 on 2026-11-22):**
      - the exact argv with `--agent factory:implementer`, as `docker exec` runs it. Its hook result is today an
        inference from D1 (no `--agent`) and round A's F2 (with `--agent`, without `--add-dir`). The VM's prompt asks
        for a background call the implementer's text does not refuse;
@@ -331,7 +332,9 @@ It has no field for hooks or for the sources of settings.
 
 **Left open:**
 - point 2's VM part: the exact F3 argv with `--agent` through `docker exec`, its `result.subtype`, and the VM's Claude
-  Code (#0-300 AC3);
+  Code (#0-300 AC3), moved to #0-301's first call on the VM (2026-11-22): it needs a Claude credential in the task
+  container, which ADR-0062 point 5 keeps off the daemon until M3.5's proxy; how that call gets one is #0-301's first
+  decision;
 - `CLAUDE.md` in a clone's subdirectories, which F3 does not load;
 - Claude Code's own defaults that no source shows;
 - Claude Code from a factory-provided read-only mount (#0-249, #0-283);

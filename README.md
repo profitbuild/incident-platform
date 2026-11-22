@@ -826,7 +826,7 @@ security boundary, so every rule that matters is also enforced outside the model
   start); no refusal, reason or sweep output quoting a value the daemon gave
   (positions, counts, hex IDs); a call's stderr returned to no caller, kept in a mode-600 file of the dispatcher's
   state, and a stderr that cannot be kept refuses the call. Limits: the first trial on the VM (2026-11-22) was refused,
-  fail closed, on `OomScoreAdj` and fixed in `v0.1.3`, the second is open (#0-284 AC8); the stderr
+  fail closed, on `OomScoreAdj` and fixed in `v0.1.3`, the second passed (#0-284 AC8); the stderr
   files are never removed and could hold a token a task printed from step 4.6 (#0-308); a volume a task names like a
   secret makes every later sweep, so every run, refuse until the owner removes it (#0-309).
 - **builder-app's push** (backlog #0-276, stage 4.3b, ADR-0060 D7 as amended; `factory` PR #16): no git with the

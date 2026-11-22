@@ -4438,11 +4438,29 @@ control flow lives only in incident-platform.
   (ADR-0064's Consequences); the call's flags as
   #0-300's spike decided; and the init event checked whole before the answer (ADR-0064 point 3). No earlier item
   writes them.
+- **Taken over from #0-300 (2026-11-22, the owner's decision):** the VM's part of its AC2 and AC3, measured by this
+  item's first call on the VM (the exact F3 argv with `--agent` through `docker exec`, its `result.subtype`, the VM's
+  Claude Code, the init event's tools with and without Bash, `CLAUDE.local.md`). That call needs a Claude credential
+  in the task container, which ADR-0062 point 5 keeps off the daemon until M3.5's proxy (#0-289), and so does M2's
+  exit: **this item's `/research` decides first how a call gets its credential before M3.5**. The options as they
+  stand (review round 1 of #0-284's and #0-300's close):
+  - (a) a dedicated Console key with a spend limit, passed per call and revoked after the trials: it amends ADR-0062
+    point 5 (no credential on the daemon while the dispatcher runs), ADR-0060 (the task container holds no Claude
+    credential), ADR-0063's order (#0-285 before any task holds a credential) and ADR-0064's premise, and accepts
+    #0-285's residual (what an earlier task left running as `factory` could read the key);
+  - (b) #0-285 and #0-289 moved before M2's exit: #0-289 depends on #0-287, which depends on this item, so the
+    dependencies are cut first, and ADR-0063's step table (M2, M3) is amended;
+  - whichever is chosen gets a security review of its own.
 
 **Acceptance criteria.**
 AC1. A call with no `structured_output`, or an init event with `plugin_errors` or not the expected agent and tools, stops the task (tests with recorded `stream-json` fixtures); the expected tools are the pinned Claude Code's for that agent: under ADR-0064's F3 exactly the `--tools` list, built from the agent's frontmatter `tools` (Grep and Glob next to Bash), and `mcp_servers` empty (`m2.md` M2.2).
 AC2. Whole runs against a fake agent reach each stop through `stopItem` with its stage (`node:test`, ported from `test-autopilot-workflow.mjs`).
 AC3. `MAX_TEST_FIXES`, `MAX_ROUNDS` and `MAX_AGENT_CALLS` each stop a run that exceeds them (tests).
+AC4. One call on the VM, in a task container, records #0-300's VM part in `m2.md`'s Record, its credential as decided
+     above: the init event's fields and its tools with and without Bash; `result.subtype`; the VM's Claude Code;
+     whether the clone's `CLAUDE.md` loads (what F3's `--add-dir /workspace` is for) and whether `CLAUDE.local.md` does;
+     whether any of the planted set takes effect; whether `--plugin-dir` loads under
+     `strictKnownMarketplaces: []`; whether the plugin's hook still refuses `run_in_background`.
 
 ### 0-302. Agents would commit their own work, with no trailer of run or agent (migration step M2.4)
 

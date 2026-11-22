@@ -41,8 +41,8 @@ Legend:
 
 - Stages 0 to 3 are done, and stage 4's 4.1, 4.2 and 4.3a–d (records in `stage-1.md` … `stage-4.md`).
 - **M1 done** (4.3d, #0-278, 2026-11-21): `factory` PR #20, PR #678 and its trial on the VM (`stage-4.md` "4.3").
-- **Current: M2** (`migration/m2.md`): M2.0 (#0-299) done 2026-11-21, `factory` PR #21; next #0-300 (the spike, part
-  answered by M2.0's measurements).
+- **Current: M2** (`migration/m2.md`): M2.0 (#0-299) done 2026-11-21, `factory` PR #21; #0-300 (M2.1's spike) and
+  #0-284 done 2026-11-22; next #0-301, its first decision the agent's credential before M3.5.
 - The old path (`/backlog-autopilot` in the VM's devcontainer, the rollback that shares the VM by time) still runs
   until M4.
 
@@ -91,15 +91,16 @@ Legend:
 - umbrella: #0-287. Split into one item per pull request (2026-11-21), in order:
   - #0-299 (M2.0, the build agents in `factory`'s plugin);
   - #0-300 (M2.1, the spike; decided 2026-11-21, ADR-0064: managed settings, `--restricted` by measurement, the init
-    event as the isolation check; spike in `factory`'s container done, F3 chosen, `factory` PR #23; the VM's part open);
+    event as the isolation check; spike in `factory`'s container done, F3 chosen, `factory` PR #23; done 2026-11-22,
+    its VM part moved to #0-301);
   - #0-301 (M2.2–M2.3, the agent call and the phases);
   - #0-302 (M2.4, the dispatcher's commits; #0-212 folded in);
   - #0-303 (M2.5, per task: the task's lock, its liveness, the state lock, `FACTORY_SLOTS`; its sweep's scope and
     the Maven cache moved to M3.4, #0-285, the owner's option B, 2026-11-21);
   - #0-304 (M2.6, what 4.3a–c left).
 - carries too: #0-280 (the gate's schema against `run-tests.sh`; done, PR #680), #0-284 (decided 2026-11-21, ADR-0062 amended; the container checked before anything
-  runs; code merged in `factory` PR #22 and #24, pinned `v0.1.3`, the first AC8 trial refused on
-  `OomScoreAdj` and fixed, the second open; follow-ups #0-308 and #0-310,
+  runs; code merged in `factory` PR #22 and #24, pinned `v0.1.3`; done 2026-11-22, AC8's second trial
+  passed after the first was refused on `OomScoreAdj`; follow-ups #0-308 and #0-310,
   #0-309 moved to M3.4), #0-249 and #0-283 (Claude Code pinned, `dev`'s firewall rule; done 2026-11-21, ADR-0065;
   `factory`'s own devcontainer #0-311).
 - part: #0-261's per-task baseline and the gate's short summary (in #0-301).
