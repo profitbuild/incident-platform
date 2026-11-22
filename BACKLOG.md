@@ -4325,7 +4325,9 @@ AC2. Auto-merge is not switched on until the eight conditions of `migration.md` 
 
 ### 0-300. How a plugin's agent runs as `claude -p`'s main thread is not known (migration step M2.1)
 
-**Type:** ci · **Priority:** High · **Status:** Open (ADR-0063, 2026-11-21).
+**Type:** ci · **Priority:** High · **Status:** Open (ADR-0063, 2026-11-21). The spike in `factory`'s container is
+done (`factory` PR #23, 2026-11-21): F3 chosen, ADR-0064 amended (AC1, AC4, AC2 and AC3 for that container). The VM's
+part of AC2 and AC3 is open.
 **Autopilot:** human-only · **Risk:** medium · **Complexity:** low · **Depends on:** #0-299
 **Touches:** the repository `profitbuild/factory` (a spike script under dispatcher/testing/), context (.ai/context/migration/m2.md's Record), decisions (ADR-0064, amended with the spike's result)
 
@@ -4346,7 +4348,7 @@ plugin's agent, its init event lists the agents, tools and no `plugin_errors`, a
 - **Managed settings.** The factory's managed settings are mounted read-only on the task container's whole
   `/etc/claude-code`, which also covers a `managed-settings.d/` an image could carry. They hold:
   - `allowManagedPermissionRulesOnly: true`, so the call's permission rules live there only;
-  - `strictPluginOnlyCustomization` for hooks, agents, skills and MCP;
+  - `strictPluginOnlyCustomization: true` (the object form is invalid on Claude Code 2.1.328, the spike);
   - `disableAllHooks: false`;
   - never `allowManagedHooksOnly` (it blocks plugin hooks) or `disableSideloadFlags` (it rejects `--plugin-dir`).
 - **The call's environment closed:** `docker exec … env -i` with a list of the variables the call needs, as
@@ -4438,7 +4440,7 @@ control flow lives only in incident-platform.
   writes them.
 
 **Acceptance criteria.**
-AC1. A call with no `structured_output`, or an init event with `plugin_errors` or not the expected agent and tools, stops the task (tests with recorded `stream-json` fixtures); the expected tools are the pinned Claude Code's for that agent (with Bash it holds no Grep or Glob, `m2.md` M2.2).
+AC1. A call with no `structured_output`, or an init event with `plugin_errors` or not the expected agent and tools, stops the task (tests with recorded `stream-json` fixtures); the expected tools are the pinned Claude Code's for that agent: under ADR-0064's F3 exactly the `--tools` list, built from the agent's frontmatter `tools` (Grep and Glob next to Bash), and `mcp_servers` empty (`m2.md` M2.2).
 AC2. Whole runs against a fake agent reach each stop through `stopItem` with its stage (`node:test`, ported from `test-autopilot-workflow.mjs`).
 AC3. `MAX_TEST_FIXES`, `MAX_ROUNDS` and `MAX_AGENT_CALLS` each stop a run that exceeds them (tests).
 

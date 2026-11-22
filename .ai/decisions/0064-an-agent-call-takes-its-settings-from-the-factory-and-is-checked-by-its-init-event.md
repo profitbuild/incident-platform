@@ -1,7 +1,9 @@
 # ADR-0064: An agent call of the dispatcher takes its settings from the factory alone, and its init event is its isolation check
 
-- **Status:** Accepted (2026-11-21, by the owner, before the spike; point 2's form is settled by the spike's
-  amendment); amends ADR-0062 point 4 (the dispatcher's mounts gain `/etc/claude-code`)
+- **Status:** Accepted (2026-11-21, by the owner, before the spike); amends ADR-0062 point 4 (the dispatcher's mounts
+  gain `/etc/claude-code`); points 1, 2, 3 and 5 amended by the spike's result (2026-11-21, `factory` PR #23, rounds
+  A–D in `factory`'s container): the call is F3, `--restricted` with `--add-dir /workspace`, the new decision point
+  2's rule required, accepted by the owner on 2026-11-21 after the spike
 - **Backlog:** #0-300
 - **Date:** 2026-11-21
 - **Author:** human (owner's decision on the options of `/research #0-300`, 2026-11-21, drafted in an interactive session)
@@ -33,8 +35,16 @@ depend on the factory's version, not on what a branch left in `.claude/`.
 - It holds against configuration a previous call left in files: a setting, a hook, an agent, a plugin, a memory
   file, an environment variable. That can come from an agent's mistake, from text in the repository that steers the
   model to write `.claude/`, or from the image's `ENV`.
+- It does not hold against the product's instruction files a previous call of the same run wrote. F3 (point 2, as
+  amended) loads the clone's `CLAUDE.md`, `.claude/CLAUDE.md` and `.claude/rules/*.md` by design, and those lie in the
+  `/workspace` that a call can write. They are instructions, never a ground for the dispatcher's decisions (ADR-0060
+  D6). They are tracked files, so the boundary against them is the dispatcher's commit check (#0-302) and the review,
+  which see them in the branch's diff. `CLAUDE.local.md`, which is not tracked, was not measured under F3. The VM's
+  trial measures it (#0-300 AC3).
 - It does not hold against code a previous call of the same run ran in the container:
-  - `claude` is installed by the image under `/home/<user>/.local/bin`, which the agent's user owns;
+  - `claude` was installed by the image under `/home/<user>/.local/bin`, which the agent's user owns. Since ADR-0065
+    it is root's `/usr/local/bin/claude`, which the agent's user cannot write, but root in the container can (next
+    line);
   - the agent holds the Docker socket, so it can act as root in its own container (ADR-0057, #0-285).
 
   Such code can change the next call's binary, and with it the init event point 3 reads. The init event is evidence
@@ -94,11 +104,12 @@ It has no field for hooks or for the sources of settings.
    - `allowManagedPermissionRulesOnly: true`. Per settings-reference it "ignores `allow`, `ask`, and `deny` rules in
      user, project, local, and `--settings` files, ignores `--allowedTools`", so the call's permission rules live
      here and nowhere else;
-   - `strictPluginOnlyCustomization` with `hooks`, `agents`, `skills` and `mcp` all `true`: blocked "from user and
-     project sources", the plugin's kept;
+   - `strictPluginOnlyCustomization: true` (amended by the spike: Claude Code 2.1.328 reports the object form, with
+     each kind named, as "present but invalid" and treats it as `true`, so the value is written as `true`): skills,
+     agents, hooks and MCP blocked "from user and project sources", the plugin's kept;
    - `strictKnownMarketplaces: []`, so the clone's or the volume's `extraKnownMarketplaces` and `enabledPlugins`
      enable no second plugin. A plugin's hooks, agents and MCP pass `strictPluginOnlyCustomization`, and only
-     `--plugin-dir`'s plugin is the factory's. The spike measures that `--plugin-dir` still loads under it;
+     `--plugin-dir`'s plugin is the factory's. Measured: `--plugin-dir` still loads under it (point 2, as amended);
    - `disableAllHooks: false`. Per settings precedence ("managed settings, command line, project local, shared project,
      user", settings.md) a managed value is the one left;
    - the dispatcher's permission rules.
@@ -148,12 +159,63 @@ It has no field for hooks or for the sources of settings.
        lies outside that volume.
      - The amendment lists the settings keys the managed file pins. Each later version of Claude Code is re-measured
        at its pin (#0-249, #0-283), since a key added by a new version would be read from the clone.
+   **Amended with the spike's result** (2026-11-21, `factory` PR #23, `dispatcher/testing/spike-0-300.mjs`; Claude
+   Code 2.1.328 in `factory`'s container, the managed settings above in `/etc/claude-code`; each round's planted
+   clone and `HOME` in `m2.md`'s Record):
+   - **F1 (point 1 alone) fails.**
+     - The `env` of the clone's `.claude/settings.json` reaches the tools (`CLAUDE_CODE_PLANTED=1`).
+     - The user's `env` moves Claude Code's own configuration directory (`CLAUDE_CONFIG_DIR`, the login with it).
+     - The user's memory, rules and output style take effect.
+
+     Hooks, agents, plugins and MCP of both sources took no effect, and neither did `disableAllHooks: true`. But
+     `env` merges across sources and cannot be pinned. So by this point's rule, point 1 alone is not enough.
+   - **F2 (`--restricted`) holds every planted element out, but loads none of the clone's `CLAUDE.md`.**
+   - **F3, F2 with `--add-dir <the clone>` and `CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD=1`, `cwd` the clone:**
+     - it loads the clone's `CLAUDE.md`, `.claude/CLAUDE.md`, `.claude/rules/*.md` and an `@` import;
+     - no planted element takes effect, of the clone or of the user: `env`, hooks, agents, a second plugin, a skill,
+       `.mcp.json`, a command, memory, rules, output style;
+     - the factory's plugin loads under `strictKnownMarketplaces: []`.
+
+     That the clone's and the user's settings are not read rests on three observations (rounds C and D):
+     - `printenv CLAUDE_CODE_PLANTED` is empty;
+     - `output_style` is `default`;
+     - no marker of the user's memory or rules came back.
+
+     Round D's D1 (F3's flags, no `--agent`, the clone's and the user's `disableAllHooks: true`) shows the factory's
+     hook blocking a background call. It does not show the settings unread: the managed `disableAllHooks: false`
+     wins by precedence, as F1 had already shown.
+     - **F3b** (the clone only by `--add-dir`, an empty `cwd`) loses the `@` import.
+     - **F4** (`--append-system-prompt-file`) brings only the root `CLAUDE.md`, as the Alternatives expected.
+   - **Decided: the call is F3:**
+     ```
+     docker exec <task ID> /usr/bin/timeout … /usr/bin/env -i <point 5's list>
+       /usr/local/bin/claude -p --plugin-dir /opt/factory --agent factory:<agent> --restricted
+       --tools <the agent's frontmatter tools>
+       --add-dir /workspace --output-format stream-json --verbose --json-schema <schema> --permission-mode dontAsk
+       --max-turns <n>
+     ```
+     `cwd` is `/workspace`. The prompt goes on stdin: `--tools` takes several values and would take an argument
+     after it as one of them. `--tools` is built from the agent's frontmatter `tools`, never a copy of them.
+   - **Known limit:** a `CLAUDE.md` in a subdirectory of the clone loads in none of the forms. Today this product has
+     none (one root `CLAUDE.md`, no `@` imports, no `.claude/rules/`). A product that relies on subdirectories'
+     `CLAUDE.md` would not reach its agents through them.
+   - **Not measured in `factory`'s container, measured on the VM in a task container (#0-300 AC3):**
+     - the exact argv with `--agent factory:implementer`, as `docker exec` runs it. Its hook result is today an
+       inference from D1 (no `--agent`) and round A's F2 (with `--agent`, without `--add-dir`). The VM's prompt asks
+       for a background call the implementer's text does not refuse;
+     - `result.subtype` of a call with `--agent`, since D2's `--max-turns 1` call with `--agent` exited 1 for a
+       reason the record does not show;
+     - the init event's `tools` on the VM's Claude Code.
 3. **The init event of every call is checked whole, before its answer is read.** The run stops when anything differs
    from what the dispatcher expects:
    - `agents` holds `factory:<agent>`, and no plugin agent but the factory's;
    - `plugins` is exactly one entry, `factory` at `/opt/factory`, and `plugin_errors` is absent;
    - `tools` equals the expected list for that agent on the pinned Claude Code, re-recorded at a version bump
-     (`m2.md` M2.2);
+     (`m2.md` M2.2). Under F3 it is exactly the `--tools` list (D2: Grep and Glob next to Bash, unlike M2.0's call
+     without `--tools`), and nothing else: a tool beyond it, such as an `mcp__…` tool of an account's connectors
+     that appeared in some calls on the owner's login, stops the run;
+   - `mcp_servers` is empty. The factory's plugin carries no MCP server today; a plugin change that adds one needs
+     this check amended first;
    - `model` and `permissionMode` are the call's;
    - `claude_code_version` is the pinned one.
 
@@ -178,12 +240,19 @@ It has no field for hooks or for the sources of settings.
 
    The list holds, each as a literal the dispatcher writes, never a value read back from the container:
    - `HOME` and the locale;
-   - a `PATH` the dispatcher sets: the system directories and the directory of the image's Claude Code;
+   - a `PATH` the dispatcher sets: the system directories only, with no `~/.local/bin` (ADR-0065: `claude` is
+     `/usr/local/bin/claude`, and the call names it by absolute path);
    - the `containerEnv` keys and values ADR-0062 point 4's list accepted, from the task configuration the dispatcher
      checked. Today these are `TESTCONTAINERS_HOST_OVERRIDE` and `TESTCONTAINERS_RYUK_DISABLED`, without which the
      agent's own Testcontainers tests fail under rootless Docker while the gate's pass;
-   - `DISABLE_AUTOUPDATER=1`, so Claude Code does not update itself during a run and fail point 3's version check;
+   - `DISABLE_AUTOUPDATER=1` and `DISABLE_UPDATES=1`, the image's (ADR-0065), which `env -i` would otherwise drop, so
+     Claude Code does not update itself during a run and fail point 3's version check;
+   - `CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD=1`, for F3's `--add-dir /workspace` (point 2, as amended);
    - what the call itself needs to reach the model, which #0-301 names.
+
+   `CLAUDE_CODE_MANAGED_SETTINGS_PATH` is one of the variables this closes. Claude Code 2.1.328 reads it as the
+   folder of its managed settings, so an image's `ENV` could move them. The spike measured that `env -i` keeps it
+   out, and that a settings file's `env` setting it does not move them either.
 
    These literals are command-line arguments of `env`, which any process in the container can read (`ps`,
    `/proc/<pid>/cmdline`), and so can anyone holding the socket. So the list is for values that are not secret. A
@@ -194,8 +263,8 @@ It has no field for hooks or for the sources of settings.
    builds every child process's environment on the VM. One difference: there the values come from the dispatcher's
    own environment; here they come from its configuration.
 
-   The directory of `claude` is in `PATH` because the image installs it there (`.devcontainer/Dockerfile`, native
-   installer, `~/.local/bin`). That directory is the agent user's, which is the residual named in the Context.
+   Until ADR-0065, the image installed `claude` with the native installer in `~/.local/bin`, which is the agent
+   user's: the binary's part of the residual named in the Context.
    Claude Code run by absolute path from a read-only mount the factory provides, owned by root and at the pinned
    version, would close the binary's part of that residual. That is the direction for #0-249/#0-283, which change
    how Claude Code is installed and pinned anyway. It does not close the in-container root through the socket
@@ -261,8 +330,9 @@ It has no field for hooks or for the sources of settings.
   on resume) widens the residual above, and needs this ADR amended first.
 
 **Left open:**
-- point 2's result (#0-300's spike);
-- the settings keys to pin should `--restricted` not be used;
+- point 2's VM part: the exact F3 argv with `--agent` through `docker exec`, its `result.subtype`, and the VM's Claude
+  Code (#0-300 AC3);
+- `CLAUDE.md` in a clone's subdirectories, which F3 does not load;
 - Claude Code's own defaults that no source shows;
 - Claude Code from a factory-provided read-only mount (#0-249, #0-283);
 - the daemon reach of a task's code (#0-285).
@@ -279,4 +349,10 @@ It has no field for hooks or for the sources of settings.
 - `allowManagedHooksOnly` or `disableSideloadFlags` in it;
 - an init event field read without the run stopping on a difference;
 - the answer read before the init event's check;
-- a decision of the dispatcher taken from the clone's `.claude/`.
+- a decision of the dispatcher taken from the clone's `.claude/`;
+- from point 2 as amended:
+  - a call without `--restricted`, without `--tools`, or with `--tools` not built from the agent's frontmatter;
+  - a call without `--add-dir /workspace`;
+  - the prompt passed as an argument rather than on stdin;
+  - `tools` not compared exactly to `--tools`, or `mcp_servers` not checked empty;
+  - `strictPluginOnlyCustomization` written as an object.
