@@ -97,7 +97,8 @@ Legend:
     after #0-313);
   - #0-302 (M2.4, the dispatcher's commits; #0-212 folded in);
   - #0-303 (M2.5, per task: the task's lock, its liveness, the state lock, `FACTORY_SLOTS`; its sweep's scope and
-    the Maven cache moved to M3.4, #0-285, the owner's option B, 2026-11-21);
+    the Maven cache moved to M3.4, #0-285, the owner's option B, 2026-11-21; done 2026-11-22, `factory` PR #25,
+    pinned `v0.1.4`);
   - #0-304 (M2.6, what 4.3a–c left);
   - #0-313 (M2.7, the credential proxy's core before the first real call; split from #0-289, ADR-0063 as amended
     for #0-301, 2026-11-22).

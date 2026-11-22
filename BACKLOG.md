@@ -186,7 +186,6 @@ Code, Javadoc, config comments and commits reference items as `backlog #N`.
 | [0-298](#0-298-the-private-repository-holdout-cloud-and-auto-merge-steps-have-no-items-migration-steps-m9m12) | The private repository, holdout, cloud and auto-merge steps have no items (migration steps M9–M12) | design | Low | Open |
 | [0-301](#0-301-the-dispatcher-runs-no-phase-of-a-task-migration-steps-m22m23) | The dispatcher runs no phase of a task (migration steps M2.2–M2.3) | ci | High | Open |
 | [0-302](#0-302-agents-would-commit-their-own-work-with-no-trailer-of-run-or-agent-migration-step-m24) | Agents would commit their own work, with no trailer of run or agent (migration step M2.4) | ci | High | Open |
-| [0-303](#0-303-the-dispatchers-lock-sweep-and-caches-assume-one-task-at-a-time-migration-step-m25) | The dispatcher's lock, sweep and caches assume one task at a time (migration step M2.5) | ci | Medium | Open |
 | [0-304](#0-304-what-the-reviews-of-43ac-left-for-the-control-flow-is-not-built-migration-step-m26) | What the reviews of 4.3a–c left for the control flow is not built (migration step M2.6) | ci | Medium | Open |
 | [0-305](#0-305-the-dispatcher-pushes-nothing-and-opens-no-pull-request-migration-steps-m31m32) | The dispatcher pushes nothing and opens no pull request (migration steps M3.1–M3.2) | ci | High | Open |
 | [0-306](#0-306-a-dispatcher-pr-carries-no-trace-of-its-agent-calls-and-the-audits-do-not-read-it-migration-step-m33) | A dispatcher PR carries no trace of its agent calls, and the audits do not read it (migration step M3.3) | ci | Medium | Open |
@@ -4354,41 +4353,6 @@ AC4. An architect's commit that changes a path outside its `writeScopes` entry s
      limit (tests); the schema accepts `writeScopes` and this repository's adapter
      names the architect's scope (CI's adapter step).
 
-### 0-303. The dispatcher's lock, sweep and caches assume one task at a time (migration step M2.5)
-
-**Type:** ci · **Priority:** Medium · **Status:** Open (ADR-0063, 2026-11-21).
-**Autopilot:** human-only · **Risk:** medium · **Complexity:** medium · **Depends on:** #0-278
-**Touches:** the repository `profitbuild/factory` (dispatcher/src/state/, container/environment.mjs, container/daemon.mjs, cli.mjs), decisions (ADR-0060 D7 and ADR-0062 point 7, as amended for #0-303)
-
-**Problem.** One `flock` guards the whole dispatcher. Both ends of a run sweep every container, network, volume and
-work directory. One Maven cache volume is shared by all tasks. M5's two slots (ADR-0063 G1) cannot run on that.
-
-**Decided 2026-11-21** (`/research` of #0-303 with #0-309, the owner's option B; ADR-0060 D7 and ADR-0062 point 7
-amended): only what holds whatever the daemon's model is. The sweep's scope with two live tasks, the orphans, the
-Maven cache and #0-309 move to #0-285 (M3.4), which chooses that model: on a shared daemon a label is no boundary (a
-task's code makes objects unlabelled or labelled as another run's), and until M4 the whole sweep keeps the rollback's
-credential volumes off the daemon.
-
-**Work.** `migration/m2.md` M2.5:
-- a lock per task, `tasks/<runId>/lock`, by `lock.mjs`'s `flock`; the dispatcher's lock only for `cli.mjs sweep` and
-  taking a slot;
-- a task is live while its lock cannot be taken (`--nonblock`), in place of M5's lease;
-- a short state lock around each read, change and write of `state.json` and the task records;
-- `FACTORY_SLOTS` (1 until M5): a run refused while as many tasks are live;
-- the whole-daemon sweep at a run's start and end only while no other task is live (always in M2); otherwise only
-  the run's own labelled objects (`removeOwnObjects`); the run's task lock taken first, the check and the start's sweep
-  under the dispatcher's lock, the end's check and sweep under it too, before the task lock is released;
-- `cli.mjs sweep` (and `--force`) refused while any task's lock is held, naming its `runId`.
-
-**Acceptance criteria.**
-AC1. A run whose `FACTORY_SLOTS` are all held by live tasks is refused before it touches the daemon; a killed run's
-     lock is free again and its task no longer live, a child process of it still alive included (tests).
-AC2. The breaker counts the blocks of two concurrent writers, and a concurrent write to `state.json` loses neither
-     (tests).
-AC3. A run does not sweep the whole daemon while another task is live (it removes only its own labelled objects), and
-     sweeps it whole when none is; `cli.mjs sweep` and `sweep --force` refuse while a task's lock is held, naming its
-     `runId` (tests with a fake second task holding its lock).
-
 ### 0-304. What the reviews of 4.3a–c left for the control flow is not built (migration step M2.6)
 
 **Type:** ci · **Priority:** Medium · **Status:** Open (ADR-0063, 2026-11-21).
@@ -4410,7 +4374,11 @@ from 4.3a's review" state.
 **Acceptance criteria.**
 AC1. A BLOCKED reason never holds text from GitHub's response (test).
 AC2. A task is resumed by its `runId`, and a new task is refused while one is `running` on the same item (tests).
-AC3. A block counts toward the breaker, and a retried mint revokes the token it can find (tests).
+     Since #0-303 (`factory` PR #25) an item is held by a running task on a branch, or a live one with none yet; a dead
+     task with no branch holds nothing (#0-277 AC13), which this AC keeps.
+AC3. A block counts toward the breaker, and a retried mint revokes the token it can find (tests). Since #0-303 a new
+     task whose start sweep fails, or whose task lock cannot be taken, ends BLOCKED: this AC decides whether those
+     environment refusals count, since in M5 they could trip the breaker for every run.
 AC4. `pushTask`'s production caller binds `repoDir` to the adapter's repository and passes no test-only option (test).
 
 ### 0-305. The dispatcher pushes nothing and opens no pull request (migration steps M3.1–M3.2)

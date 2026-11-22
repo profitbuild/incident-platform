@@ -173,6 +173,7 @@ resolvable.
 | 0-283 | the firewall's sudo rule takes no arguments, its one extra host (ntfy) written into the image, `dev` out of `sudo` (ADR-0065, with #0-249); details in [the section](#0-283-the-devcontainer-image-lets-dev-widen-its-firewall-and-installs-claude-code-unpinned) | PR #688 |
 | 0-284 | the task container checked before anything runs in it (factory PR #22 and #24, `v0.1.3`), AC8 passed on the VM's second trial; details in [the section](#0-284-the-task-container-is-checked-before-anything-runs-in-it-and-its-refusals-hold-none-of-the-agent-sides-text) | PR #691 |
 | 0-300 | the spike of an agent call (F3: `--restricted --tools … --add-dir /workspace`, ADR-0064 amended, factory PR #23); its VM part moved to #0-301; details in [the section](#0-300-how-a-plugins-agent-runs-as-claude--ps-main-thread-is-not-known-migration-step-m21) | PR #691 |
+| 0-303 | a lock per task, the dispatcher's only for a slot and the sweep, the state's lock, `FACTORY_SLOTS` (factory PR #25, `v0.1.4`); details in [the section](#0-303-the-dispatchers-lock-sweep-and-caches-assume-one-task-at-a-time-migration-step-m25) | PR #693 |
 
 Items completed before `BACKLOG.md` existed are not listed.
 
@@ -5162,3 +5163,38 @@ AC3. The spike records, for each form measured, on `factory`'s container's Claud
      - whether the plugin's hook still refuses `run_in_background`.
 AC4. ADR-0064 is amended with the result: the form chosen, and without `--restricted` the settings keys the managed
      file pins.
+
+### 0-303. The dispatcher's lock, sweep and caches assume one task at a time (migration step M2.5)
+
+**Type:** ci · **Priority:** Medium · **Status:** Done, PR #693 (2026-11-22). Code: `factory` PR #25 (`5576c992`), pinned `v0.1.4`.
+**Autopilot:** human-only · **Risk:** medium · **Complexity:** medium · **Depends on:** #0-278
+**Touches:** the repository `profitbuild/factory` (dispatcher/src/state/, container/environment.mjs, container/daemon.mjs, cli.mjs), decisions (ADR-0060 D7 and ADR-0062 point 7, as amended for #0-303)
+
+**Problem.** One `flock` guards the whole dispatcher. Both ends of a run sweep every container, network, volume and
+work directory. One Maven cache volume is shared by all tasks. M5's two slots (ADR-0063 G1) cannot run on that.
+
+**Decided 2026-11-21** (`/research` of #0-303 with #0-309, the owner's option B; ADR-0060 D7 and ADR-0062 point 7
+amended): only what holds whatever the daemon's model is. The sweep's scope with two live tasks, the orphans, the
+Maven cache and #0-309 move to #0-285 (M3.4), which chooses that model: on a shared daemon a label is no boundary (a
+task's code makes objects unlabelled or labelled as another run's), and until M4 the whole sweep keeps the rollback's
+credential volumes off the daemon.
+
+**Work.** `migration/m2.md` M2.5:
+- a lock per task, `tasks/<runId>/lock`, by `lock.mjs`'s `flock`; the dispatcher's lock only for `cli.mjs sweep` and
+  taking a slot;
+- a task is live while its lock cannot be taken (`--nonblock`), in place of M5's lease;
+- a short state lock around each read, change and write of `state.json` and the task records;
+- `FACTORY_SLOTS` (1 until M5): a run refused while as many tasks are live;
+- the whole-daemon sweep at a run's start and end only while no other task is live (always in M2); otherwise only
+  the run's own labelled objects (`removeOwnObjects`); the run's task lock taken first, the check and the start's sweep
+  under the dispatcher's lock, the end's check and sweep under it too, before the task lock is released;
+- `cli.mjs sweep` (and `--force`) refused while any task's lock is held, naming its `runId`.
+
+**Acceptance criteria.**
+AC1. A run whose `FACTORY_SLOTS` are all held by live tasks is refused before it touches the daemon; a killed run's
+     lock is free again and its task no longer live, a child process of it still alive included (tests).
+AC2. The breaker counts the blocks of two concurrent writers, and a concurrent write to `state.json` loses neither
+     (tests).
+AC3. A run does not sweep the whole daemon while another task is live (it removes only its own labelled objects), and
+     sweeps it whole when none is; `cli.mjs sweep` and `sweep --force` refuse while a task's lock is held, naming its
+     `runId` (tests with a fake second task holding its lock).

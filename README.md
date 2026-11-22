@@ -870,7 +870,7 @@ security boundary, so every rule that matters is also enforced outside the model
     and the agent's tests run as the uid that unpacked the scripts, so a branch can forge it; the PR's CI, on a fresh
     runner, is the gate that counts.
   - An item an open pull request holds (a head branch containing `/<id>-`), or one of the dispatcher's own running
-    tasks with a branch, is refused before any container, every page of the list read; `main` is updated only as a
+    tasks on a branch, or live with none yet (its task lock held, #0-303), is refused before any container, every page of the list read; `main` is updated only as a
     fast-forward, with builder-app's token; the rule's cases (`.github/scripts/fixtures/item-lock-branches.tsv`) are
     run through `next-item.sh`'s own definition here and through the dispatcher's lock there, the copy held equal by
     `check-factory-copies.rb`.
