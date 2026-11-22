@@ -729,6 +729,13 @@ security boundary, so every rule that matters is also enforced outside the model
   it is in place before `factory`'s session starts, which requires it, and fails closed. Root writes nothing under
   `factory`'s home (a link planted there would turn a root write into root for `factory`). `create.sh` checks all of it
   on every VM it makes, and it and Factory guards refuse a VM copy of the devcontainer's allow-list that differs from it either way.
+- **What `factory` may use on the build VM is limited** (backlog #0-315, ADR-0057 as amended): root's drop-in for `factory`'s user slice
+  (`user-<uid>.slice`, which holds its rootless daemon and every container, a task's Testcontainers siblings included)
+  sets `MemoryMax` to the VM's memory less max(1.5 GiB, 12 %), `MemoryHigh` to 95 % of that and `TasksMax` to 16384,
+  derived by `provision.sh` at every boot, so a runaway build or a fork bomb in a test is killed inside `factory` and
+  the dispatcher, the resolver and the system stay up. `factory` cannot raise it; `create.sh` checks the values in
+  effect, the drop-in's owner and that the daemon runs inside the slice, and Factory guards tests the derivation. The
+  limit is one for all of `factory`: a container's own limits, and so a limit per slot, wait for #0-285's model.
 - **The factory's own repository, `profitbuild/factory`** (backlog #0-267, ADR-0060 D5): public, changed only by the
   owner's pull requests. Its ruleset `main` requires a pull request, the code owner's review and its CI checks
   (`Test`, `Test (git 2.43)`, `Lint Workflows`, bound to GitHub Actions; `Secret Scan` below) and refuses force pushes and deletion; its ruleset `tags` has

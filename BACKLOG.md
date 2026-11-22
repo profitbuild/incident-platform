@@ -197,7 +197,7 @@ Code, Javadoc, config comments and commits reference items as `backlog #N`.
 | [0-312](#0-312-nothing-watches-anthropics-claude-code-signing-key) | Nothing watches Anthropic's Claude Code signing key | ci | Low | Open |
 | [0-313](#0-313-the-first-real-agent-call-on-the-vm-would-need-claudes-key-in-the-task-container-migration-step-m27) | The first real agent call on the VM would need Claude's key in the task container (migration step M2.7) | security | High | Open |
 | [0-314](#0-314-factory-stays-public-when-its-product-goes-private-migration-step-m9) | `factory` stays public when its product goes private (migration step M9) | ci | Low | Open |
-| [0-315](#0-315-a-runaway-task-can-take-the-build-vm-and-the-dispatcher-down-with-it) | A runaway task can take the build VM and the dispatcher down with it | ci | High | Open |
+| [0-315](#0-315-a-runaway-task-can-take-the-build-vm-and-the-dispatcher-down-with-it) | A runaway task can take the build VM and the dispatcher down with it | ci | High | Open (AC2: the VM trial) |
 | [0-316](#0-316-every-agent-call-reads-a-215-kb-claudemd-written-as-a-runbook) | Every agent call reads a 21.5 KB `CLAUDE.md` written as a runbook | docs | Medium | Open |
 | [0-317](#0-317-nothing-keeps-factorys-modules-small) | Nothing keeps `factory`'s modules small | ci | Low | Open |
 | [0-133](#0-133-incidentresolvedevent-carries-no-openedat) | `IncidentResolvedEvent` carries no `openedAt` | tech-debt | Low | Open |
@@ -4795,39 +4795,45 @@ AC9. Whether the pinned Claude Code routes its calls through `ANTHROPIC_UNIX_SOC
 
 ### 0-315. A runaway task can take the build VM and the dispatcher down with it
 
-**Type:** ci · **Priority:** High · **Status:** Open (the review of opencomputer, 2026-11-22;
-`.ai/context/migration/opencomputer.md`).
+**Type:** ci · **Priority:** High · **Status:** Open (AC1, AC3 done; AC2, the trial on the VM, to do) (the review of
+opencomputer, 2026-11-22; `.ai/context/migration/opencomputer.md`).
 **Autopilot:** human-only · **Risk:** medium · **Complexity:** low · **Depends on:** —
-**Touches:** factory (scripts/factory-admin/build-vm/provision.sh: owner-only), root (README "Infrastructure Hardening",
-`.ai/context/migration/m2.md`)
+**Touches:** this repository's build VM scripts (`scripts/factory-admin/build-vm/provision.sh`, `create.sh`:
+owner-only), `.github/scripts/test-factory-slice-limits.sh` and `.github/workflows/factory-guards.yml` (owner-only),
+README "Infrastructure Hardening", ADR-0057 (amended) and the ADR index, `.ai/context/migration/m2.md`
 
 **Problem.** Nothing limits what `factory`'s containers use:
 - `host-config.mjs` requires `Memory`, `NanoCpus` and `CpuQuota` at 0 and `PidsLimit` unset;
 - a task's Testcontainers are siblings on the same daemon, which a container's own limit would not cover anyway.
 
-So one Maven build, or a fork bomb in a test, can exhaust the VM's memory or PIDs and take down the other slot's task
-and the dispatcher, whose process runs on the same VM as another user.
+So one Maven build, or a fork bomb in a test, can exhaust the VM's memory and take down the other slot's task and the
+dispatcher, whose process runs on the same VM as another user. Measured on the VM on 2026-11-22 (`m2.md`): the slice
+had `MemoryMax=infinity` and no swap; PIDs were bounded only by logind's default `TasksMax=33%` (31318).
 
-**Work.** A limit on `factory`'s systemd user slice, `user-<factory's uid>.slice` (`MemoryHigh`/`MemoryMax` below
-the VM's memory with room for the dispatcher and the system, `TasksMax`). The slice and not `user@<uid>.service`: it
-holds the user manager (and with it the rootless daemon and every container) and also `factory`'s processes outside
-it, such as a `sudo -u factory` session. The rootless `dockerd` and `containerd` sit inside the same limit, so an
-out-of-memory kill may take the daemon and not only the task's container; where the kernel's choice is not enough,
-the daemon's unit gets a lower `OOMScoreAdjust` or a sub-slice of its own, as opencomputer nests a runners' slice
-under the user's:
+**Work.** A limit on `factory`'s systemd user slice, `user-<factory's uid>.slice`: `MemoryMax` the VM's memory less
+max(1.5 GiB, 12 %), `MemoryHigh` 95 % of it (no swap: a wide band would only throttle), `TasksMax` 16384. The slice,
+the unit root owns above `factory`'s user manager, which holds the rootless daemon (`app.slice/docker.service`) and
+every container (`user.slice/docker-<id>.scope`). Not a `sudo -u factory` session, as first written: sudo's PAM has no
+`pam_systemd`, so the dispatcher's `docker` and `devcontainer` clients stay in their caller's session (measured), and
+they are clients only.
 - written by `provision.sh` into a drop-in under `/etc/systemd/`, root's, so a task cannot raise it, as opencomputer
   does in `deploy/vm/limits.sh` (the user's and the runners' slices, root-owned);
-- the values derived from the VM's memory and CPUs, the way `limits.sh` derives them.
+- the values derived from the VM's memory at every boot (`factory_slice_limits`), so a bigger VM for M5 needs no change.
 
-Limits per task container come with #0-285's model, since only a nested runtime would cover a task's test
-containers.
+Not done, and why: a lower `OOMScoreAdjust` for the daemon, first proposed here, gives nothing, since rootless Docker
+starts a container at no lower a score than its daemon's (`m2.md`, #0-284's AC8 trial); and the daemon's unit already
+has `OOMPolicy=continue`, its processes in a cgroup apart from the containers', so an OOM kill takes the largest
+process, a JVM. A sub-slice for the containers, as opencomputer's runners' slice, only if AC2 shows the daemon killed.
+Limits per task container come with #0-285's model, since only a nested runtime would cover a task's test containers.
 
 **Acceptance criteria.**
 AC1. `factory`'s user slice has `MemoryMax`, `MemoryHigh` and `TasksMax` below the VM's capacity, in a root-owned
-     drop-in `provision.sh` writes and `verify-pins.sh` or a check reads (test of the derived values).
+     drop-in `provision.sh` writes and `create.sh`'s `check_boundary` reads back from systemd (test of the derived
+     values: `test-factory-slice-limits.sh`, in Factory guards).
 AC2. On the build VM, a task's container that allocates past the limit is killed while the dispatcher stays up, and
      whether `factory`'s daemon survived is recorded; if it did not, the next run's container check stops it rather
-     than running on a half-dead daemon (a VM trial recorded in `m2.md`).
+     than running on a half-dead daemon; and `memory.peak` of the slice after a gate that runs the Kafka test
+     (`verify -pl shared,incident-service -am`) is recorded against `MemoryMax` (a VM trial recorded in `m2.md`).
 AC3. README "Infrastructure Hardening" names the limit and that a container's own limits wait for #0-285.
 
 ### 0-316. Every agent call reads a 21.5 KB `CLAUDE.md` written as a runbook

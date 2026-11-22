@@ -400,6 +400,48 @@ cat > "/etc/systemd/system/user@$factory_uid.service.d/factory-egress.conf" <<UN
 Requires=factory-egress.service factory-dns.service
 After=factory-egress.service factory-dns.service
 UNIT
+
+# --- What `factory` may use (backlog #0-315) ------------------------------------------------------------------------
+# Nothing else limits it: factory's containers run with no memory, CPU or PID limit (factory's host-config.mjs requires
+# the zeros until #0-285), and a task's Testcontainers are siblings on the same daemon, which a container's own limit
+# would not cover anyway. One Maven build, or a fork bomb in a test, would take the VM's memory, and with it the
+# dispatcher (another user's process on this VM) and the resolver the egress chain needs: the VM has no swap, so the
+# whole VM stalls in reclaim before the kernel's OOM killer acts. So root limits factory's user slice,
+# user-<uid>.slice, which holds factory's user manager and with it the rootless daemon (app.slice/docker.service) and
+# every container (user.slice/docker-<id>.scope, systemd's cgroup driver): measured on the VM on 2026-11-22 (m2.md).
+# `sudo -u factory`, the way the dispatcher runs docker and the devcontainer CLI, stays in its caller's session (sudo's
+# PAM has no pam_systemd), outside the slice: those are clients, the containers they start are the daemon's.
+# The values come from the VM's memory, so a bigger VM (M5's two slots) needs no change here:
+#   - MemoryMax: MemTotal less a reserve of max(1.5 GiB, 12 %) for the system, the resolver and the dispatcher (an idle
+#     VM used 570 MB, 222 MB of it factory's);
+#   - MemoryHigh: 95 % of it. With no swap the band between the two only throttles, so it is kept narrow: a runaway
+#     build ends in an OOM kill of its own process, not in a stall that only the gate's timeout would find;
+#   - TasksMax: 16384, below logind's default of 33 % (31318 on a 12 GiB VM), above the threads a gate takes with
+#     Spring's cached contexts, Kafka and Postgres.
+# An OOM kill inside the slice takes its largest process, a JVM (all of factory's run at oom_score_adj 200), not the
+# daemon, whose unit has OOMPolicy=continue; #0-315's AC2 checks that on the VM. Limits per task container come with
+# #0-285's model. A drop-in under /etc, root's, so factory cannot raise it: its own `systemctl --user set-property`
+# acts below the slice and can only narrow.
+# create.sh and .github/scripts/test-factory-slice-limits.sh read factory_slice_limits from this file to check the same
+# values, so it stays a function of its argument alone, its body ending at the first line that is `}`.
+factory_slice_limits() {  # <MemTotal in kB>: the drop-in's [Slice] section; fails on a VM too small for the gate
+  local total=$1 reserve max
+  case $total in '' | *[!0-9]*) echo "provision.sh: MemTotal '$total' is not a number of kB" >&2; return 1 ;; esac
+  reserve=$(( total * 12 / 100 ))
+  [ "$reserve" -ge 1572864 ] || reserve=1572864
+  max=$(( total - reserve ))
+  if [ "$max" -lt 4194304 ]; then
+    echo "provision.sh: a VM of $total kB leaves factory $max kB, below the 4 GiB a gate needs" >&2; return 1
+  fi
+  printf '[Slice]\nMemoryHigh=%sK\nMemoryMax=%sK\nTasksMax=16384\n' "$(( max * 95 / 100 ))" "$max"
+}
+limits=$(factory_slice_limits "$(awk '$1 == "MemTotal:" { print $2 }' /proc/meminfo)") || exit 1
+install -d -m 0755 -o root -g root "/etc/systemd/system/user-$factory_uid.slice.d"
+printf '# Written by provision.sh from the VM'"'"'s memory at every boot (backlog #0-315).\n%s\n' "$limits" \
+  > "/etc/systemd/system/user-$factory_uid.slice.d/50-factory-limits.conf"
+chown root:root "/etc/systemd/system/user-$factory_uid.slice.d/50-factory-limits.conf"
+chmod 0644 "/etc/systemd/system/user-$factory_uid.slice.d/50-factory-limits.conf"
+# The reload below applies it: on the first boot before factory's session starts, on a later one to the running slice.
 systemctl daemon-reload
 systemctl enable factory-egress.service factory-dns.service factory-egress.timer
 systemctl start factory-egress.service factory-dns.service factory-egress.timer

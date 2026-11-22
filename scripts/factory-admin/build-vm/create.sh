@@ -17,7 +17,8 @@
 # And the boundary of ADR-0057 (#0-116, #0-240), the same way, on the started VM: no rootful Docker daemon, `factory`
 # in no docker group, its daemon rootless, its egress chain in place, the VM's gateway (under Lima, the Mac's loopback
 # services) rejected for it, a host outside the allow-list unreachable and one inside it reachable, and its DNS sent to
-# the VM's resolver, which adds what it answers for the allow-list (#0-247), checked from a container. Before the VM, the
+# the VM's resolver, which adds what it answers for the allow-list (#0-247), checked from a container; and `factory`'s
+# user slice limited in memory and tasks, as provision.sh derives from the VM's memory (#0-315). Before the VM, the
 # VM's copy of the devcontainer's allow-list must equal it both ways (check-allowlists.sh).
 # The clone is owned by the subordinate uid the devcontainer's `dev` (uid 1000) maps to under rootless Docker, so
 # `dev` can write its workspace.
@@ -323,7 +324,38 @@ check_boundary() {
   [ -n "$helper" ] || boundary_fail "cannot read HELPER_IMAGE from provision.sh"
   vm "${as_factory[@]}" docker image inspect "$helper" >/dev/null 2>&1 || boundary_fail "the helper image $helper is not on factory's daemon"
   vm test -x /usr/bin/flock || boundary_fail "/usr/bin/flock is missing"
-  echo "factory-build: boundary holds $1 (rootless Docker for factory, egress filtered, gateway $gw rejected; dispatcher's sudo rule, checkout and directories as ADR-0062 says)"
+  # What factory may use (backlog #0-315): the limits of its slice in effect, equal to what provision.sh derives from
+  # this VM's memory (its factory_slice_limits, read from the file, so the two cannot disagree), from a drop-in root
+  # owns, and the daemon inside that slice. Read from systemd, not from the drop-in: a later drop-in would override it.
+  limits_fn=$(sed -n '/^factory_slice_limits() {/,/^}$/p' "$here/provision.sh")
+  # Read as test-factory-slice-limits.sh reads it: defined once, its range ending at its closing line (review round 1).
+  [ "$(grep -c '^factory_slice_limits() {' "$here/provision.sh")" = 1 ] && [ "$(tail -n 1 <<<"$limits_fn")" = "}" ] \
+    || boundary_fail "cannot read factory_slice_limits from provision.sh (not defined once, or no closing line)"
+  eval "$limits_fn"
+  # shellcheck disable=SC2016 # the awk program runs in the VM
+  mem=$(vm awk '$1 == "MemTotal:" { print $2 }' /proc/meminfo) || boundary_fail "cannot read the VM's MemTotal"
+  limits=$(factory_slice_limits "$mem") || boundary_fail "provision.sh's limits refuse this VM's memory ($mem kB)"
+  max_kb=$(sed -n 's/^MemoryMax=\([0-9][0-9]*\)K$/\1/p' <<<"$limits")
+  for p in MemoryHigh MemoryMax; do
+    kb=$(sed -n "s/^$p=\([0-9][0-9]*\)K\$/\1/p" <<<"$limits")
+    got=$(vm systemctl show "user-$uid.slice" -p "$p" --value) || boundary_fail "cannot read $p of user-$uid.slice"
+    [ -n "$kb" ] && [ "$got" = "$(( kb * 1024 ))" ] \
+      || boundary_fail "user-$uid.slice has $p=$got, not ${kb:-?} kB as provision.sh derives from $mem kB"
+  done
+  # TasksMax from the same output, not a literal of its own (review round 1, FAC-A01).
+  want_tasks=$(sed -n 's/^TasksMax=\([0-9][0-9]*\)$/\1/p' <<<"$limits")
+  tasks=$(vm systemctl show "user-$uid.slice" -p TasksMax --value) || boundary_fail "cannot read TasksMax of user-$uid.slice"
+  [ -n "$want_tasks" ] && [ "$tasks" = "$want_tasks" ] \
+    || boundary_fail "user-$uid.slice has TasksMax=$tasks, not ${want_tasks:-?} as provision.sh derives"
+  for want in "root:root 755 /etc/systemd/system/user-$uid.slice.d" \
+              "root:root 644 /etc/systemd/system/user-$uid.slice.d/50-factory-limits.conf"; do
+    got=$(vm sudo stat -c '%U:%G %a' "${want##* }") || boundary_fail "no ${want##* }"
+    [ "$got" = "${want% *}" ] || boundary_fail "${want##* } is $got, not ${want% *}"
+  done
+  cg=$(vm sudo systemctl --user -M factory@ show docker.service -p ControlGroup --value) \
+    || boundary_fail "cannot read the cgroup of factory's docker.service"
+  [[ $cg == "/user.slice/user-$uid.slice/"* ]] || boundary_fail "factory's daemon runs in $cg, outside user-$uid.slice and its limits"
+  echo "factory-build: boundary holds $1 (rootless Docker for factory, egress filtered, gateway $gw rejected; dispatcher's sudo rule, checkout and directories as ADR-0062 says; factory's slice limited to $(( max_kb / 1024 )) MiB and $want_tasks tasks)"
 }
 check_boundary "after creation"
 # Once more after a reboot: provision.sh runs again, late in the boot, after factory's session and its daemon have
