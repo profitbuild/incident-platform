@@ -196,6 +196,7 @@ Code, Javadoc, config comments and commits reference items as `backlog #N`.
 | [0-310](#0-310-three-small-follow-ups-of-the-review-of-factory-pr-22-0-284) | Three small follow-ups of the review of `factory` PR #22 (#0-284) | refactor | Low | Open |
 | [0-311](#0-311-factorys-own-devcontainer-installs-claude-code-unpinned-and-lets-node-widen-its-firewall) | `factory`'s own devcontainer installs Claude Code unpinned and lets `node` widen its firewall | ci | Medium | Open |
 | [0-312](#0-312-nothing-watches-anthropics-claude-code-signing-key) | Nothing watches Anthropic's Claude Code signing key | ci | Low | Open |
+| [0-313](#0-313-the-first-real-agent-call-on-the-vm-would-need-claudes-key-in-the-task-container-migration-step-m27) | The first real agent call on the VM would need Claude's key in the task container (migration step M2.7) | security | High | Open |
 | [0-133](#0-133-incidentresolvedevent-carries-no-openedat) | `IncidentResolvedEvent` carries no `openedAt` | tech-debt | Low | Open |
 | [0-134](#0-134-diff-cover-is-installed-by-version-without-hashes) | `diff-cover` is installed by version, without hashes | ci | Low | Open |
 | [0-135](#0-135-kubectl-in-ci-is-downloaded-unverified) | kubectl in CI is downloaded unverified | ci | Low | Open |
@@ -4025,11 +4026,17 @@ AC1. One PR opened by builder-app from a dispatcher run, through the proxy, with
 ### 0-289. Claude's credential would sit in the task container, and the cost of a run is unknown (migration step M3)
 
 **Type:** security · **Priority:** High · **Status:** Open (ADR-0063, 2026-11-21).
-**Autopilot:** human-only · **Risk:** high · **Complexity:** medium · **Depends on:** #0-287, #0-285
+**Autopilot:** human-only · **Risk:** high · **Complexity:** medium · **Depends on:** #0-287, #0-285, #0-313
 **Touches:** the repository `profitbuild/factory` (dispatcher/src/proxy/), factory (scripts/factory-admin/build-vm/provision.sh, .devcontainer/ allow-list: owner-only), root (README "Infrastructure Hardening")
 
 **Problem.** A task's agents need Claude. Today the login lives in the devcontainer's volumes; a token inside the task
 container is readable by every test it runs, and nothing counts what a run costs.
+
+**Moved to #0-313 (2026-11-22, ADR-0063 as amended for #0-301):** the proxy's core, the Console workspace and key,
+the task's token (through `apiKeyHelper`, not `ANTHROPIC_AUTH_TOKEN`: ADR-0064 point 5), usage per task, and AC1–AC3
+below. What stays here: the other Anthropic hosts out of the task allow-list, #0-274's rule if needed, AC4, the
+transcripts (`m3.md` M3.5). AC4 also names, for M5's shared daemon, the proxy's plain HTTP hop on the Docker bridge,
+which another task's container could reach.
 
 **Work.** `migration/m3.md` part M3.5: a Console workspace with a monthly spend limit (owner); a `node:http` proxy on
 the containers' host-gateway address that accepts only the running task's random token, swaps in the key and
@@ -4245,7 +4252,29 @@ AC2. Auto-merge is not switched on until the eight conditions of `migration.md` 
 
 **Type:** ci · **Priority:** High · **Status:** Open (ADR-0063, 2026-11-21).
 **Autopilot:** human-only · **Risk:** high · **Complexity:** high · **Depends on:** #0-300, #0-280, #0-284, #0-249, #0-283
-**Touches:** the repository `profitbuild/factory` (dispatcher/src/flow/, dispatcher/src/container/ for the managed settings' mount, the managed settings file, its tests and fixtures)
+**Touches:** the repository `profitbuild/factory` (dispatcher/src/flow/, dispatcher/src/container/ for the managed settings' mount, the managed settings file, schemas/answers/, the expected Claude Code version and tools, its tests and fixtures), ci (.github/scripts/check-factory-copies.rb: the expected version against `.devcontainer/claude-code.pin`, owner-only)
+
+**Decided with the owner (2026-11-22, `/research` of #0-301; ADR-0063 and ADR-0064 points 3 and 5 amended):**
+- **K2, a third option beside (a) and (b) below:** no Claude key in the container. The calls go through the
+  dispatcher's proxy, whose core comes first as #0-313 (M2.7); `ANTHROPIC_BASE_URL` in the `env -i` list, the task's
+  token through `apiKeyHelper` in the managed settings from a read-only file, never in an argument. It amends ADR-0062
+  points 4 and 5 (one mount, the task's token the one credential on the daemon), ADR-0063 (M3.5's core into M2) and
+  ADR-0064 point 5 (the channel); ADR-0060 D4 stands, as this is its design. A leaked token works only from the VM and
+  only while its task runs. #0-285's residual (what an earlier task left as `factory` reaching the next task's token)
+  is held until #0-285 by the rule that a run that holds a token runs only on a VM made anew that has run nothing before it.
+  - **Not (a)**, a Console key in the container: the bare key ADR-0060 rejected, usable anywhere until revoked, and
+    it amends ADR-0060 too.
+  - **Not (b)**, all of #0-285 and #0-289 before M2's exit: #0-285 chooses the daemon's model for M5 (ADR-0063 G1-b),
+    a decision M2 does not need for its few owner-named runs, and its dependencies would be cut first.
+  - The security review the options ask of the one chosen is #0-313's own (its code, with `factory.md`).
+- **f1:** no check of the architect's writes in this item: its write scope is #0-302's (M2.4), and until #0-302
+  nothing is committed or pushed.
+- **g1:** each agent's answer schema is the factory's (`schemas/answers/`, checked by `validate.mjs`); the task
+  record's forms stay the product's (`CLAUDE.md`, `.ai/work/_template/`).
+- The expected Claude Code version and `tools` are the factory's, compared with `.devcontainer/claude-code.pin` in
+  Lint Workflows (ADR-0065's open point).
+- The code needs no credential: AC1–AC3, AC5 and AC6 are tests. AC4, the first call on the VM with #0-300's VM part,
+  waits for #0-313.
 
 **Problem.** After the spike the dispatcher still has no agent call and no phases, and `backlog-autopilot.js`'s
 control flow lives only in incident-platform.
@@ -4270,8 +4299,8 @@ control flow lives only in incident-platform.
   item's first call on the VM (the exact F3 argv with `--agent` through `docker exec`, its `result.subtype`, the VM's
   Claude Code, the init event's tools with and without Bash, `CLAUDE.local.md`). That call needs a Claude credential
   in the task container, which ADR-0062 point 5 keeps off the daemon until M3.5's proxy (#0-289), and so does M2's
-  exit: **this item's `/research` decides first how a call gets its credential before M3.5**. The options as they
-  stand (review round 1 of #0-284's and #0-300's close):
+  exit: **this item's `/research` decides first how a call gets its credential before M3.5** (decided 2026-11-22:
+  K2, the block above). The options as they stood (review round 1 of #0-284's and #0-300's close):
   - (a) a dedicated Console key with a spend limit, passed per call and revoked after the trials: it amends ADR-0062
     point 5 (no credential on the daemon while the dispatcher runs), ADR-0060 (the task container holds no Claude
     credential), ADR-0063's order (#0-285 before any task holds a credential) and ADR-0064's premise, and accepts
@@ -4285,10 +4314,14 @@ AC1. A call with no `structured_output`, or an init event with `plugin_errors` o
 AC2. Whole runs against a fake agent reach each stop through `stopItem` with its stage (`node:test`, ported from `test-autopilot-workflow.mjs`).
 AC3. `MAX_TEST_FIXES`, `MAX_ROUNDS` and `MAX_AGENT_CALLS` each stop a run that exceeds them (tests).
 AC4. One call on the VM, in a task container, records #0-300's VM part in `m2.md`'s Record, its credential as decided
-     above: the init event's fields and its tools with and without Bash; `result.subtype`; the VM's Claude Code;
+     above (after #0-313, which needs AC1–AC3, AC5 and AC6's code): the init event's fields and its tools with and without Bash; `result.subtype`; the VM's Claude Code;
      whether the clone's `CLAUDE.md` loads (what F3's `--add-dir /workspace` is for) and whether `CLAUDE.local.md` does;
      whether any of the planted set takes effect; whether `--plugin-dir` loads under
      `strictKnownMarketplaces: []`; whether the plugin's hook still refuses `run_in_background`.
+AC5. Each agent's answer is checked against its schema in `factory`'s `schemas/answers/`, the one passed to
+     `--json-schema`, and each agent's "## Answer (JSON)" example passes it (tests).
+AC6. Lint Workflows fails when the factory's expected Claude Code version differs from `.devcontainer/claude-code.pin`
+     (a case of `test-check-factory-copies.sh`), with ADR-0061's list of compared copies amended in the same change.
 
 ### 0-302. Agents would commit their own work, with no trailer of run or agent (migration step M2.4)
 
@@ -4556,3 +4589,54 @@ directories. A key without a watched source fails Lint Workflows, wherever it li
 
 AC1. The weekly watch reports a rotated, revoked or extended Claude Code key, as it does Snyk's (test).
 AC2. A committed signing key under `.devcontainer/keys/` without a source the watch reads fails Lint Workflows (test).
+
+### 0-313. The first real agent call on the VM would need Claude's key in the task container (migration step M2.7)
+
+**Type:** security · **Priority:** High · **Status:** Open (split from #0-289 by the owner, `/research` of #0-301,
+2026-11-22).
+**Autopilot:** human-only · **Risk:** high · **Complexity:** medium · **Depends on:** #0-301's code (AC1–AC3, AC5, AC6: its managed file and call, which this extends); the measurements can come first. #0-301's AC4 (the first call on the VM) follows this item
+**Touches:** the repository `profitbuild/factory` (dispatcher/src/proxy/, the managed settings' `apiKeyHelper`, the token's mount in
+dispatcher/src/container/, its tests), factory (scripts/factory-admin/build-vm/provision.sh if the proxy needs an egress rule, owner-only), decisions
+(ADR-0064 point 5 if the measurement fails; ADR-0062 points 4 and 5 as amended), factory
+(scripts/factory-admin/build-vm/create.sh and provision.sh: the fresh-VM marker, owner-only), docs (docs/ai-factory.md: the VM made anew
+before a run that holds a token), root (README "Infrastructure Hardening", `.ai/context/migration/m2.md`)
+
+**Migration (ADR-0063 as amended for #0-301, 2026-11-22):** step M2.7, before #0-301's trial and M2's exit; the
+core of #0-289 (M3.5), moved forward. #0-285 (M3.4) still comes before the rest of M3.5.
+
+**Problem.** #0-301's trial (with #0-300's VM part) and M2's exit are real agent calls in a task container on the VM.
+The container holds no Claude credential (ADR-0060 D4, ADR-0062 point 5), and ADR-0060 rejected a bare key there: it
+would be readable by every test a task runs and usable anywhere until revoked. The proxy that keeps the key outside
+was planned for M3.5, after M2.
+
+**Work.** `migration/m2.md` M2.7:
+- **measure first:** `apiKeyHelper` from the managed settings is read under F3's `--restricted` (if not, ADR-0064
+  point 5 is amended before any code); the VM lets `dispatcher`'s proxy reach `api.anthropic.com` (ADR-0060's open
+  "its address in the egress filter");
+- the owner's part: a Console workspace for the factory with a monthly spend limit, its key in `dispatcher`'s
+  `~/.config/factory/` (mode 600), never on `factory`;
+- a `node:http` proxy of `dispatcher` on the containers' host-gateway address: only the running task's random token,
+  the key swapped in, the response streamed unbuffered (`HEAD /api/hello`, `/v1/messages`; `count_tokens` optional),
+  usage counted per task;
+- the token in a file per task, mounted read-only into the task's container (the exact mount comparison and the
+  `HostConfig` table), printed by the managed file's `apiKeyHelper`; `ANTHROPIC_BASE_URL` in the call's `env -i`
+  list (ADR-0064 point 5 as amended);
+- until #0-285: a run that holds a token runs only on a VM made anew that has run nothing before it (docs/ai-factory.md),
+  held by the dispatcher too (AC6: a marker `create.sh` writes and the first run consumes). Its cost is a VM made anew each
+  time, builder-app's key installed again included (#0-284's AC8 record); M2 needs few such runs (#0-301's AC4 and
+  M2's exit);
+- its pull request in `factory` gets a security review of its own (`/review factory#<n>` with `2` and `7`, by
+  `factory.md`): the review #0-301's options asked of the one chosen.
+
+**Acceptance criteria.**
+AC1. A request without the task's token, with another task's, or after the task ended is refused (tests).
+AC2. The key never appears in a response, a log line or a task's files (tests, and a VM trial recorded).
+AC3. Streaming passes through unchanged against a fake upstream, and usage is summed per task (tests).
+AC4. The two measurements above are recorded in `m2.md` before the proxy's code, and README "Infrastructure
+     Hardening" names the proxy, the token's channel and what a leaked token yields (the VM only, the task's life).
+AC5. The proxy listens on the containers' host-gateway address only, and the VM's filter keeps it unreachable from
+     outside the VM (a test of the bound address, and a VM trial recorded): what AC4's "the VM only" rests on.
+AC6. Until #0-285, the dispatcher refuses to issue a task's token on a VM that has run anything before: a marker
+     `create.sh` writes (root's, outside `factory`'s reach) and the first run consumes, so a skipped rebuild stops the
+     run instead of exposing the next task's token to what an earlier one left (tests; review round 3 of #0-301's
+     decisions, security).

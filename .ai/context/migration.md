@@ -93,11 +93,14 @@ Legend:
   - #0-300 (M2.1, the spike; decided 2026-11-21, ADR-0064: managed settings, `--restricted` by measurement, the init
     event as the isolation check; spike in `factory`'s container done, F3 chosen, `factory` PR #23; done 2026-11-22,
     its VM part moved to #0-301);
-  - #0-301 (M2.2–M2.3, the agent call and the phases);
+  - #0-301 (M2.2–M2.3, the agent call and the phases; decided 2026-11-22: K2, f1, g1; its first call on the VM, AC4,
+    after #0-313);
   - #0-302 (M2.4, the dispatcher's commits; #0-212 folded in);
   - #0-303 (M2.5, per task: the task's lock, its liveness, the state lock, `FACTORY_SLOTS`; its sweep's scope and
     the Maven cache moved to M3.4, #0-285, the owner's option B, 2026-11-21);
-  - #0-304 (M2.6, what 4.3a–c left).
+  - #0-304 (M2.6, what 4.3a–c left);
+  - #0-313 (M2.7, the credential proxy's core before the first real call; split from #0-289, ADR-0063 as amended
+    for #0-301, 2026-11-22).
 - carries too: #0-280 (the gate's schema against `run-tests.sh`; done, PR #680), #0-284 (decided 2026-11-21, ADR-0062 amended; the container checked before anything
   runs; code merged in `factory` PR #22 and #24, pinned `v0.1.3`; done 2026-11-22, AC8's second trial
   passed after the first was refused on `OomScoreAdj`; follow-ups #0-308 and #0-310,
@@ -112,7 +115,8 @@ Legend:
   - #0-306 (M3.3, the trace and `audit-data.sh`; #0-204 folded in);
   - #0-285 (M3.4, what a task leaves for the next task's credential, before the proxy; with it the daemon's model,
     the orphans' sweep, the Maven cache and #0-309, from #0-303);
-  - #0-289 (M3.5, proxy, Console, transcripts);
+  - #0-289 (M3.5, what is left of the proxy after #0-313: other Anthropic hosts, #0-274, the shared daemon's
+    token, the transcripts);
   - #0-307 (M3.6, the factory pin from one source).
 - the dispatcher's pull requests are held by the required `Factory guards` (rules 1, 2, 4), so the plugin's
   implementer needs no `guard-tests`/`guard-migrations` hook (`m3.md` "Before").
