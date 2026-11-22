@@ -52,8 +52,10 @@ ruby .github/scripts/check-shell.rb "$(command -v shellcheck)"; ruby .github/scr
 # ADR-0061): as a push, so differences are warnings; CI fails a pull request only on a difference it brings
 .github/scripts/test-check-factory-copies.sh; d=$(mktemp -d) && git clone -q --depth 1 https://github.com/profitbuild/factory.git "$d" && ruby .github/scripts/check-factory-copies.rb "$d"
 # The test gate's answers against factory's own checkGateAnswer at the adapter's factoryVersion (backlog #0-280,
-# ADR-0061 amended), as Lint Workflows runs them: the tag fetched and held to FACTORY_COMMIT first, by #0-278's step
-.github/scripts/ci-local.sh --job lint-workflows --step "The adapter keeps" --step "The test gate's answers"
+# ADR-0061 amended), and that version's expected Claude Code against .devcontainer/claude-code.pin (#0-301 AC6), as
+# Lint Workflows runs them: the tag fetched and held to FACTORY_COMMIT first, by #0-278's step
+.github/scripts/ci-local.sh --job lint-workflows --step "The adapter keeps" --step "The pinned factory expects" \
+  --step "The test gate's answers"
 # The autopilot workflow's logic (backlog #0-163): its helpers and whole runs against a fake agent(), on the Node of
 # .node-version (ADR-0043; Node's built-in modules only, no npm)
 node .github/scripts/test-autopilot-workflow.mjs

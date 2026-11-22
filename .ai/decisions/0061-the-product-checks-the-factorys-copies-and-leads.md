@@ -2,7 +2,8 @@
 
 - **Status:** Accepted (2026-11-19, by the owner); amended by #0-272 (2026-11-20: a fifth comparison, below) and by
   #0-278 (2026-11-21: a copy at a path of its own, the adapter against its version's schema, the version's tag, below)
-  and by #0-280 (2026-11-21: the test gate's answers against that version's own check, below)
+  and by #0-280 (2026-11-21: the test gate's answers against that version's own check, below) and by #0-301
+  (2026-11-22: the expected Claude Code version against that version's, below)
 - **Backlog:** #0-268
 - **Date:** 2026-11-19
 - **Author:** human (the owner chose option B and the lead direction (b) in an interactive session); written by Claude Code
@@ -113,6 +114,28 @@ The test gate's answer is a contract `factory` holds, `schemas/gate.schema.json`
   runs it, beside builder-app's key.
 - **What it leans on:** `dispatcher/src/adapter.mjs` exporting `checkGateAnswer` and `AdapterError`. A change of either
   in `factory` fails the step that moves the version, loudly (exit 3), never silently.
+
+## Amendment (#0-301, 2026-11-22): the expected Claude Code version against that version's
+
+`factory`'s `claude-code/expectations.json` holds `claudeCodeVersion`, the version every agent call's init event is
+held to (ADR-0064 point 3); `.devcontainer/claude-code.pin` holds the version every task container installs
+(ADR-0065). #0-301's AC6 first named a case of `check-factory-copies.rb`, against `factory@main`; decided with the
+owner on the pin's pull request (2026-11-22) to compare instead as #0-280 does:
+- **With what:** `factory` at the adapter's `factoryVersion`, the checkout #0-278's step made and held to
+  `FACTORY_COMMIT`, the code the build VM runs. Against `factory@main` the check would pass while the pinned version
+  expected another Claude Code (a bump in `factory` not yet tagged, or a pin moved here alone), and the difference
+  would show only at the first call on the VM, as a stopped task.
+- **A difference always fails**, by `.github/scripts/check-claude-code-expectations.sh` in its own step after
+  #0-278's: both values are this repository's choice (the pin directly, the expectations through `factoryVersion`),
+  so only a pull request here makes one, and a Claude Code bump and the `factory` version that expects it move in
+  one pull request.
+- **No factory code runs:** the step reads one JSON value with `jq`, a symlink on the way refused (SEC-31). A missing
+  checkout, or one #0-278's step refused before checking out, is a check not made (exit 3), told apart from a
+  difference (exit 1) as `check-gate-answers.mjs` does. The pin is read as `install-claude-code.sh`'s `pin_value`
+  reads it, and the cases run that function on the same pins (review round 1). Its cases:
+  `test-check-claude-code-expectations.sh`.
+- Not a copy: `check-factory-copies.rb`'s lists are unchanged, and when #0-307 moves that check to the pinned tag
+  (M3.6), this one is already there.
 
 ## Consequences
 

@@ -73,8 +73,10 @@ Code's setup documentation, "Binary integrity and code signing").
   then the seed-bugs benchmark and ADR-0064's re-measurements (docs/ai-factory.md "Pinned versions").
 - The dispatcher's expected version (ADR-0064 point 3) has a second holder besides this file. *Decided for #0-301
   (2026-11-22):* it is the factory's own value, beside its expected `tools` and managed file, and Lint Workflows
-  compares it with this file through `check-factory-copies.rb` (ADR-0061's list of copies amended when #0-301's AC6
-  is built); the init event check still fails closed on a difference.
+  compares it with this file (#0-301's AC6); the init event check still fails closed on a difference. *Built with
+  #0-301's AC6 (2026-11-22):* not through `check-factory-copies.rb` against `factory@main`, as first decided, but in
+  `factory` at the adapter's pinned `factoryVersion`, by `check-claude-code-expectations.sh`, a difference always
+  failing (ADR-0061 as amended): the version the build VM's `factory` expects, not the one its `main` does.
 - `profitbuild/factory`'s own `.devcontainer/Dockerfile` installs Claude Code and grants sudo the old way:
   #0-311.
 - Left open: the key's weekly watch (#0-312); root in the container (the Docker socket, #0-116, #0-285) can still replace the binary and the firewall,

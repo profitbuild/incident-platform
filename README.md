@@ -623,7 +623,10 @@ security boundary, so every rule that matters is also enforced outside the model
   with `DISABLE_UPDATES` (no `claude update`/`install` in the container). Lint Workflows holds the pin to the signed
   manifest (`--check`, beside the CI tools' pins); the preflight refuses any other running version. It was `curl https://claude.ai/install.sh | bash`: the
   newest release on the day of the build, under `dev`'s home. Limit: root in the container (the Docker socket, #0-285)
-  can still replace the binary there, for that container's life.
+  can still replace the binary there, for that container's life. Lint Workflows fails when `factory` at the pinned `factoryVersion` expects
+  another Claude Code than the pin (`claude-code/expectations.json`, which every agent call's init event is held to;
+  `check-claude-code-expectations.sh`, #0-301 AC6, ADR-0061 as amended), so a bump moves both in one pull request
+  rather than stopping the first call on the VM.
 - **Where a run starts**: the preflight refuses a run outside the devcontainer (`FACTORY_DEVCONTAINER` from its
   `containerEnv`), not under the bot's identity (`GIT_AUTHOR_NAME`, `GIT_COMMITTER_NAME` and `gh`'s login must be
   `FACTORY_BOT_LOGIN`, the two `GIT_*_EMAIL` its noreply address), with the firewall down (`example.com` not refused,
