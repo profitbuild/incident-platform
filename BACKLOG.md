@@ -196,6 +196,7 @@ Code, Javadoc, config comments and commits reference items as `backlog #N`.
 | [0-311](#0-311-factorys-own-devcontainer-installs-claude-code-unpinned-and-lets-node-widen-its-firewall) | `factory`'s own devcontainer installs Claude Code unpinned and lets `node` widen its firewall | ci | Medium | Open |
 | [0-312](#0-312-nothing-watches-anthropics-claude-code-signing-key) | Nothing watches Anthropic's Claude Code signing key | ci | Low | Open |
 | [0-313](#0-313-the-first-real-agent-call-on-the-vm-would-need-claudes-key-in-the-task-container-migration-step-m27) | The first real agent call on the VM would need Claude's key in the task container (migration step M2.7) | security | High | Open |
+| [0-314](#0-314-factory-stays-public-when-its-product-goes-private-migration-step-m9) | `factory` stays public when its product goes private (migration step M9) | ci | Low | Open |
 | [0-315](#0-315-a-runaway-task-can-take-the-build-vm-and-the-dispatcher-down-with-it) | A runaway task can take the build VM and the dispatcher down with it | ci | High | Open |
 | [0-316](#0-316-every-agent-call-reads-a-215-kb-claudemd-written-as-a-runbook) | Every agent call reads a 21.5 KB `CLAUDE.md` written as a runbook | docs | Medium | Open |
 | [0-317](#0-317-nothing-keeps-factorys-modules-small) | Nothing keeps `factory`'s modules small | ci | Low | Open |
@@ -4870,3 +4871,44 @@ its longest is 446 lines today. Nothing keeps them so.
 
 **Acceptance criteria.**
 AC1. `factory`'s CI fails a module over the hard limit, and the ratchet's list may only shrink (tests).
+
+### 0-314. `factory` stays public when its product goes private (migration step M9)
+
+**Type:** ci · **Priority:** Low · **Status:** Open (the owner's decision, 2026-11-22: with M9, not after M12).
+**Autopilot:** human-only · **Risk:** medium · **Complexity:** medium · **Depends on:** #0-298 (M9's own items: the
+organisation on GitHub Team and the read token for the VMs' clone)
+**Touches:** ci (.github/workflows/ci.yml, owner-only), factory (scripts/factory-admin/build-vm/provision.sh and
+create.sh, owner-only), the repository `profitbuild/factory` (its visibility, the owner's setting), decisions (ADR-0061
+amended), docs (the anonymous clone command for `check-factory-copies.rb`: CLAUDE.md "Commands", or where #0-316
+moves it), root (README "Infrastructure Hardening", `.ai/context/migration/m9-m12.md`, `migration.md`)
+
+**Migration:** step M9 (ADR-0055 stage 9). M9 makes incident-platform private on Team; nothing in the plan says what
+happens to `factory`, which would stay public on its own.
+
+**Problem.** Three places fetch `factory` anonymously over https and would fail once it is private:
+`.github/workflows/ci.yml` "The factory's copies match their originals" (`check-factory-copies.rb`, #0-268), the
+fetch of the adapter's `factoryVersion` tag in the step after it (#0-278, #0-280), and
+`scripts/factory-admin/build-vm/provision.sh`'s `FACTORY_REPO_URL` (the VM's checkout at `FACTORY_COMMIT`). On Free
+a private `factory` would also lose its ruleset; on Team, after M9, it does not.
+
+**Work.**
+- The same read token M9 gives the VMs' clone of the product, or a GitHub App of its own with `contents: read` on
+  `factory` only (never builder-app widened): decided in ADR-0061's amendment, with where its key lives (an environment
+  of incident-platform, ADR-0035) and that it mints only short-lived installation tokens.
+- The two CI steps and `provision.sh` fetch with that token; a run without it (a fork's pull request, which gets no
+  secret) refuses with a readable error and never skips, so the pin's check keeps meaning something.
+- Why `factory`'s own protection matters less once the product pins it: what runs on the VM is `FACTORY_COMMIT`, which
+  changes only through a reviewed pull request here; recorded in the ADR, not assumed.
+- The `gitleaks:allow` reason on `FACTORY_COMMIT` ("a public commit id") reworded; the anonymous clone
+  command for `check-factory-copies.rb` updated where it lives then (CLAUDE.md, or where #0-316 moved it);
+  `fetch-factory-pr.sh` checked (it reads through `gh`, logged in, so it should keep working).
+- The plan pages of GitHub checked first for what Team gives a private repository (rulesets, environments and their
+  protection rules, secret scanning), as M9 does for the product.
+
+**Acceptance criteria.**
+AC1. With `factory` private, both CI steps pass on a pull request of this repository and refuse, with their reason, on
+     one without the token (tests of the steps' scripts, and a CI run recorded).
+AC2. `create.sh` builds the VM from the private `factory` at the pinned commit, and `verify-pins.sh` passes (a VM
+     trial recorded in M9's record).
+AC3. ADR-0061 is amended with the token, its scope and where its key lives, and README "Infrastructure Hardening"
+     names the token and what a leaked one yields (read access to `factory`, until it expires).
