@@ -4713,7 +4713,9 @@ AC3. A call of `setUpTaskContainer` outside `inTaskEnvironment` is refused or ca
 
 ### 0-311. `factory`'s own devcontainer installs Claude Code unpinned and lets `node` widen its firewall
 
-**Type:** ci · **Priority:** Medium · **Status:** Open (split from #0-249/#0-283, 2026-11-21).
+**Type:** ci · **Priority:** Medium · **Status:** Open (split from #0-249/#0-283, 2026-11-21). `factory`'s side
+merged (factory PR #27, 2026-11-22); AC3 done here (2026-11-23, `check-factory-copies.rb`'s `BYTE_COPIES` and
+`BYTE_DIRS`, ADR-0061 point 2 as amended); AC1 and AC2 wait for the owner's check in a rebuilt `factory` devcontainer.
 **Autopilot:** human-only · **Risk:** medium · **Complexity:** low · **Depends on:** #0-249, #0-283
 **Touches:** the repository `profitbuild/factory` (.devcontainer/Dockerfile, .devcontainer/init-firewall.sh,
 .devcontainer/devcontainer.json, its CI), root (`check-factory-copies.rb`, if the pin becomes a copy it compares)

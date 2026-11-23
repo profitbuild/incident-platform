@@ -767,7 +767,9 @@ security boundary, so every rule that matters is also enforced outside the model
   Its CI scans every commit a pull request or a push adds for secrets (`Secret Scan`, this repository's job and
   scripts, a required check; #0-268). Lint Workflows here keeps `factory`'s copies equal to their originals
   (`check-factory-copies.rb`, #0-268): its tool pins and actions' SHAs, the copied scripts, `setup-node`,
-  `zizmor.yml`, `.node-version`, the denies and builder-app's permissions (#0-272), both ways, against a fresh clone of
+  `zizmor.yml`, `.node-version`, the denies, builder-app's permissions (#0-272) and its devcontainer's Claude Code
+  (`claude-code.pin`, `install-claude-code.sh` and the signing key, byte for byte with the installer's mode, a key only
+  `factory` holds a finding: #0-311), both ways, against a fresh clone of
   `factory@main`; this repository
   leads (ADR-0061), so a pull request here that changes a compared file fails on a difference it brings until
   `factory` matches, and a difference `main` has already is a warning; the clone is outside input (a symlink in it

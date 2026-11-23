@@ -18,6 +18,9 @@
 #      NOTICE_START, ending at the next bare `#` line; a copy without it is a finding), and every file of `factory`
 #      that carries the notice is in COPIES (the list both ways); setup-node's action.yml and zizmor.yml equal their
 #      originals once comments are removed (their comments name each repository's items); .node-version byte for byte;
+#      and the devcontainer's Claude Code, byte for byte with its mode (backlog #0-311 AC3, ADR-0061 point 2 as
+#      amended, ADR-0065): BYTE_COPIES, and
+#      the files of BYTE_DIRS both ways, so a key `factory` trusts and this repository does not is a finding;
 #   4. denies: `factory`'s .claude/settings.json denies every deny here but those of OPTIONAL_DENIES, and nothing
 #      that this repository does not deny (AC4). An optional deny names what `factory` has no use for; present there
 #      it is no finding, so `factory` may add one without a false alarm.
@@ -54,8 +57,8 @@ require 'open3'
 require 'set'
 require_relative 'run-blocks'
 
-# Files here whose content the comparison reads: a pull request that changes one is the side that leads.
-COMPARED = %w[
+# The files the comparisons below read other than the byte copies, which COMPARED adds to them.
+COMPARED_FILES = %w[
   .github/workflows/ci.yml
   .github/scripts/install-pinned-tool.sh
   .github/scripts/secret-scan.sh
@@ -67,6 +70,17 @@ COMPARED = %w[
   .github/repository-settings/apps/profitbuild-builder.json
   .github/scripts/fixtures/item-lock-branches.tsv
 ].freeze
+# Copies of `factory`'s devcontainer, byte for byte, the executable bit included (backlog #0-311 AC3, ADR-0065): its
+# Claude Code is installed from the pin's version, by the script, against the key of BYTE_DIRS. They carry no notice,
+# since the pin's lines are read as data and the key file cannot hold a comment; their comments name this repository's
+# files (factory's README says so). A bump of claude-code.pin here, ADR-0065's one-PR bump, fails until `factory` has it.
+BYTE_COPIES = %w[.devcontainer/claude-code.pin .devcontainer/install-claude-code.sh].freeze
+# Directories compared file by file, both ways: a file only one side has is a finding (a key only `factory` holds
+# would let its pin be signed by a key this repository never trusted). A pull request that changes any file under one
+# leads, as COMPARED's files do.
+BYTE_DIRS = %w[.devcontainer/keys].freeze
+# Files here whose content the comparison reads, the byte copies included: a pull request that changes one leads.
+COMPARED = (COMPARED_FILES + BYTE_COPIES).freeze
 COPIES = %w[
   .github/scripts/install-pinned-tool.sh
   .github/scripts/secret-scan.sh
@@ -146,6 +160,15 @@ def read(root, rel)
   path = File.join(root, rel)
   factory_path!(path) if root == FACTORY
   File.file?(path) ? File.read(path) : nil
+end
+
+# The regular files directly in a directory, by name (a symlink in `factory` is refused before this runs).
+def dir_files(root, rel)
+  dir = File.join(root, rel)
+  factory_path!(dir) if root == FACTORY
+  return [] unless File.directory?(dir)
+
+  Dir.children(dir).select { |name| File.file?(File.join(dir, name)) }.sort
 end
 
 def ci_files(root)
@@ -279,6 +302,32 @@ def compare(product)
       found << "#{rel} is missing on one side"
     end
   end
+  BYTE_COPIES.each do |rel|
+    original = read(product, rel)
+    copy = read(FACTORY, rel)
+    if original.nil?
+      found << "#{rel} is listed as copied byte for byte but this repository has no such file"
+    elsif copy.nil?
+      found << "factory has no #{rel}"
+    elsif copy != original
+      found << "factory's #{rel} differs from this repository's (#{digest(original)} here)"
+    elsif File.executable?(File.join(product, rel)) != File.executable?(File.join(FACTORY, rel))
+      found << "factory's #{rel} is #{File.executable?(File.join(FACTORY, rel)) ? '' : 'not '}executable, this repository's " \
+               "is#{File.executable?(File.join(product, rel)) ? '' : ' not'}"
+    end
+  end
+  BYTE_DIRS.each do |rel|
+    ours = dir_files(product, rel)
+    theirs = dir_files(FACTORY, rel)
+    (ours - theirs).each { |name| found << "factory has no #{rel}/#{name}" }
+    (theirs - ours).each { |name| found << "factory's #{rel}/#{name} is not in this repository's #{rel}/" }
+    (ours & theirs).each do |name|
+      original = read(product, "#{rel}/#{name}")
+      next if original == read(FACTORY, "#{rel}/#{name}")
+
+      found << "factory's #{rel}/#{name} differs from this repository's (#{digest(original)} here)"
+    end
+  end
   ours = read(product, '.node-version').to_s.strip
   theirs = read(FACTORY, '.node-version').to_s.strip
   found << "factory's .node-version is #{theirs}, this repository's #{ours}" if ours != theirs
@@ -303,7 +352,13 @@ def compare(product)
   found
 end
 
-touched = changed_file ? File.readlines(changed_file, chomp: true).map(&:strip) & COMPARED : []
+touched = if changed_file
+            File.readlines(changed_file, chomp: true).map(&:strip).select do |f|
+              COMPARED.include?(f) || BYTE_DIRS.any? { |d| f.start_with?("#{d}/") }
+            end
+          else
+            []
+          end
 findings = compare(File.expand_path('.'))
 # Differences main already has are not this pull request's: they warn, as on every other run.
 already = touched.empty? ? Set.new(findings) : Set.new(compare(File.expand_path(baseline)))
