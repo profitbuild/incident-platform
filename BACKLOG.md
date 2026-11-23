@@ -198,7 +198,6 @@ Code, Javadoc, config comments and commits reference items as `backlog #N`.
 | [0-313](#0-313-the-first-real-agent-call-on-the-vm-would-need-claudes-key-in-the-task-container-migration-step-m27) | The first real agent call on the VM would need Claude's key in the task container (migration step M2.7) | security | High | Open |
 | [0-314](#0-314-factory-stays-public-when-its-product-goes-private-migration-step-m9) | `factory` stays public when its product goes private (migration step M9) | ci | Low | Open |
 | [0-316](#0-316-every-agent-call-reads-a-215-kb-claudemd-written-as-a-runbook) | Every agent call reads a 21.5 KB `CLAUDE.md` written as a runbook | docs | Medium | Open |
-| [0-317](#0-317-nothing-keeps-factorys-modules-small) | Nothing keeps `factory`'s modules small | ci | Low | Open |
 | [0-318](#0-318-a-git-failure-in-the-dispatchers-base-tree-puts-gits-stderr-in-a-stops-reason) | A git failure in the dispatcher's base tree puts git's stderr in a stop's reason | ci | Low | Open |
 | [0-319](#0-319-nothing-tests-how-createsh-reads-the-slices-limits-back) | Nothing tests how `create.sh` reads the slice's limits back | ci | Low | Open |
 | [0-133](#0-133-incidentresolvedevent-carries-no-openedat) | `IncidentResolvedEvent` carries no `openedAt` | tech-debt | Low | Open |
@@ -4036,8 +4035,16 @@ slot, each slot wiped after each task. No Sysbox or nested-Podman spike; the opt
      token is issued only on a clean slot, and issuing it uses the mark up, so a slot is clean for one task only;
      this replaces #0-313 AC6's fresh VM.
 - **The network between slots:** a slot's containers do not reach the ports another slot's tasks publish
-  (Testcontainers' PostgreSQL and Kafka through rootlesskit on the VM), whatever address they try.
+  (Testcontainers' PostgreSQL and Kafka through rootlesskit on the VM), whatever address they try. **How (option C,
+  measured 2026-11-23, `migration/measurements/0-313-m2-0-285/`):** each slot's daemon publishes on an address of its
+  own on a dummy interface (`daemon.json` `"ip"` and `"host-gateway-ip"`, so `host.docker.internal` and Testcontainers
+  stay unchanged), each slot's uid may reach only its own address on `lo`, and FACTORY-EGRESS's rule for the VM's
+  address on the ephemeral range goes. Measured: on today's chain another slot's random port (`-P`) is reached; with
+  option C it listens on the slot's address only, its own slot reaches it and the other does not.
 - **Images after a wipe:** loaded from a root-owned tarball, or a local mirror, chosen by the time measured.
+  Measured 2026-11-23: the whole wipe 11.9–14.7 s with 332 MB of images (about 1–1.5 minutes estimated with a task
+  image of 2–3 GB), well under 3 minutes, so a tarball and no mirror; the user manager did not come back by itself
+  under linger, and is kept down anyway; a socket for a task lives outside `/run` (rootlesskit's `--copy-up=/run`).
 - **The Maven cache:** per slot, wiped with it, seeded read-only if the time measured needs it (`maven.repo.local.tail`).
 - **Not closed:** ADR-0064's residual within one task (root in its own container through its slot's socket).
 - **Its ADR amends ADR-0062** (one `factory` user), and this item comes before M5's `FACTORY_SLOTS=2`.
@@ -4120,7 +4127,8 @@ transcripts (`m3.md` M3.5). AC4 also names, for M5's shared daemon, the proxy's 
 which another task's container could reach.
 
 **Work.** `migration/m3.md` part M3.5: a Console workspace with a monthly spend limit (owner); a `node:http` proxy on
-the containers' host-gateway address that accepts only the running task's random token, swaps in the key and
+the containers' host-gateway address (since 2026-11-23 a dummy address of its own, #0-313's measurement 2) that
+accepts only the running task's random token, swaps in the key and
 streams to `api.anthropic.com`, counting usage per task (the task allow-list without Anthropic's hosts is #0-313's
 AC7 since 2026-11-22); #0-274 if the proxy needs a rule of its own.
 Spike first: no login is needed with `ANTHROPIC_BASE_URL` and
@@ -4713,7 +4721,9 @@ AC3. A call of `setUpTaskContainer` outside `inTaskEnvironment` is refused or ca
 
 ### 0-311. `factory`'s own devcontainer installs Claude Code unpinned and lets `node` widen its firewall
 
-**Type:** ci · **Priority:** Medium · **Status:** Open (split from #0-249/#0-283, 2026-11-21).
+**Type:** ci · **Priority:** Medium · **Status:** Open (split from #0-249/#0-283, 2026-11-21). `factory`'s side
+merged (factory PR #27, 2026-11-22); AC3 done here (2026-11-23, `check-factory-copies.rb`'s `BYTE_COPIES` and
+`BYTE_DIRS`, ADR-0061 point 2 as amended); AC1 and AC2 wait for the owner's check in a rebuilt `factory` devcontainer.
 **Autopilot:** human-only · **Risk:** medium · **Complexity:** low · **Depends on:** #0-249, #0-283
 **Touches:** the repository `profitbuild/factory` (.devcontainer/Dockerfile, .devcontainer/init-firewall.sh,
 .devcontainer/devcontainer.json, its CI), root (`check-factory-copies.rb`, if the pin becomes a copy it compares)
@@ -4778,7 +4788,9 @@ was planned for M3.5, after M2.
   "its address in the egress filter");
 - the owner's part: a Console workspace for the factory with a monthly spend limit, its key in `dispatcher`'s
   `~/.config/factory/` (mode 600), never on `factory`;
-- a `node:http` proxy of `dispatcher` on the containers' host-gateway address: only the running task's random token,
+- a `node:http` proxy of `dispatcher` on an address of its own on a dummy interface (measurement 2, 2026-11-23: was
+  "the containers' host-gateway address"; `provision.sh` makes the interface and one FACTORY-EGRESS `ACCEPT` for that
+  address and port): only the running task's random token,
   the key swapped in, the response streamed unbuffered (`HEAD /api/hello`, `/v1/messages`; `count_tokens` optional),
   usage counted per task; any other path refused and logged by its path alone, so what Claude Code's built-in plugins
   (telemetry among them) might send goes nowhere through it (review of #0-313's measurement record, 2026-11-22);
@@ -4828,17 +4840,21 @@ was planned for M3.5, after M2.
   - The result decides nothing here: a socket per task is #0-285's, with its model.
   - The reason: while a task holds `factory`'s daemon socket, a socket per task is no boundary between tasks, since
     `factory`'s daemon must reach every task's socket to mount it.
-  - This item stays on the host-gateway address with the task's token, as decided.
+  - This item stays on TCP with the task's token, as decided, on the proxy's dummy address (measurement 2,
+    2026-11-23; was "the host-gateway address").
 
 **Acceptance criteria.**
 AC1. A request without the task's token, with another task's, or after the task ended is refused (tests).
 AC2. The key never appears in a response, a log line or a task's files (tests, and a VM trial recorded).
 AC3. Streaming passes through unchanged against a fake upstream, and usage is summed per task (tests).
 AC4. The two measurements above are recorded in `m2.md` before the proxy's code (the first, 2026-11-22: `apiKeyHelper`
-     is read under `--restricted`), and README "Infrastructure
+     is read under `--restricted`; the second, 2026-11-23: `dispatcher` reaches the API, and a task's container
+     reaches the proxy on a dummy address with one rule, `measurements/0-313-m2-0-285/`), and README "Infrastructure
      Hardening" names the proxy, the token's channel and what a leaked token yields (the VM only, the task's life).
-AC5. The proxy listens on the containers' host-gateway address only, and the VM's filter keeps it unreachable from
-     outside the VM (a test of the bound address, and a VM trial recorded): what AC4's "the VM only" rests on.
+AC5. The proxy listens on its dummy address only (measurement 2; was "the containers' host-gateway address"), and
+     the VM's filter keeps it unreachable from outside the VM: an INPUT rule for that address and port, since a
+     neighbour on the VM's network could still send to it through the VM's MAC (review of measurement 2,
+     security) (a test of the bound address, and a VM trial recorded): what AC4's "the VM only" rests on.
 AC6. Until #0-285 (whose clean slot then replaces the marker, ADR-0063 as amended for the new product), the dispatcher
      refuses to issue a task's token on a VM that has run anything before: a marker
      `create.sh` writes (root's, outside `factory`'s reach) and the first run consumes, so a skipped rebuild stops the
@@ -4881,23 +4897,6 @@ AC1. `CLAUDE.md` holds the sections named above, each runbook part replaced by a
 AC2. Its size is recorded before and after.
 AC3. One agent call on the VM after the change reads `CLAUDE.md` with the same section for the factory's agents
      (`### This product, for the factory's agents`).
-
-### 0-317. Nothing keeps `factory`'s modules small
-
-**Type:** ci · **Priority:** Low · **Status:** Open (the review of opencomputer, 2026-11-22;
-`.ai/context/migration/opencomputer.md`).
-**Autopilot:** human-only · **Risk:** low · **Complexity:** low · **Depends on:** —
-**Touches:** the repository `profitbuild/factory` (a script under dispatcher/testing/ or scripts/, its CI job)
-
-**Problem.** `factory`'s modules carry headers that state their invariants, which works while each module is small;
-its longest is 446 lines today. Nothing keeps them so.
-
-**Work.** A check in `factory`'s CI, as opencomputer's `computer/scripts/max-lines.mjs`:
-- a soft limit warns and a hard one fails;
-- a list of files already over it, which may only shrink (a ratchet).
-
-**Acceptance criteria.**
-AC1. `factory`'s CI fails a module over the hard limit, and the ratchet's list may only shrink (tests).
 
 ### 0-314. `factory` stays public when its product goes private (migration step M9)
 

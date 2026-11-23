@@ -70,7 +70,10 @@ Code's setup documentation, "Binary integrity and code signing").
 ## Consequences
 
 - Two images built from one commit run one version, the pin's. A bump is one pull request changing the pin's lines,
-  then the seed-bugs benchmark and ADR-0064's re-measurements (docs/ai-factory.md "Pinned versions").
+  then the seed-bugs benchmark and ADR-0064's re-measurements (docs/ai-factory.md "Pinned versions"). Since
+  2026-11-23 (#0-311 AC3, ADR-0061 point 2 as amended) `factory`'s devcontainer holds copies of the pin, the
+  installer and the key, so that pull request fails until `factory` has the same pin: the owner mirrors it there
+  first, as for every copy (ADR-0061 point 3).
 - The dispatcher's expected version (ADR-0064 point 3) has a second holder besides this file. *Decided for #0-301
   (2026-11-22):* it is the factory's own value, beside its expected `tools` and managed file, and Lint Workflows
   compares it with this file (#0-301's AC6); the init event check still fails closed on a difference. *Built with

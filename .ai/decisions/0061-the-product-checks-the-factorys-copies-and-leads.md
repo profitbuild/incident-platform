@@ -3,7 +3,8 @@
 - **Status:** Accepted (2026-11-19, by the owner); amended by #0-272 (2026-11-20: a fifth comparison, below) and by
   #0-278 (2026-11-21: a copy at a path of its own, the adapter against its version's schema, the version's tag, below)
   and by #0-280 (2026-11-21: the test gate's answers against that version's own check, below) and by #0-301
-  (2026-11-22: the expected Claude Code version against that version's, below)
+  (2026-11-22: the expected Claude Code version against that version's, below) and by #0-311 (2026-11-23: the
+  devcontainer's Claude Code byte for byte, below)
 - **Backlog:** #0-268
 - **Date:** 2026-11-19
 - **Author:** human (the owner chose option B and the lead direction (b) in an interactive session); written by Claude Code
@@ -31,6 +32,12 @@ as `factory` starts a difference; a red `main` stops the autopilot (main-guard).
    `COPIES`. Also `setup-node` and `zizmor.yml` minus their comments, `.node-version`, and the denies both ways:
    `OPTIONAL_DENIES`, named entries only (what `factory` does not have: `repository-settings.rb`, this repository's
    `docker/` files), are neither required nor refused there; the generic `.env` denies are required.
+   *Amended (2026-11-23, #0-311 AC3):* also `BYTE_COPIES`, `factory`'s devcontainer's `claude-code.pin` and
+   `install-claude-code.sh`, byte for byte with the installer's executable bit, and `BYTE_DIRS`, its
+   `.devcontainer/keys/`, file by file both ways, so a key only `factory` holds is a finding (its pin could be
+   signed by a key this repository never trusted). Byte for byte, not by notice: the pin's lines are read as data and
+   the key file cannot carry a comment (the choice of `factory` PR #27's review, option b). A pull request that
+   changes a file under `.devcontainer/keys/` leads, as `COMPARED`'s files do.
 3. **This repository leads.** On a pull request, a difference fails only if the pull request changes a file of
    `COMPARED` and `main` (the merge commit's first parent) does not have the difference already. Every other
    difference, and every push, is a warning. A copy is changed here first, then the owner mirrors it in `factory`

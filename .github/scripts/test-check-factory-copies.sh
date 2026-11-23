@@ -83,6 +83,12 @@ fresh() {
     mkdir -p "$dir/factory/dispatcher/testing/fixtures" && mv "$dir/x" "$dir/factory/dispatcher/testing/fixtures/item-lock-branches.tsv"
     put product .node-version 24.22.1
     put factory .node-version 24.22.1
+    for t in product factory; do
+        put "$t" .devcontainer/claude-code.pin '# The pin.' 'CLAUDE_CODE_VERSION=2.1.328'
+        put "$t" .devcontainer/install-claude-code.sh '#!/usr/bin/env bash' 'echo install'
+        chmod 0755 "$dir/$t/.devcontainer/install-claude-code.sh"
+        put "$t" .devcontainer/keys/KEY.asc '-----BEGIN PGP PUBLIC KEY BLOCK-----' 'key' '-----END PGP PUBLIC KEY BLOCK-----'
+    done
     put product .claude/settings.json "$PRODUCT_DENIES"
     put factory .claude/settings.json '{"permissions":{"deny":["Bash(git push --force *)","Bash(gh pr review *)"]}}'
     put product .github/repository-settings/apps/profitbuild-builder.json "$APP_JSON"
@@ -155,6 +161,25 @@ fresh; put product .github/zizmor.yml 'rules:' '  self-repository:' '    disable
 expect "zizmor.yml changed here beyond its comments" 1 "::error::factory's .github/zizmor.yml differs from this repository's (sha256 " .github/zizmor.yml
 fresh; put product .node-version 24.22.2
 expect ".node-version bumped here" 1 "::error::factory's .node-version is 24.22.1, this repository's 24.22.2" .node-version
+fresh; put product .devcontainer/claude-code.pin '# The pin.' 'CLAUDE_CODE_VERSION=2.1.330'
+expect "the Claude Code pin bumped here, factory behind, fails the PR" 1 \
+    "::error::factory's .devcontainer/claude-code.pin differs from this repository's (sha256 " .devcontainer/claude-code.pin
+expect "the same difference on a push only warns" 0 "::warning::factory's .devcontainer/claude-code.pin differs"
+fresh; put factory .devcontainer/install-claude-code.sh '#!/usr/bin/env bash' 'echo other'
+expect "an installer factory changed on its own only warns, even on a PR that changes it here" 0 \
+    "::warning::factory's .devcontainer/install-claude-code.sh differs" .devcontainer/install-claude-code.sh
+fresh; chmod 0644 "$dir/factory/.devcontainer/install-claude-code.sh"
+expect "factory's installer not executable" 0 "factory's .devcontainer/install-claude-code.sh is not executable, this repository's is"
+fresh; put product .devcontainer/keys/NEW.asc 'a key added here'
+expect "a key added here, factory without it, fails the PR" 1 "::error::factory has no .devcontainer/keys/NEW.asc" .devcontainer/keys/NEW.asc
+fresh; put factory .devcontainer/keys/OTHER.asc 'a key only factory has'
+expect "a key only factory trusts" 0 "factory's .devcontainer/keys/OTHER.asc is not in this repository's .devcontainer/keys/"
+fresh; put product .devcontainer/keys/KEY.asc 'the key replaced'
+expect "the key changed here, factory behind, fails the PR" 1 "::error::factory's .devcontainer/keys/KEY.asc differs" .devcontainer/keys/KEY.asc
+fresh; rm "$dir/factory/.devcontainer/claude-code.pin"
+expect "factory without the pin" 0 "factory has no .devcontainer/claude-code.pin"
+fresh; rm "$dir/product/.devcontainer/claude-code.pin"
+expect "a byte copy listed but gone here" 0 ".devcontainer/claude-code.pin is listed as copied byte for byte but this repository has no such file"
 fresh; put product .claude/settings.json '{"permissions":{"deny":["Bash(git push --force *)","Bash(gh pr review *)","Read(./.env)"]}}'
 expect "a generic .env deny here is required in factory" 1 "::error::factory's .claude/settings.json does not deny Read(./.env)" .claude/settings.json
 fresh; put product .claude/settings.json '{"permissions":{"deny":["Bash(git push --force *)","Bash(gh pr review *)","Bash(rm *)"]}}'

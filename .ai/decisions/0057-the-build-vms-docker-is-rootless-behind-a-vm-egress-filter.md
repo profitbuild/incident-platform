@@ -2,7 +2,8 @@
 
 - **Status:** Accepted (2026-11-14, by the owner, after PR #632 merged); amended by backlog #0-247 (2026-11-14: the
   allow-list is kept by the VM's resolver, which adds what it answers, not by a set resolved every 30 minutes); amended
-  by backlog #0-315 (2026-11-22: `factory`'s user slice is limited in memory and tasks)
+  by backlog #0-315 (2026-11-22: `factory`'s user slice is limited in memory and tasks); amended by #0-313's
+  measurement 2 (2026-11-23: the proxy's dummy address and its rules, below)
 - **Amends:** ADR-0056 (the build VM's Docker Engine: Docker CE run rootless for `factory`, not Ubuntu's `docker.io`
   run by root with `factory` in the docker group)
 - **Backlog:** #0-116, #0-240, #0-247, #0-315
@@ -150,6 +151,16 @@ The owner approved a spike with three criteria before it started (2026-11-14):
 R1: the devcontainer image built from nothing behind both filters, its firewall up, and the gate passed: 639 tests
 of `shared` and `oncall-service`, 0 failures (65–97 s). R3: `create.sh` builds the same from `provision.sh` alone
 (49 s), and a reboot runs `provision.sh` again with no duplicate rule or chain.
+
+**Amended (2026-11-23, #0-313's measurement 2, `.ai/context/migration/measurements/0-313-m2-0-285/`):** the
+dispatcher's credential proxy (#0-313) listens on an address of its own on a dummy interface that `provision.sh`
+makes, with one FACTORY-EGRESS `ACCEPT` for that address and port, so a task's container reaches it through the
+filter, and an INPUT rule that keeps it from anything outside the VM. Measured on the build VM: a container of
+`factory`'s daemon does not reach `10.0.2.2` (rootlesskit's `--disable-host-loopback`) nor the VM's address on a port
+of its own; it does reach the VM's address on a port of the ephemeral range, through FACTORY-EGRESS's `lo` rule for
+rootlesskit's published ports, which therefore also lets every container reach every listener of the VM's address in
+that range, another slot's Testcontainers included. #0-285 replaces that rule with an address per slot (`daemon.json`
+`ip` and `host-gateway-ip`) and a rule per slot's uid, measured there as option C.
 
 ## Alternatives considered
 
