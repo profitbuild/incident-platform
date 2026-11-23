@@ -175,7 +175,11 @@ Two facts the item had not weighed (the `/research` of 2026-11-20):
 5. **No credential lives on `factory`'s daemon while the dispatcher runs; the rollback shares the VM by time.**
    *Amended (2026-11-22, ADR-0064 point 5 for #0-301, built by #0-313):* one exception, a task's token for the
    dispatcher's proxy, mounted read-only into that task's container. It is no Claude key: it is valid only through
-   the proxy, which listens on the containers' host-gateway address alone, and only while its task runs. Until
+   the proxy, which listens on the containers' host-gateway address alone, and only while its task runs
+   (*amended 2026-11-23, #0-313's measurement 2, `.ai/context/migration/measurements/0-313-m2-0-285/`: on a dummy
+   interface's address of its own, which `provision.sh` makes with one FACTORY-EGRESS `ACCEPT` and an INPUT rule for
+   it; not on the VM's address, which a container reaches only on the ephemeral range by the rule for rootlesskit's
+   ports and which a cloud puts on a network outside the VM*). Until
    #0-285, a run that holds a token runs only on a VM made anew that has run nothing before it. A
    test with the Docker socket (`docker-outside-of-docker`, for Testcontainers) can mount any volume of that daemon
    itself, whatever the dispatcher mounts. So the rollback (today's `/backlog-autopilot` in the VM's devcontainer)

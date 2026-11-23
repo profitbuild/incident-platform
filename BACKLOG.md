@@ -4036,7 +4036,15 @@ slot, each slot wiped after each task. No Sysbox or nested-Podman spike; the opt
      token is issued only on a clean slot, and issuing it uses the mark up, so a slot is clean for one task only;
      this replaces #0-313 AC6's fresh VM.
 - **The network between slots:** a slot's containers do not reach the ports another slot's tasks publish
-  (Testcontainers' PostgreSQL and Kafka through rootlesskit on the VM), whatever address they try.
+  (Testcontainers' PostgreSQL and Kafka through rootlesskit on the VM), whatever address they try. **How (option C,
+  measured 2026-11-23, `migration/measurements/0-313-m2-0-285/`):** each slot's daemon publishes on an address of its
+  own on a dummy interface (`daemon.json` `"ip"` and `"host-gateway-ip"`, so `host.docker.internal` and Testcontainers
+  stay unchanged), each slot's uid may reach only its own address on `lo`, and FACTORY-EGRESS's rule for the VM's
+  address on the ephemeral range goes. Measured: on today's chain another slot's random port (`-P`) is reached; with
+  option C it listens on the slot's address only, its own slot reaches it and the other does not.
+  Measured 2026-11-23: the whole wipe 11.9–14.7 s with 332 MB of images (about 1–1.5 minutes estimated with a task
+  image of 2–3 GB), well under 3 minutes, so a tarball and no mirror; the user manager did not come back by itself
+  under linger, and is kept down anyway; a socket for a task lives outside `/run` (rootlesskit's `--copy-up=/run`).
 - **Images after a wipe:** loaded from a root-owned tarball, or a local mirror, chosen by the time measured.
 - **The Maven cache:** per slot, wiped with it, seeded read-only if the time measured needs it (`maven.repo.local.tail`).
 - **Not closed:** ADR-0064's residual within one task (root in its own container through its slot's socket).
@@ -4120,7 +4128,8 @@ transcripts (`m3.md` M3.5). AC4 also names, for M5's shared daemon, the proxy's 
 which another task's container could reach.
 
 **Work.** `migration/m3.md` part M3.5: a Console workspace with a monthly spend limit (owner); a `node:http` proxy on
-the containers' host-gateway address that accepts only the running task's random token, swaps in the key and
+the containers' host-gateway address (since 2026-11-23 a dummy address of its own, #0-313's measurement 2) that
+accepts only the running task's random token, swaps in the key and
 streams to `api.anthropic.com`, counting usage per task (the task allow-list without Anthropic's hosts is #0-313's
 AC7 since 2026-11-22); #0-274 if the proxy needs a rule of its own.
 Spike first: no login is needed with `ANTHROPIC_BASE_URL` and
@@ -4780,7 +4789,9 @@ was planned for M3.5, after M2.
   "its address in the egress filter");
 - the owner's part: a Console workspace for the factory with a monthly spend limit, its key in `dispatcher`'s
   `~/.config/factory/` (mode 600), never on `factory`;
-- a `node:http` proxy of `dispatcher` on the containers' host-gateway address: only the running task's random token,
+- a `node:http` proxy of `dispatcher` on an address of its own on a dummy interface (measurement 2, 2026-11-23: was
+  "the containers' host-gateway address"; `provision.sh` makes the interface and one FACTORY-EGRESS `ACCEPT` for that
+  address and port): only the running task's random token,
   the key swapped in, the response streamed unbuffered (`HEAD /api/hello`, `/v1/messages`; `count_tokens` optional),
   usage counted per task; any other path refused and logged by its path alone, so what Claude Code's built-in plugins
   (telemetry among them) might send goes nowhere through it (review of #0-313's measurement record, 2026-11-22);
@@ -4830,17 +4841,21 @@ was planned for M3.5, after M2.
   - The result decides nothing here: a socket per task is #0-285's, with its model.
   - The reason: while a task holds `factory`'s daemon socket, a socket per task is no boundary between tasks, since
     `factory`'s daemon must reach every task's socket to mount it.
-  - This item stays on the host-gateway address with the task's token, as decided.
+  - This item stays on TCP with the task's token, as decided, on the proxy's dummy address (measurement 2,
+    2026-11-23; was "the host-gateway address").
 
 **Acceptance criteria.**
 AC1. A request without the task's token, with another task's, or after the task ended is refused (tests).
 AC2. The key never appears in a response, a log line or a task's files (tests, and a VM trial recorded).
 AC3. Streaming passes through unchanged against a fake upstream, and usage is summed per task (tests).
 AC4. The two measurements above are recorded in `m2.md` before the proxy's code (the first, 2026-11-22: `apiKeyHelper`
-     is read under `--restricted`), and README "Infrastructure
+     is read under `--restricted`; the second, 2026-11-23: `dispatcher` reaches the API, and a task's container
+     reaches the proxy on a dummy address with one rule, `measurements/0-313-m2-0-285/`), and README "Infrastructure
      Hardening" names the proxy, the token's channel and what a leaked token yields (the VM only, the task's life).
-AC5. The proxy listens on the containers' host-gateway address only, and the VM's filter keeps it unreachable from
-     outside the VM (a test of the bound address, and a VM trial recorded): what AC4's "the VM only" rests on.
+AC5. The proxy listens on its dummy address only (measurement 2; was "the containers' host-gateway address"), and
+     the VM's filter keeps it unreachable from outside the VM: an INPUT rule for that address and port, since a
+     neighbour on the VM's network could still send to it through the VM's MAC (review of measurement 2,
+     security) (a test of the bound address, and a VM trial recorded): what AC4's "the VM only" rests on.
 AC6. Until #0-285 (whose clean slot then replaces the marker, ADR-0063 as amended for the new product), the dispatcher
      refuses to issue a task's token on a VM that has run anything before: a marker
      `create.sh` writes (root's, outside `factory`'s reach) and the first run consumes, so a skipped rebuild stops the

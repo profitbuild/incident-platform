@@ -158,7 +158,8 @@ is no boundary, and under a daemon per task most of it would be thrown away. G1'
 **Amended (2026-11-22, #0-301's `/research`, the owner's options K2, f1, g1): the credential proxy's core moves into
 M2.** M2's exit and #0-301's trial (with #0-300's VM part) are real agent calls in a task container on the VM, and
 ADR-0060 D4 keeps Claude's credential out of it. So the proxy's core, M3.5's first half, comes before that trial as
-an item of its own, #0-313 (M2.7): a `node:http` proxy of `dispatcher` on the containers' host-gateway address that
+an item of its own, #0-313 (M2.7): a `node:http` proxy of `dispatcher` on the containers' host-gateway address (since
+2026-11-23 a dummy address of its own with one rule, #0-313's measurement 2, ADR-0062 point 5 as amended) that
 accepts only the running task's random token, swaps in the Console key (a workspace with a spend limit) and streams
 to `api.anthropic.com`, counting usage per task. M3.4 (#0-285) still comes before the rest of M3.5; until it does,
 a run that holds a token runs only on a VM made anew (`delete.sh`, `create.sh`) that has run nothing before it, so

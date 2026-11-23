@@ -1,0 +1,8 @@
+RESULT D.published 10.204.2.1:32768 
+RESULT D.listening 10.204.2.1:32768 
+RESULT D.own_slot.host.docker.internal open
+RESULT D.own_slot.10.204.2.1 open
+RESULT D.other_slot.10.204.2.1 closed
+RESULT D.other_slot.192.168.5.15 closed
+RESULT D.other_slot.host.docker.internal closed
+RESULT done

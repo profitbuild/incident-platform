@@ -1,0 +1,33 @@
+RESULT vm_ip 192.168.5.15
+RESULT ephemeral_range 32768-60999
+RESULT rootless_env 
+docker: invalid reference format
+
+Run 'docker run --help' for more information
+docker: invalid reference format
+
+Run 'docker run --help' for more information
+RESULT B.task_image alpine:latest
+RESULT B.tarball_bytes 332268032
+RESULT B.user_manager_back_by_itself_with_linger inactive
+RESULT B.run1.stop_s 1.2
+RESULT B.run1.remove_s 5.0
+RESULT B.run1.recreate_and_daemon_s 0.8
+RESULT B.run1.load_s 7.7
+RESULT B.run1.total_s 14.7
+docker: invalid reference format
+
+Run 'docker run --help' for more information
+RESULT B.run2.stop_s 1.2
+RESULT B.run2.remove_s 0.2
+RESULT B.run2.recreate_and_daemon_s 1.7
+RESULT B.run2.load_s 10.0
+RESULT B.run2.total_s 13.1
+RESULT B.run3.stop_s 1.2
+RESULT B.run3.remove_s 0.1
+RESULT B.run3.recreate_and_daemon_s 1.7
+RESULT B.run3.load_s 8.8
+RESULT B.run3.total_s 11.9
+RESULT B.pull_postgres_kafka_from_network_s 12.0
+RESULT done
+
