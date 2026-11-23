@@ -734,9 +734,12 @@ security boundary, so every rule that matters is also enforced outside the model
   on every VM it makes, and it and Factory guards refuse a VM copy of the devcontainer's allow-list that differs from it either way.
 - **What `factory` may use on the build VM is limited** (backlog #0-315, ADR-0057 as amended): root's drop-in for `factory`'s user slice
   (`user-<uid>.slice`, which holds its rootless daemon and every container, a task's Testcontainers siblings included)
-  sets `MemoryMax` to the VM's memory less max(1.5 GiB, 12 %), `MemoryHigh` to 95 % of that and `TasksMax` to 16384,
-  derived by `provision.sh` at every boot, so a runaway build or a fork bomb in a test is killed inside `factory` and
-  the dispatcher, the resolver and the system stay up. `factory` cannot raise it; `create.sh` checks the values in
+  sets `MemoryMax` to the VM's memory less max(1.5 GiB, 12 %) and `TasksMax` to 16384, with no `MemoryHigh` (written
+  as `infinity`: with no swap it only throttled, so a runaway hung at it, the daemon with it, and never met the OOM
+  killer), derived by `provision.sh` at every boot, so a runaway build or a fork bomb in a test is killed inside
+  `factory` and the dispatcher, the resolver and the system stay up: tried on the VM on 2026-11-22, a container past
+  the limit was OOM-killed in 5 s, the daemon and a process of `dispatcher` untouched, while a full gate peaked at
+  5974 MiB. `factory` cannot raise it; `create.sh` checks the values in
   effect, the drop-in's owner and that the daemon runs inside the slice, and Factory guards tests the derivation. The
   limit is one for all of `factory`: a container's own limits, and so a limit per slot, wait for #0-285's model.
 - **The factory's own repository, `profitbuild/factory`** (backlog #0-267, ADR-0060 D5): public, changed only by the
