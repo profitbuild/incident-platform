@@ -175,6 +175,7 @@ resolvable.
 | 0-300 | the spike of an agent call (F3: `--restricted --tools … --add-dir /workspace`, ADR-0064 amended, factory PR #23); its VM part moved to #0-301; details in [the section](#0-300-how-a-plugins-agent-runs-as-claude--ps-main-thread-is-not-known-migration-step-m21) | PR #691 |
 | 0-303 | a lock per task, the dispatcher's only for a slot and the sweep, the state's lock, `FACTORY_SLOTS` (factory PR #25, `v0.1.4`); details in [the section](#0-303-the-dispatchers-lock-sweep-and-caches-assume-one-task-at-a-time-migration-step-m25) | PR #693 |
 | 0-315 | `factory`'s user slice limited on the build VM: `MemoryMax` from the VM's memory, `TasksMax` 16384, `MemoryHigh` `infinity` after AC2's trial (PR #699, then this), checked by `create.sh`; details in [the section](#0-315-a-runaway-task-can-take-the-build-vm-and-the-dispatcher-down-with-it) | PR #703 |
+| 0-317 | `factory`'s modules held to 400 lines (a warning) and 600 (a failure) by `dispatcher/test/max-lines.test.mjs`, the files over it on a ratchet list each at its length (`fake-daemon.mjs`, 640), its shrinking and no new entry held by review (factory PR #28); details in [the section](#0-317-nothing-keeps-factorys-modules-small) | factory PR #28 |
 
 Items completed before `BACKLOG.md` existed are not listed.
 
@@ -5243,3 +5244,21 @@ AC2. On the build VM, a task's container that allocates past the limit is killed
      than running on a half-dead daemon; and `memory.peak` of the slice after a gate that runs the Kafka test
      (`verify -pl shared,incident-service -am`) is recorded against `MemoryMax` (a VM trial recorded in `m2.md`).
 AC3. README "Infrastructure Hardening" names the limit and that a container's own limits wait for #0-285.
+
+### 0-317. Nothing keeps `factory`'s modules small
+
+**Type:** ci · **Priority:** Low · **Status:** Done, factory PR #28 (2026-11-22; the IP side, this item's closing, with #0-313's measurement 2). The
+"446 lines" below was `factory`'s longest module in `dispatcher/src/` when the item was written; with `dispatcher/testing/`
+in the scope, `fake-daemon.mjs` was 640, the one entry of the ratchet (`RATCHET`).
+**Autopilot:** human-only · **Risk:** low · **Complexity:** low · **Depends on:** —
+**Touches:** the repository `profitbuild/factory` (a script under dispatcher/testing/ or scripts/, its CI job)
+
+**Problem.** `factory`'s modules carry headers that state their invariants, which works while each module is small;
+its longest is 446 lines today. Nothing keeps them so.
+
+**Work.** A check in `factory`'s CI, as opencomputer's `computer/scripts/max-lines.mjs`:
+- a soft limit warns and a hard one fails;
+- a list of files already over it, which may only shrink (a ratchet).
+
+**Acceptance criteria.**
+AC1. `factory`'s CI fails a module over the hard limit, and the ratchet's list may only shrink (tests).

@@ -187,7 +187,8 @@ Legend:
 ### Factory items in no step
 Open factory items no step carries, done when their turn comes in the queue:
 - #0-255, #0-257, #0-221, #0-224, #0-69, #0-2 and #0-152 B;
-- #0-316 (the product's `CLAUDE.md` as a short starting point) and #0-317 (a file-size ratchet in `factory`'s CI),
+- #0-316 (the product's `CLAUDE.md` as a short starting point) and #0-317 (a file-size ratchet in `factory`'s CI; done,
+  factory PR #28),
   from the review of opencomputer (`migration/opencomputer.md`).
 - #0-318 (git's stderr out of a stop's reason in `base-tree.mjs`), from the review of `factory` PR #26 (#0-301).
 

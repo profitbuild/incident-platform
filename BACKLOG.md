@@ -198,7 +198,6 @@ Code, Javadoc, config comments and commits reference items as `backlog #N`.
 | [0-313](#0-313-the-first-real-agent-call-on-the-vm-would-need-claudes-key-in-the-task-container-migration-step-m27) | The first real agent call on the VM would need Claude's key in the task container (migration step M2.7) | security | High | Open |
 | [0-314](#0-314-factory-stays-public-when-its-product-goes-private-migration-step-m9) | `factory` stays public when its product goes private (migration step M9) | ci | Low | Open |
 | [0-316](#0-316-every-agent-call-reads-a-215-kb-claudemd-written-as-a-runbook) | Every agent call reads a 21.5 KB `CLAUDE.md` written as a runbook | docs | Medium | Open |
-| [0-317](#0-317-nothing-keeps-factorys-modules-small) | Nothing keeps `factory`'s modules small | ci | Low | Open |
 | [0-318](#0-318-a-git-failure-in-the-dispatchers-base-tree-puts-gits-stderr-in-a-stops-reason) | A git failure in the dispatcher's base tree puts git's stderr in a stop's reason | ci | Low | Open |
 | [0-319](#0-319-nothing-tests-how-createsh-reads-the-slices-limits-back) | Nothing tests how `create.sh` reads the slice's limits back | ci | Low | Open |
 | [0-133](#0-133-incidentresolvedevent-carries-no-openedat) | `IncidentResolvedEvent` carries no `openedAt` | tech-debt | Low | Open |
@@ -4042,10 +4041,10 @@ slot, each slot wiped after each task. No Sysbox or nested-Podman spike; the opt
   stay unchanged), each slot's uid may reach only its own address on `lo`, and FACTORY-EGRESS's rule for the VM's
   address on the ephemeral range goes. Measured: on today's chain another slot's random port (`-P`) is reached; with
   option C it listens on the slot's address only, its own slot reaches it and the other does not.
+- **Images after a wipe:** loaded from a root-owned tarball, or a local mirror, chosen by the time measured.
   Measured 2026-11-23: the whole wipe 11.9–14.7 s with 332 MB of images (about 1–1.5 minutes estimated with a task
   image of 2–3 GB), well under 3 minutes, so a tarball and no mirror; the user manager did not come back by itself
   under linger, and is kept down anyway; a socket for a task lives outside `/run` (rootlesskit's `--copy-up=/run`).
-- **Images after a wipe:** loaded from a root-owned tarball, or a local mirror, chosen by the time measured.
 - **The Maven cache:** per slot, wiped with it, seeded read-only if the time measured needs it (`maven.repo.local.tail`).
 - **Not closed:** ADR-0064's residual within one task (root in its own container through its slot's socket).
 - **Its ADR amends ADR-0062** (one `factory` user), and this item comes before M5's `FACTORY_SLOTS=2`.
@@ -4898,23 +4897,6 @@ AC1. `CLAUDE.md` holds the sections named above, each runbook part replaced by a
 AC2. Its size is recorded before and after.
 AC3. One agent call on the VM after the change reads `CLAUDE.md` with the same section for the factory's agents
      (`### This product, for the factory's agents`).
-
-### 0-317. Nothing keeps `factory`'s modules small
-
-**Type:** ci · **Priority:** Low · **Status:** Open (the review of opencomputer, 2026-11-22;
-`.ai/context/migration/opencomputer.md`).
-**Autopilot:** human-only · **Risk:** low · **Complexity:** low · **Depends on:** —
-**Touches:** the repository `profitbuild/factory` (a script under dispatcher/testing/ or scripts/, its CI job)
-
-**Problem.** `factory`'s modules carry headers that state their invariants, which works while each module is small;
-its longest is 446 lines today. Nothing keeps them so.
-
-**Work.** A check in `factory`'s CI, as opencomputer's `computer/scripts/max-lines.mjs`:
-- a soft limit warns and a hard one fails;
-- a list of files already over it, which may only shrink (a ratchet).
-
-**Acceptance criteria.**
-AC1. `factory`'s CI fails a module over the hard limit, and the ratchet's list may only shrink (tests).
 
 ### 0-314. `factory` stays public when its product goes private (migration step M9)
 

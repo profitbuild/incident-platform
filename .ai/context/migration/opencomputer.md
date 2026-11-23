@@ -98,7 +98,7 @@ runtime**, because its containers are nested inside it.
 | Events from the proxy and a thresholds file | #0-306 (M3.3), a note of the plan; its ACs when #0-306 is made ready | M3 | One event per model call (time to first byte, status, limit headers, refusals), held by thresholds `audit-data.sh` reads |
 | A second provider through the same proxy | #0-259 (M6.7) | M6 | A provider is a profile of routes and a key, so a second model's key stays out of the container too |
 | The product's `CLAUDE.md` as a short starting point | new #0-316 | any time | Point 5 above |
-| A file-size ratchet in `factory`'s CI | new #0-317 | any time | Cheap. `factory`'s longest module is 446 lines today |
+| A file-size ratchet in `factory`'s CI | new #0-317 | any time | Cheap. `factory`'s longest module in `dispatcher/src/` was 446 lines; with `dispatcher/testing/`, `fake-daemon.mjs` was 640 (done, factory PR #28) |
 
 ## Not taken, and why
 
