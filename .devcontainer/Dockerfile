@@ -57,20 +57,36 @@ RUN /usr/local/share/claude-code/install-claude-code.sh --pin /usr/local/share/c
 COPY init-firewall.sh /usr/local/bin/
 RUN chmod 0755 /usr/local/bin/init-firewall.sh
 
+# The dispatcher's credential proxy on the build VM (backlog #0-313), the one address and port a task container may reach
+# besides the list: copied from .devcontainer/factory-proxy, which check-allowlists.sh holds equal to provision.sh's
+# PROXY_ADDR and first PROXY_PORTS. A file of the image and not a build argument of task.json: the dispatcher's closed
+# table of task.json's keys (ADR-0062 point 4) carries `build.dockerfile` and `build.context` only. So the owner's
+# container gets the file too; on the Mac nothing listens there, and the rule it gives opens one address and port.
+COPY factory-proxy /etc/factory-firewall/proxy
+# Anthropic's hosts, the owner's container's only (backlog #0-313 AC7): a build argument devcontainer.json passes and
+# task.json, holding no `build.args`, cannot. With it unset, as in every task container, the image holds no choice and
+# the firewall opens no Anthropic host: a task's model calls go through the proxy alone. "1" or nothing; anything else
+# fails the build rather than guess.
+ARG FACTORY_ANTHROPIC=""
 # The one extra host the firewall opens, from the image and never from the caller (backlog #0-283): the ntfy server
 # of the owner's container, a build argument devcontainer.json takes from the host's FACTORY_NTFY_SERVER. Empty (the
-# task container, as task.json passes none; the VM's rollback, whose `up` runs with none of the owner's variables): no
-# file, no extra host. A host, not a URL, is written: the scheme, any port and any path are cut, and anything but
+# task container, as task.json passes none): no file, no extra host. A host, not a URL, is written: the scheme, any port and any path are cut, and anything but
 # letters, digits, dots and hyphens, or one starting with a hyphen (it would reach `dig` as an option) or holding an empty label (`..`), fails the build. A server changed on the host takes a rebuild; until then
 # notifications fail and the firewall still comes up (a host given as an argument and held by sudo would have failed
 # the firewall itself on such a change, leaving the network open).
 ARG FACTORY_NTFY_SERVER=""
 RUN mkdir -p /etc/factory-firewall \
+    && case "${FACTORY_ANTHROPIC}" in \
+        1) printf 'yes\n' > /etc/factory-firewall/anthropic ;; \
+        '') ;; \
+        *) echo "FACTORY_ANTHROPIC '${FACTORY_ANTHROPIC}' is neither 1 nor empty" >&2; exit 1 ;; \
+    esac \
     && if [ -n "${FACTORY_NTFY_SERVER}" ]; then \
         host=$(printf '%s' "${FACTORY_NTFY_SERVER}" | sed -E 's#^https?://##; s#[/:].*##') \
         && case "$host" in *[!A-Za-z0-9.-]*|-*|''|*..*) echo "FACTORY_NTFY_SERVER '${FACTORY_NTFY_SERVER}' has no valid host" >&2; exit 1 ;; esac \
         && printf '%s\n' "$host" > /etc/factory-firewall/extra-hosts; \
     fi \
+    && chown -R root:root /etc/factory-firewall \
     && chmod -R go-w /etc/factory-firewall
 
 # The workspace is the host's directory, mounted, and Docker Desktop can report it under another owner

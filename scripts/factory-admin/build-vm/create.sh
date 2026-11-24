@@ -138,7 +138,7 @@ check_boundary() {
   # Commands as factory without its login shell (`sudo -iu` would run ~/.profile, which code a test can rewrite on a VM
   # agents have used, and make a check pass falsely: review round 4 of #0-116); curl -q skips ~/.curlrc, and DOCKER_HOST
   # names factory's daemon over any context in ~/.docker. By the daemon's own socket, not the /run/docker.sock link the
-  # dispatcher and the rollback scripts use, on purpose: these checks judge the daemon itself, and the link is checked
+  # dispatcher uses (the rollback scripts did until #0-313), on purpose: these checks judge the daemon itself, and the link is checked
   # apart (the feature's mount of /var/run/docker.sock below, and the daemon dispatcher's docker reaches).
   as_factory=(sudo -u factory -H env "DOCKER_HOST=unix:///run/user/$uid/docker.sock")
   [ "$(vm systemctl is-enabled docker.service 2>/dev/null || true)" = masked ] || boundary_fail "the rootful docker.service is not masked"
@@ -362,7 +362,55 @@ check_boundary() {
   cg=$(vm sudo systemctl --user -M factory@ show docker.service -p ControlGroup --value) \
     || boundary_fail "cannot read the cgroup of factory's docker.service"
   [[ $cg == "/user.slice/user-$uid.slice/"* ]] || boundary_fail "factory's daemon runs in $cg, outside user-$uid.slice and its limits"
-  echo "factory-build: boundary holds $1 (rootless Docker for factory, egress filtered, gateway $gw rejected; dispatcher's sudo rule, checkout and directories as ADR-0062 says; factory's slice limited to $(( max_kb / 1024 )) MiB and $want_tasks tasks)"
+  # The dispatcher's proxy (backlog #0-313; ADR-0062 point 5 as amended): its configuration root's and as provision.sh
+  # writes it, its dummy interface holding the address alone with no route leaving by it, the port closed to the VM's
+  # network (AC5) and open to factory's containers on that address only; Anthropic's API reached by `dispatcher` and
+  # by nothing of `factory`, from the VM or from a container (AC7).
+  # The same form check-allowlists.sh reads them in: digits, dots and commas, a trailing `# comment` allowed.
+  p_addr=$(sed -n 's/^PROXY_ADDR=\([0-9.,]*\)\( *#.*\)\{0,1\}$/\1/p' "$here/provision.sh" | head -1)
+  p_ports=$(sed -n 's/^PROXY_PORTS=\([0-9.,]*\)\( *#.*\)\{0,1\}$/\1/p' "$here/provision.sh" | head -1)
+  [ -n "$p_addr" ] && [ -n "$p_ports" ] || boundary_fail "cannot read PROXY_ADDR or PROXY_PORTS from provision.sh"
+  conf=$(vm sudo stat -c '%U:%G %a %F' /etc/factory-proxy.conf) || boundary_fail "no /etc/factory-proxy.conf"
+  [ "$conf" = "root:root 644 regular file" ] || boundary_fail "/etc/factory-proxy.conf is $conf, not root:root 644 regular file"
+  [ "$(vm cat /etc/factory-proxy.conf)" = "$(printf 'ADDR=%s\nPORTS=%s' "$p_addr" "$p_ports")" ] \
+    || boundary_fail "/etc/factory-proxy.conf does not hold ADDR=$p_addr and PORTS=$p_ports alone"
+  addrs=$(vm ip -4 -o addr show dev factory-proxy0 </dev/null | awk '{print $4}') || boundary_fail "no interface factory-proxy0"
+  [ "$addrs" = "$p_addr/32" ] || boundary_fail "factory-proxy0 holds ${addrs:-no address}, not $p_addr/32 alone"
+  if vm ip -4 route show default </dev/null | grep -qw factory-proxy0; then boundary_fail "a default route leaves by factory-proxy0"; fi
+  for port in ${p_ports//,/ }; do
+    vm sudo iptables -C INPUT ! -i lo -p tcp --dport "$port" -j DROP 2>/dev/null </dev/null \
+      || boundary_fail "the proxy's port $port is not closed to the VM's network (INPUT)"
+    vm sudo iptables -C FACTORY-EGRESS -o lo -d "$p_addr/32" -p tcp --dport "$port" -j ACCEPT 2>/dev/null </dev/null \
+      || boundary_fail "FACTORY-EGRESS does not let factory reach the proxy at $p_addr:$port"
+  done
+  d_uid=$(vm id -u dispatcher </dev/null) || boundary_fail "no user dispatcher"
+  for dset in factory-dispatcher factory-dispatcher-dns; do
+    vm sudo iptables -C FACTORY-EGRESS -m owner --uid-owner "$d_uid" -p tcp --dport 443 -m set --match-set "$dset" dst -j ACCEPT 2>/dev/null </dev/null \
+      || boundary_fail "FACTORY-EGRESS does not let dispatcher alone reach its Anthropic set $dset"
+  done
+  # Reached: any HTTP status (405 to a GET on /v1/messages, measurement 2) means the connection was made.
+  code=$(vm sudo -u dispatcher -H curl -q -s -o /dev/null -w '%{http_code}' --max-time 15 https://api.anthropic.com/v1/messages </dev/null || true)
+  [[ $code =~ ^[1-5][0-9][0-9]$ ]] || boundary_fail "dispatcher does not reach api.anthropic.com (got '${code:-nothing}')"
+  # Each negative probe after a positive one from the same place, api.github.com (allowed to every filtered uid): a
+  # probe that cannot run at all (no curl, no network, a failed container) then fails here instead of passing as
+  # "not reached" (review round 2, security).
+  vm sudo -u factory -H curl -q -s -o /dev/null --max-time 10 https://api.github.com/zen </dev/null 2>/dev/null \
+    || boundary_fail "factory does not reach api.github.com from the VM: its Anthropic probe would prove nothing"
+  if vm sudo -u factory -H curl -q -s -o /dev/null --max-time 10 https://api.anthropic.com/v1/messages </dev/null 2>/dev/null; then
+    boundary_fail "factory reaches api.anthropic.com from the VM"
+  fi
+  # From a container of factory's daemon, both probes in one container. Reached is any HTTP status, as for dispatcher
+  # above: busybox wget exits non-zero on the 405 a GET on /v1/messages gets, so its exit code cannot tell a refused
+  # connection from a reached API (review round 1, security); -S prints the status line only when an answer came.
+  # shellcheck disable=SC2016 # the loop runs in the container's shell, not here
+  probe=$(vm "${as_factory[@]}" docker run --rm alpine sh -c 'for u in https://api.github.com/zen https://api.anthropic.com/v1/messages; do
+      if wget -T 8 -S -O /dev/null "$u" 2>&1 | grep -q "HTTP/"; then echo "$u reached"; else echo "$u refused"; fi; done' </dev/null) \
+    || boundary_fail "cannot run the probe container on factory's daemon"
+  grep -qx 'https://api.github.com/zen reached' <<<"$probe" \
+    || boundary_fail "a container of factory's daemon does not reach api.github.com: its Anthropic probe would prove nothing"
+  grep -qx 'https://api.anthropic.com/v1/messages refused' <<<"$probe" \
+    || boundary_fail "a container of factory's daemon reaches api.anthropic.com"
+  echo "factory-build: boundary holds $1 (rootless Docker for factory, egress filtered, gateway $gw rejected; dispatcher's sudo rule, checkout and directories as ADR-0062 says; factory's slice limited to $(( max_kb / 1024 )) MiB and $want_tasks tasks; the proxy at $p_addr:$p_ports, Anthropic for dispatcher alone)"
 }
 check_boundary "after creation"
 # Once more after a reboot: provision.sh runs again, late in the boot, after factory's session and its daemon have
@@ -384,6 +432,17 @@ dev_gid=$(vm sh -c "awk -F: '\$1==\"factory\" {print \$2 + 999}' /etc/subgid") |
 [[ $dev_uid =~ ^[0-9]+$ && $dev_gid =~ ^[0-9]+$ ]] || boundary_fail "no subordinate range for factory"
 # -h: a symbolic link in the clone is changed itself, never its target (the default of -R, said outright).
 vm sudo chown -R -h "$dev_uid:$dev_gid" "$CLONE"
+# The fresh-VM marker (backlog #0-313 AC6, until #0-285): a VM made anew, provisioned and checked, has run nothing. The
+# first dispatcher run that holds a token consumes it (in its own state, never removing the file) and every later run
+# stops, so a skipped rebuild cannot expose a task's token to what an earlier task left. Written here and never by
+# provision.sh (which runs again at every boot), as root, one line of 32 lowercase hex, root:root 0644; refused if
+# a VM made anew already holds one.
+vm sudo sh -c 'umask 022; [ ! -e /etc/factory-fresh-vm ] && od -An -tx1 -N16 /dev/urandom | tr -d " \n" > /etc/factory-fresh-vm.new && echo >> /etc/factory-fresh-vm.new && chown root:root /etc/factory-fresh-vm.new && chmod 0644 /etc/factory-fresh-vm.new && mv /etc/factory-fresh-vm.new /etc/factory-fresh-vm' </dev/null \
+  || boundary_fail "cannot write /etc/factory-fresh-vm (or a VM made anew already holds one)"
+fresh=$(vm sudo stat -c '%U:%G %a' /etc/factory-fresh-vm </dev/null) || boundary_fail "no /etc/factory-fresh-vm"
+[ "$fresh" = "root:root 644" ] || boundary_fail "/etc/factory-fresh-vm is $fresh, not root:root 644"
+[[ $(vm cat /etc/factory-fresh-vm </dev/null) =~ ^[0-9a-f]{32}$ ]] || boundary_fail "/etc/factory-fresh-vm is not one line of 32 lowercase hex"
+echo "factory-build: fresh-VM marker written (the first run that holds a token consumes it)"
 ready=true
 # The VM's contents come from this checkout's provision.sh, its code from the default branch of REPO_URL: the two match
 # only when this runs from an up-to-date main (review round 4). Not a failure: the VM is fine, the owner decides.

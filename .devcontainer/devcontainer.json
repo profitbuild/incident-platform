@@ -7,8 +7,12 @@
     // notifications (docs/ai-factory.md, Setup 5). Unset: no extra host, and notify.sh reports it cannot send. Not the
     // topic: a build argument stays readable in the image's history, and the topic is what lets anyone read the
     // notifications. A server changed on the host takes a rebuild of the container.
+    // And Anthropic's hosts (backlog #0-313 AC7): this container's own login and API calls. task.json passes no
+    // argument (the dispatcher carries no `build.args`), so a task's container opens none of them and reaches the model
+    // through the dispatcher's proxy alone.
     "args": {
-      "FACTORY_NTFY_SERVER": "${localEnv:FACTORY_NTFY_SERVER}"
+      "FACTORY_NTFY_SERVER": "${localEnv:FACTORY_NTFY_SERVER}",
+      "FACTORY_ANTHROPIC": "1"
     }
   },
   "runArgs": [

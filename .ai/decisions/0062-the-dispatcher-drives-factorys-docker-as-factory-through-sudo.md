@@ -7,7 +7,8 @@
   start on an empty daemon and what it cannot see, the directories made as `dispatcher`; point 4 amended on the review
   of `factory` PR #18: the dispatcher's mounts given as `runArgs`); amends ADR-0060's
   Consequences on the task image (point 6); point 5 (the rollback shares the VM by time) reversed by ADR-0063
-  (2026-11-21): the rollback goes at M4 (#0-290); points 4 and 6 amended by #0-284 (2026-11-21, before its code): the
+  (2026-11-21): the rollback goes at M4 (#0-290), and amended by #0-313 (2026-11-23): it leaves the VM now, for the
+  owner's devcontainer on the Mac; points 4 and 6 amended by #0-284 (2026-11-21, before its code): the
   image built and its label checked before any container, the container's `HostConfig` held whole, no refusal holding
   a value the daemon gave, a call's stderr kept from every caller; point 4 amended by ADR-0064 (2026-11-21, #0-300):
   the dispatcher's mounts gain the factory's managed settings read-only on `/etc/claude-code`; points 4 and 5 amended
@@ -212,6 +213,18 @@ Two facts the item had not weighed (the `/research` of 2026-11-20):
      rollback from a killed run's leftovers (review round 4, arc-5e17).
    The rollback does not move to the Mac, which would reopen for it what ADR-0056 and ADR-0057 closed (#0-240: the
    Mac's loopback through `host.docker.internal`; #0-116: Docker Desktop's daemon).
+   *Amended (2026-11-23, #0-313, the owner): the rollback leaves the VM now, earlier than M4.* #0-313 gives Anthropic's
+   hosts to `dispatcher`'s uid alone (AC7): a task holds `factory`'s daemon socket and can start a sibling container
+   that no task firewall filters, so nothing of that daemon may reach Anthropic around the proxy. A devcontainer of
+   `factory`'s daemon, the rollback's included, can then no longer log Claude Code in or call the model. Of the three
+   ways (a root's rule for `factory` while a rollback runs; a rollback without Claude; the rollback off the VM) the owner
+   chose the last: from this change the old path (`/backlog-autopilot`) runs only in the owner's devcontainer on the
+   Mac, as before ADR-0056. `rollback-start.sh` and `rollback-exec.sh` refuse every call, saying so; the dispatcher's
+   refusal on a running `factory.rollback` container stays, harmless, until M4 (#0-290) removes it with the rest.
+   What the sentence above names as reopened comes back for the old path alone, accepted: on the Mac its tests reach
+   the Mac's loopback through `host.docker.internal` (#0-240) and run on Docker Desktop's daemon (#0-116), as they did
+   until 2026-11-14. Nothing of the dispatcher's path changes. A consequence the owner named: `/seed-bugs`' baseline
+   for M4 runs on the Mac, or on the VM before this change merges.
 6. **The task image in v0 is built on the VM from the product's task configuration** (ADR-0055: "until stage C
    the task image is built there"): `taskImage` is that configuration's path in the product (relative, never a value
    starting with `-`, never leaving the clone); `devcontainer build` builds it as `factory` (until #0-284's code is
@@ -310,7 +323,7 @@ Two facts the item had not weighed (the `/research` of 2026-11-20):
   or the helper that fills the next clone. The ID and the digest stop a tag swap and a changed pull, no more; the same
   holds for `factory`'s home, which lives across tasks (accepted in v0, as `~/.m2`). A container or network a task's
   test starts without the label is removed by point 7's sweep of the whole daemon.
-- The rollback and the dispatcher share the VM by time (point 5): the owner starts a rollback with
+- The rollback and the dispatcher share the VM by time (point 5) *(Withdrawn 2026-11-23 by #0-313, point 5 as amended: the rollback no longer runs on the VM; the old path runs in the owner's devcontainer on the Mac.)*: the owner starts a rollback with
   `rollback-start.sh`, enters the logins again, and ends it (its labelled container stopped) before the next dispatcher
   run, whose sweep removes the logins and every other container the rollback started. docs/ai-factory.md "Build VM"
   says so once #0-277's pull request changes it.

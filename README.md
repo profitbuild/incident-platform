@@ -602,7 +602,11 @@ security boundary, so every rule that matters is also enforced outside the model
   finding. No autopilot item reaches those paths: in practice they judge the owner's `/review`. The rules for
   CI workflows (`.ai/context/security.md`, "CI workflows") still carry no ids (#0-136).
 - **Network**: autopilot runs happen in the devcontainer (`.devcontainer/`), whose firewall allows only its
-  own DNS resolver, the Anthropic API, GitHub, Maven Central, the verifier's advisory hosts (`osv.dev`,
+  own DNS resolver, the Anthropic API and login (only in an image that chose them, the owner's container: its
+  `devcontainer.json` passes `FACTORY_ANTHROPIC`, and a task's container, built from `task.json`, opens none, backlog
+  #0-313 AC7), the dispatcher's credential proxy (one address and port, `/etc/factory-firewall/proxy` from
+  `.devcontainer/factory-proxy`; in the owner's container on the Mac the rule is dead unless the Mac routes `10.0.0.0/8` to a LAN or VPN that
+  holds that address, where it opens that one address and port), GitHub, Maven Central, the verifier's advisory hosts (`osv.dev`,
   `api.osv.dev`, `tomcat.apache.org`, `spring.io`: open to the whole container, and by the IPs they resolve to,
   which a CDN or Google's front end shares with other sites — hence a short list) and the Docker host over IPv4, closes IPv6 to all
   but loopback, and blocks all traffic if its own setup fails (`FIREWALL SETUP FAILED`). It narrows exfiltration, it
@@ -819,19 +823,39 @@ security boundary, so every rule that matters is also enforced outside the model
   (GitHub alone is reached; what runs is the pinned commit). `dispatcher`'s directories in its home are made as
   `dispatcher`, a planted link refused, so root never follows one. Tasks' work directories live under
   `/home/factory/tasks` (700), made and removed by one-shot containers of the pinned helper image (`verify-pins.sh`
-  step 7). The rollback devcontainer shares the VM by time (`rollback-start.sh`, `rollback-exec.sh`, the label
-  `factory.rollback`), so no credential is on `factory`'s daemon while a task runs: `rollback-start.sh` starts only on
-  a daemon with no container at all and no run's network or volume, and once `up` has returned accepts only the one
-  container it made. `create.sh` checks the rule (as root's `sudo -l` lists it: exactly the two programs, nothing for
+  step 7). The rollback devcontainer no longer runs on the VM (withdrawn by #0-313, ADR-0062 point 5 as amended,
+  earlier than M4: the VM gives Anthropic to `dispatcher`'s uid alone, so no devcontainer of `factory`'s daemon can
+  log Claude Code in); `rollback-start.sh` and `rollback-exec.sh` refuse every call, and the old path runs in the
+  owner's devcontainer on the Mac. `create.sh` checks the rule (as root's `sudo -l` lists it: exactly the two programs, nothing for
   `factory`; both programs run through it, `docker` reaching `unix:///run/docker.sock`; another program,
   `--preserve-env` and `-D` refused; `factory` reading nothing of `dispatcher`'s), the checkout's owner, pin, cleanliness and modes, the
   dispatcher's clone of the product (its, bare, of the product's URL, with `main`), the directories and the helper
   image. Limits: `factory`'s image store and home are the agent's side and live across
-  tasks (ADR-0062's Consequences, #0-285); `rollback-start.sh` sees only the daemon's containers and a run's `factory.task` objects, so what a task left in
-  `factory`'s reach outside them survives, and a rollback with the owner's logins after a dispatcher run starts on a VM
-  made anew (accepted for the migration, while the rollback is kept, until stage 5's exit; not enforced). The image's
+  tasks (ADR-0062's Consequences, #0-285). The image's
   firewall sudo rule and its Claude Code were #0-283, closed with #0-249 (the two entries of "Network" and "Claude
   Code pinned" above).
+- **The dispatcher's credential proxy on the build VM** (backlog #0-313, ADR-0064 point 5 and ADR-0062 point 5 as
+  amended; the proxy's code is `factory`'s, its VM side here): a task's container holds no Claude key, only its task's
+  random token, mounted read-only and printed by the managed settings' `apiKeyHelper`; the dispatcher's proxy, of
+  `dispatcher`'s uid, swaps it for the key it alone reads. The proxy listens on an address of its own, `10.203.0.1` on
+  the dummy interface `factory-proxy0` (`provision.sh`; `/etc/factory-proxy.conf`, root's), port 8770, never on the
+  VM's address: `factory`'s containers reach it through one `FACTORY-EGRESS` `ACCEPT` for that address and port, and an
+  INPUT rule closes the port to everything outside the VM (AC5). It reads each request's body only to check it,
+  never logging or keeping it (its `tools` client tools alone, no `mcp_servers`, every `anthropic-beta` value on a list
+  measured from Claude Code's own calls; anything else refused, the response still streamed): the API's server-side
+  tools (web search, web fetch, the MCP connector) would otherwise fetch from any host on Anthropic's side, past the
+  VM's filter. **What a leaked token yields:** the model's calls through that run's proxy, from the VM only, while the
+  run lives, within the Console workspace's spend limit. Anthropic's hosts are open to `dispatcher`'s uid alone, on
+  443, in sets of their own (`FACTORY-EGRESS`, its resolver): neither a task's container nor a sibling container its
+  code starts on `factory`'s daemon reaches Anthropic around the proxy (AC7). Until #0-285 a run that holds a token
+  runs only on a VM made anew: `create.sh` writes a root-owned marker, `/etc/factory-fresh-vm`, that the first such run
+  consumes and every later one is refused on (AC6). `create.sh` checks the configuration, the interface, both rules,
+  that `dispatcher` reaches `api.anthropic.com` and that neither `factory` nor a container of its daemon does, and
+  writes the marker; `check-allowlists.sh` (in `create.sh` and Factory guards) holds Anthropic's hosts out of every list
+  `factory` reaches and the task image's proxy address equal to `provision.sh`'s. A second layer outside the
+  repository, checked by nothing here: the server-side tools turned off for the factory's Console workspace, where the
+  Console allows it. Limits: any process of the task's container reads its token (444), and so does a task through
+  `factory`'s daemon socket (#0-285); the trial on the VM (#0-301's AC4) is still to come.
 - **The task container checked before anything runs in it** (backlog #0-284, ADR-0062 points 4 and 6 as amended;
   `factory` PR #22 and PR #24, pinned `v0.1.3`): the daemon's `docker info` security options and default runtime
   checked before any container of the run, so a `daemon.json` of the agent's side refuses the run; the image built by
@@ -904,7 +928,9 @@ commands but not code they run, as Docker access (needed by Testcontainers) is r
 `factory`, with no route past the VM's allow-list or to the Mac (ADR-0057, which closed #0-240 there; a listener a
 root service opens on the VM's ephemeral ports after its creation is reachable, checked only by `create.sh`, #0-242), but it still
 reads what `factory` holds, the devcontainer's volumes with the bot's token and Claude Code's login (ADR-0055 stage 4),
-and on the Mac, the way back until #0-238's AC5, all of the above stays as it was; secrets are scanned only after the push, when a
+and on the Mac, where the old path (`/backlog-autopilot`) runs alone since #0-313 withdrew the VM's rollback
+(ADR-0062 point 5 as amended), all of the above stays as it was: its tests reach the Mac's loopback (#0-240) on
+Docker Desktop's daemon (#0-116) until M4 removes the old path; secrets are scanned only after the push, when a
 branch is already public, and an allow comment passes whatever its line holds (#0-156, ADR-0036); no Maven Enforcer
 (#0-110); the shell guards are heuristics, the commit gates and the PR checks are the reliable lines; an owner's
 session on a Claude Code older than 2.1.295 ignores the hooks' `onFailure` without a word, so there a hook that

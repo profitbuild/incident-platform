@@ -3,10 +3,11 @@
 - **Status:** Accepted (2026-11-14, by the owner, after PR #632 merged); amended by backlog #0-247 (2026-11-14: the
   allow-list is kept by the VM's resolver, which adds what it answers, not by a set resolved every 30 minutes); amended
   by backlog #0-315 (2026-11-22: `factory`'s user slice is limited in memory and tasks); amended by #0-313's
-  measurement 2 (2026-11-23: the proxy's dummy address and its rules, below)
+  measurement 2 (2026-11-23: the proxy's dummy address and its rules, below); and by #0-313's AC7 (2026-11-23:
+  Anthropic out of the copy, for `dispatcher`'s uid alone, and `check-allowlists.sh`'s rules for it)
 - **Amends:** ADR-0056 (the build VM's Docker Engine: Docker CE run rootless for `factory`, not Ubuntu's `docker.io`
   run by root with `factory` in the docker group)
-- **Backlog:** #0-116, #0-240, #0-247, #0-315
+- **Backlog:** #0-116, #0-240, #0-247, #0-315, #0-313
 - **Date:** 2026-11-14
 - **Author:** human (the owner's spike of 2026-11-14, drafted in an interactive session)
 - **Reversible:** yes. The VM is recreated from `provision.sh`; going back is the previous `provision.sh` (rootful
@@ -112,6 +113,21 @@ The owner approved a spike with three criteria before it started (2026-11-14):
   equal both ways, required to required and optional to optional, and `VM_ONLY_DOMAINS` apart from it; Factory guards
   runs it on every pull request and `create.sh` before every VM, so a host added to or removed from `init-firewall.sh`
   alone fails CI, not the running VM (FAC-A01, review rounds 1 and 2).
+  *Amended (2026-11-23, #0-313 AC7; review round 2 of its VM side, architecture):* the copy is no longer the whole
+  of the devcontainer's list. Anthropic's hosts (`ANTHROPIC_DOMAINS`, `ANTHROPIC_OPTIONAL_DOMAINS` in
+  `init-firewall.sh`) are opened only in an image that chose them, the owner's (point below and ADR-0065 point 5 as
+  amended), and on the VM they leave `DOMAINS` and `OPTIONAL_DOMAINS`: `DISPATCHER_DOMAINS` (`api.anthropic.com`)
+  is resolved into sets of its own (`factory-dispatcher`, `factory-dispatcher-dns`, never `factory-allowed` or
+  `factory-dns`), accepted by `FACTORY-EGRESS` for `dispatcher`'s uid alone, on 443, for its proxy's upstream. A task
+  holds `factory`'s daemon socket and can start a sibling container no task firewall filters, so only the VM's
+  layer keeps `factory` from Anthropic around the proxy. `check-allowlists.sh` holds, beside the copy:
+  - no Anthropic host, nor a parent of one (the resolver allows each name with its subdomains), in a list `factory`
+    reaches: `ALLOWED_DOMAINS`, `OPTIONAL_DOMAINS`, the VM's `DOMAINS`, `OPTIONAL_DOMAINS`, `VM_ONLY_DOMAINS`;
+  - `DISPATCHER_DOMAINS` not empty and Anthropic's hosts alone;
+  - the choice the owner's: `task.json` names no `FACTORY_ANTHROPIC`, and the Dockerfile's `ARG FACTORY_ANTHROPIC`
+    defaults to empty, so an image built without the argument (every task image) chooses none;
+  - `.devcontainer/factory-proxy`, the proxy's address and port the task image lets its container reach, equal to
+    `provision.sh`'s `PROXY_ADDR` and the first of its `PROXY_PORTS`.
 - **Amended by #0-315 (2026-11-22): what `factory` may use is limited.** Rootless Docker bounds what a container can
   reach, not what it uses: the containers run with no limit (`factory`'s `host-config.mjs` until #0-285) and a task's
   Testcontainers are siblings on the same daemon, so a runaway build or a fork bomb took the VM's memory, the dispatcher
@@ -136,7 +152,12 @@ The owner approved a spike with three criteria before it started (2026-11-14):
   and its configuration holding `stop-dns-rebind` and `max-cache-ttl=300`. Since #0-315: the limits of `factory`'s
   slice in effect, read from systemd, equal to what `factory_slice_limits` (read from `provision.sh`) derives from the
   VM's memory, their drop-in and its directory root's, and the daemon's cgroup inside the slice; Factory guards tests
-  the derivation (`test-factory-slice-limits.sh`).
+  the derivation (`test-factory-slice-limits.sh`). Since #0-313: `/etc/factory-proxy.conf` root's and as `provision.sh`
+  writes it, `factory-proxy0` holding the proxy's address alone with no default route by it, the INPUT rule closing
+  the port to the VM's network and the `FACTORY-EGRESS` `ACCEPT` for it, the dispatcher's set accepted for its uid
+  alone; `dispatcher` reaching `api.anthropic.com` and neither `factory` nor a container of its daemon doing so, each
+  negative probe after a positive one from the same place (`api.github.com`), so a probe that cannot run fails
+  instead of passing; and, once the VM is checked, the fresh-VM marker written (#0-313 AC6).
 
 ### What the spike showed (2026-11-14, VM `rootless-spike`, then `factory-build` from `create.sh`)
 

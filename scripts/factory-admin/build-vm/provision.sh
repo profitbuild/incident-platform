@@ -71,7 +71,8 @@ FACTORY_COMMIT=254afb213cb52bd1484d3962fc835da151f09bd8  # gitleaks:allow: a pub
 FACTORY_CHECKOUT=/opt/factory-checkout
 # The dispatcher's state (#0-275's FACTORY_STATE_DIR): its own, mode 700, which the dispatcher refuses otherwise.
 DISPATCHER_STATE=/home/dispatcher/state
-# The product: its repository, cloned by create.sh for the rollback's devcontainer and here for the dispatcher, whose
+# The product: its repository, cloned by create.sh (for the rollback's devcontainer, withdrawn by #0-313; kept for
+# work by hand on the VM) and here for the dispatcher, whose
 # FACTORY_REPO_DIR is a bare clone of its own in its home (backlog #0-277: the dispatcher's alone, #0-278 AC7's way;
 # its git reads refs/heads/main there). One source: create.sh and install-builder-app.sh read both, and
 # DISPATCHER_STATE, from this file.
@@ -86,6 +87,16 @@ FACTORY_TASKS=/home/factory/tasks
 # The helper image of those one-shot containers (ADR-0062 point 8): buildpack-deps:noble-scm, the index digest for
 # linux/amd64 and linux/arm64 (git 2.43.0 and coreutils' timeout, probed 2026-11-20), checked by verify-pins.sh.
 HELPER_IMAGE=buildpack-deps:noble-scm@sha256:c4e7382cc1abefe0bbaaf99324fad5122f9def4d3840fbfad17d3c2fd77b9dc9
+# The dispatcher's credential proxy (backlog #0-313; measurement 2, 2026-11-23, ADR-0062 point 5 as amended): it listens
+# on an address of its own, on a dummy interface made here, never on the VM's address (which a cloud puts on a network
+# outside the VM) nor on the daemon's host-gateway. A task's container reaches it through one FACTORY-EGRESS ACCEPT for
+# that address and port; an INPUT rule keeps the port closed to everything outside the VM. The dispatcher reads both
+# from /etc/factory-proxy.conf, written below; .devcontainer/factory-proxy, which the task's image copies for its own
+# firewall, holds PROXY_ADDR and the first port too (check-allowlists.sh compares them). 10.203.0.0/16 is the
+# measurement's, inside 10.0.0.0/8, which FACTORY-EGRESS rejects for everything but that one rule. Ports: comma-separated,
+# 1024-65535 and outside the kernel's ephemeral range (the dispatcher refuses others); M5's second slot adds one.
+PROXY_ADDR=10.203.0.1
+PROXY_PORTS=8770
 
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
@@ -162,6 +173,42 @@ runuser -u "$DISPATCHER_USER" -- sh -c '
 printf 'net.ipv4.ip_forward = 0\nnet.ipv6.conf.all.forwarding = 0\n' > /etc/sysctl.d/90-factory-build.conf
 sysctl -q -p /etc/sysctl.d/90-factory-build.conf
 
+# The proxy's address and ports, for the dispatcher (factory's proxy/conf.mjs) and the egress chain below: root's, 0644,
+# exactly two lines; the dispatcher refuses the file when it is not root's, is writable by others or is a link.
+printf 'ADDR=%s\nPORTS=%s\n' "$PROXY_ADDR" "$PROXY_PORTS" > /etc/factory-proxy.conf.new
+chown root:root /etc/factory-proxy.conf.new
+chmod 0644 /etc/factory-proxy.conf.new
+mv -f /etc/factory-proxy.conf.new /etc/factory-proxy.conf
+# Its dummy interface, factory-proxy0, made at every boot by a unit of its own (a cloud VM runs this file once), the address alone on
+# it, before the dispatcher can start; no route leaves by it, so the dispatcher's check that ADDR is no default route's
+# interface holds.
+install -m 0755 /dev/stdin /usr/local/sbin/factory-proxy-net.sh <<'PROXYNET'
+#!/bin/bash
+# The dispatcher's proxy's dummy interface (backlog #0-313), written by provision.sh: its address from
+# /etc/factory-proxy.conf, the only address on it.
+set -euo pipefail
+addr=$(sed -n 's/^ADDR=\([0-9.]*\)$/\1/p' /etc/factory-proxy.conf)
+[ -n "$addr" ] || { echo "factory-proxy-net: no ADDR in /etc/factory-proxy.conf" >&2; exit 1; }
+ip link show factory-proxy0 >/dev/null 2>&1 || ip link add factory-proxy0 type dummy
+ip -4 addr flush dev factory-proxy0
+ip addr add "$addr/32" dev factory-proxy0
+ip link set factory-proxy0 up
+PROXYNET
+cat > /etc/systemd/system/factory-proxy-net.service <<UNIT
+[Unit]
+Description=The dummy interface of the dispatcher's proxy (backlog #0-313)
+Before=network-online.target
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/sbin/factory-proxy-net.sh
+[Install]
+WantedBy=multi-user.target
+UNIT
+systemctl daemon-reload
+systemctl enable factory-proxy-net.service
+systemctl restart factory-proxy-net.service
+
 install -m 0755 /dev/stdin /usr/local/sbin/factory-egress.sh <<'EGRESS'
 #!/bin/bash
 # The build VM's egress filter (backlog #0-116, #0-240, ADR-0057), written by provision.sh.
@@ -186,11 +233,17 @@ FILTERED=1000-4294967294
 # name is allowed with its subdomains (dnsmasq's `ipset=/name/` matches both), resolved when it is asked for; it is also
 # resolved once at boot and every 30 minutes into the static set, as before.
 DOMAINS=(
-  api.anthropic.com claude.ai platform.claude.com console.anthropic.com
   repo.maven.apache.org repo1.maven.org
   api.osv.dev osv.dev tomcat.apache.org spring.io
 )
-OPTIONAL_DOMAINS=(statsig.anthropic.com)
+OPTIONAL_DOMAINS=()
+# Anthropic, to `dispatcher`'s uid alone and only on 443 (backlog #0-313 AC7): its proxy needs the API, and nothing of
+# `factory` may reach Anthropic around it. A task holds `factory`'s daemon socket and can start a sibling container,
+# which the task's own firewall does not filter, so the task's allow-list without Anthropic (init-firewall.sh) closes
+# only the traffic from inside its container; this closes the rest. Kept in sets of their own (static and resolved),
+# never in factory-allowed or factory-dns. check-allowlists.sh holds every name here among init-firewall.sh's
+# ANTHROPIC_DOMAINS and none of those in the lists above.
+DISPATCHER_DOMAINS=(api.anthropic.com)
 # What only the VM needs, as its rootless Docker builds the devcontainer's image and pulls images: none of these may
 # be in the devcontainer's list (check-allowlists.sh).
 VM_ONLY_DOMAINS=(
@@ -221,7 +274,17 @@ load_allowed() {
   done
   ipset swap factory-allowed-new factory-allowed
   ipset destroy factory-allowed-new
-  echo "factory-egress: $(ipset list factory-allowed | grep -c '^[0-9]') allowed networks"
+  ipset create factory-dispatcher hash:net -exist
+  ipset create factory-dispatcher-new hash:net -exist
+  ipset flush factory-dispatcher-new
+  for d in "${DISPATCHER_DOMAINS[@]}"; do
+    ip=$(getent ahostsv4 "$d" | awk '{print $1}' | sort -u)
+    [ -n "$ip" ] || { echo "factory-egress: $d does not resolve" >&2; exit 1; }
+    for i in $ip; do ipset add factory-dispatcher-new "$i" -exist; done
+  done
+  ipset swap factory-dispatcher-new factory-dispatcher
+  ipset destroy factory-dispatcher-new
+  echo "factory-egress: $(ipset list factory-allowed | grep -c '^[0-9]') allowed networks, $(ipset list factory-dispatcher | grep -c '^[0-9]') for the dispatcher"
 }
 
 if [ "${1:-}" = refresh ]; then load_allowed; exit 0; fi
@@ -230,6 +293,15 @@ ipset create factory-allowed hash:net -exist
 # The resolver's set: an address dnsmasq answered for a listed name, for an hour (a connection opened in it stays
 # ESTABLISHED after; a name asked again is added again). Not swapped or flushed by a refresh.
 ipset create factory-dns hash:ip timeout 3600 -exist
+ipset create factory-dispatcher hash:net -exist
+# The dispatcher's resolved set, as factory-dns: what the resolver answered for DISPATCHER_DOMAINS.
+ipset create factory-dispatcher-dns hash:ip timeout 3600 -exist
+# The proxy (backlog #0-313): its address and ports, written by provision.sh, read here at every boot; the
+# dispatcher's uid, the one that may reach Anthropic.
+proxy_addr=$(sed -n 's/^ADDR=\([0-9.]*\)$/\1/p' /etc/factory-proxy.conf)
+proxy_ports=$(sed -n 's/^PORTS=\([0-9,]*\)$/\1/p' /etc/factory-proxy.conf)
+[ -n "$proxy_addr" ] && [ -n "$proxy_ports" ] || { echo "factory-egress: no ADDR or PORTS in /etc/factory-proxy.conf" >&2; exit 1; }
+dispatcher_uid=$(id -u dispatcher) || { echo "factory-egress: no user dispatcher" >&2; exit 1; }
 gw=$(ip -4 route show default | awk '{print $3; exit}')
 dev=$(ip -4 route show default | awk '{print $5; exit}')
 net=$(ip -4 -o addr show "$dev" | awk '{print $4; exit}')
@@ -259,6 +331,7 @@ install -d -m 0755 /run/factory-dns
   echo "stop-dns-rebind"
   for r in $(printf '%s\n' $dns | sort -u); do echo "server=$r"; done
   echo "ipset=/$(printf '%s/' "${DOMAINS[@]}" "${OPTIONAL_DOMAINS[@]}" "${VM_ONLY_DOMAINS[@]}")factory-dns"
+  echo "ipset=/$(printf '%s/' "${DISPATCHER_DOMAINS[@]}")factory-dispatcher-dns"
 } > /run/factory-dns/dnsmasq.conf.new
 mv /run/factory-dns/dnsmasq.conf.new /run/factory-dns/dnsmasq.conf
 # Every DNS query of a filtered uid goes to it, whatever server the asker named (an in-container resolver, 8.8.8.8):
@@ -276,6 +349,12 @@ for p in udp tcp; do
   iptables -C INPUT ! -i lo -p "$p" --dport "$DNS_PORT" -j DROP 2>/dev/null \
     || iptables -I INPUT 1 ! -i lo -p "$p" --dport "$DNS_PORT" -j DROP
 done
+# The proxy's ports, the same way (backlog #0-313 AC5): a neighbour on the VM's network could otherwise send to the
+# dummy address through the VM's MAC (review of measurement 2, security).
+for port in ${proxy_ports//,/ }; do
+  iptables -C INPUT ! -i lo -p tcp --dport "$port" -j DROP 2>/dev/null \
+    || iptables -I INPUT 1 ! -i lo -p tcp --dport "$port" -j DROP
+done
 iptables -N FACTORY-EGRESS-NEW 2>/dev/null || iptables -F FACTORY-EGRESS-NEW
 # DNS: the resolver only, on any output device (a container's query, rewritten from the gateway's resolver, still
 # leaves by the default route's device). No other DNS server is reached by a filtered uid: the DNAT above sent every
@@ -286,6 +365,11 @@ iptables -A FACTORY-EGRESS-NEW -d "$vm_ip" -p tcp --dport "$DNS_PORT" -j ACCEPT
 # Testcontainers' mapped ports, through host.docker.internal). Nothing else of the VM's own listeners, sshd among them,
 # nor one a later change adds (review round 2 of #0-116).
 iptables -A FACTORY-EGRESS-NEW -o lo -d "$vm_ip" -p tcp --dport "$eph_lo:$eph_hi" -j ACCEPT
+# The dispatcher's proxy, on its dummy address (backlog #0-313; measurement 2): the one way a task's container reaches
+# it, a local address and so out by lo. Before lo's REJECT and the private networks' (10.0.0.0/8 holds the address).
+for port in ${proxy_ports//,/ }; do
+  iptables -A FACTORY-EGRESS-NEW -o lo -d "$proxy_addr" -p tcp --dport "$port" -j ACCEPT
+done
 iptables -A FACTORY-EGRESS-NEW -o lo -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
 iptables -A FACTORY-EGRESS-NEW -o lo -j REJECT
 # The gateway and the VM's network: under Lima the Mac (its loopback services, #0-240), in a cloud the provider's
@@ -303,6 +387,10 @@ done
 iptables -A FACTORY-EGRESS-NEW -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
 iptables -A FACTORY-EGRESS-NEW -m set --match-set factory-allowed dst -j ACCEPT
 iptables -A FACTORY-EGRESS-NEW -m set --match-set factory-dns dst -j ACCEPT
+# Anthropic's API for the dispatcher's uid only (backlog #0-313 AC7), on 443: its proxy's upstream.
+for dset in factory-dispatcher factory-dispatcher-dns; do
+  iptables -A FACTORY-EGRESS-NEW -m owner --uid-owner "$dispatcher_uid" -p tcp --dport 443 -m set --match-set "$dset" dst -j ACCEPT
+done
 iptables -A FACTORY-EGRESS-NEW -j REJECT
 # Swap in whole: the new chain takes the traffic before the old one goes.
 iptables -I OUTPUT 1 -m owner --uid-owner "$FILTERED" -j FACTORY-EGRESS-NEW
@@ -501,7 +589,7 @@ apparmor_parser -r /etc/apparmor.d/usr.bin.rootlesskit
 # The default socket path is the rootless daemon's, so the devcontainer's docker-outside-of-docker feature mounts it
 # unchanged, and `docker` reaches it with no DOCKER_HOST as long as factory's ~/.docker names no other context: that
 # file is the agent side's, so whoever must not be misled sets DOCKER_HOST (the dispatcher's sudo rule, create.sh's
-# checks, the rollback scripts; backlog #0-277). Made by systemd-tmpfiles early at every boot,
+# checks, and the rollback scripts until #0-313 withdrew them; backlog #0-277). Made by systemd-tmpfiles early at every boot,
 # before factory's session: the rootless daemon sees /run as it was when it started, and a link made later (by this
 # script, which Lima runs late in the boot) was missing to it after a reboot, so the feature's mount failed.
 # Root's own `docker`, if anything ran one, would reach factory's daemon through it: an untrusted one, as code a test

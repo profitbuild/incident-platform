@@ -197,6 +197,8 @@ jobs:
       - name: Builder app install tests
         run: .github/scripts/test-install-builder-app.sh
 
+      # Backlog #0-313 (ADR-0062 point 5 as amended): the VM's rollback scripts are withdrawn; each refuses every call,
+      # saying why, and runs nothing. M4 removes them.
       - name: Rollback scripts tests
         run: .github/scripts/test-rollback-scripts.sh
 

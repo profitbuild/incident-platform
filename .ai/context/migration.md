@@ -44,8 +44,9 @@ Legend:
 - **Current: M2** (`migration/m2.md`): M2.0 (#0-299) done 2026-11-21, `factory` PR #21; #0-300 (M2.1's spike) and
   #0-284 done 2026-11-22; #0-303 done 2026-11-22; #0-301's code done 2026-11-22 (`factory` PR #26, pinned `v0.1.5`),
   its first call on the VM (AC4) after #0-313; next #0-313 and #0-302.
-- The old path (`/backlog-autopilot` in the VM's devcontainer, the rollback that shares the VM by time) still runs
-  until M4.
+- The old path (`/backlog-autopilot`) still runs until M4, since #0-313 (2026-11-23) in the owner's devcontainer on the
+  Mac only: its rollback on the VM is withdrawn (ADR-0062 point 5 as amended), as the VM gives Anthropic to
+  `dispatcher`'s uid alone. `/seed-bugs`' baseline for M4 runs on the Mac.
 - **Order after M4 since 2026-11-22 (ADR-0063 as amended for the new product):** M5 with #0-285 (a user per slot,
   wiped after each task) and #0-289's rest; M9 alongside M5; then T, the new product's adapter, the `react` profile
   and the review rules split; M8 for the new product; N's first tasks; M6-lite (M6.4b, audits and `/seed-bugs` as

@@ -30,6 +30,17 @@ repo() {
     # shellcheck disable=SC2016 # the fixture's own text: its ${ALLOWED_DOMAINS[@]} is a line the check must not read
     printf 'ALLOWED_DOMAINS=(\n    %s\n)\nOPTIONAL_DOMAINS=(%s)\nfor d in "${ALLOWED_DOMAINS[@]}"; do :; done\nprintf x | jq -r '"'"'(%s)[] | select(test(":") | not)'"'"'\n' "$4" "$5" "${7:-.web + .api + .git}" \
         > "$r/.devcontainer/init-firewall.sh"
+    # The lists and files of backlog #0-313 (AC7, the proxy), each overridable by a variable of the caller.
+    printf 'DISPATCHER_DOMAINS=(%s)\nPROXY_ADDR=%s  # the proxy\nPROXY_PORTS=%s\n' \
+        "${DISP-api.x.com}" "${PADDR-10.9.0.1}" "${PPORTS-8770}" >> "$r/scripts/factory-admin/build-vm/provision.sh"
+    printf 'ANTHROPIC_DOMAINS=(%s)\nANTHROPIC_OPTIONAL_DOMAINS=(%s)\n' "${ANTH-api.x.com y.x.com}" "${ANTH_OPT-t.x.com}" \
+        >> "$r/.devcontainer/init-firewall.sh"
+    printf '%s\n' "${PFILE-10.9.0.1:8770}" > "$r/.devcontainer/factory-proxy"
+    # task.json: valid JSON either way, the caller's when TASKJSON is set (a default inside ${...} would end at its
+    # first closing brace: review round 1, general).
+    local task_default='{ "build": { "dockerfile": "Dockerfile" } }'
+    printf '%s\n' "${DOCKERARG-ARG FACTORY_ANTHROPIC=\"\"}" > "$r/.devcontainer/Dockerfile"
+    printf '%s\n' "${TASKJSON-$task_default}" > "$r/.devcontainer/task.json"
     echo "$r"
 }
 # expect <name> <exit> <text the output must hold> <root>
@@ -59,6 +70,25 @@ r=$(repo 'a.com' '' '' 'a.com' ''); sed -i.bak '/^jq -r/d' "$r/scripts/factory-a
 expect "no VM meta key selection found fails"                    1 "no api.github.com/meta key selection" "$r"
 r=$(repo 'a.com' '' '' 'a.com' ''); sed -i.bak '/jq -r/d' "$r/.devcontainer/init-firewall.sh"
 expect "no devcontainer meta key selection found fails"          1 "no api.github.com/meta key selection found in $r/.devcontainer" "$r"
+# Backlog #0-313: Anthropic only for the owner's image and the dispatcher, the proxy's address in one place.
+expect "Anthropic only in the owner's lists and the dispatcher's passes" 0 "Anthropic only for the owner's image" "$(repo 'a.com' '' '' 'a.com' '')"
+expect "an Anthropic host in the task's required list fails"     1 "Anthropic's hosts in a list factory reaches" "$(repo 'a.com y.x.com' '' '' 'a.com y.x.com' '')"
+expect "an optional Anthropic host in the VM's list fails"       1 "#0-313 AC7): t.x.com" "$(repo 'a.com' 't.x.com' '' 'a.com' 't.x.com')"
+expect "an Anthropic host among the VM's own fails"              1 "#0-313 AC7): y.x.com" "$(repo 'a.com' '' 'y.x.com' 'a.com' '')"
+expect "a dispatcher host not Anthropic's fails"                 1 "not one of init-firewall.sh's Anthropic hosts: z.com" "$(DISP='api.x.com z.com' repo 'a.com' '' '' 'a.com' '')"
+expect "a dispatcher host factory reaches too fails"             1 "in a list factory reaches: api.x.com" "$(repo 'a.com api.x.com' '' '' 'a.com api.x.com' '')"
+expect "no dispatcher list found fails"                          1 "no DISPATCHER_DOMAINS list" "$(DISP='' repo 'a.com' '' '' 'a.com' '')"
+expect "no Anthropic list in the devcontainer found fails"       1 "no ANTHROPIC_DOMAINS list" "$(ANTH='' repo 'a.com' '' '' 'a.com' '')"
+expect "task.json naming the Anthropic choice fails"             1 "task.json names FACTORY_ANTHROPIC" "$(TASKJSON='{ "build": { "args": { "FACTORY_ANTHROPIC": "1" } } }' repo 'a.com' '' '' 'a.com' '')"
+expect "a task image's proxy address other than the VM's fails"  1 "is not provision.sh's PROXY_ADDR" "$(PFILE='10.9.0.2:8770' repo 'a.com' '' '' 'a.com' '')"
+expect "a task image's proxy port other than the first fails"    1 "is not provision.sh's PROXY_ADDR" "$(PFILE='10.9.0.1:8771' PPORTS='8770,8771' repo 'a.com' '' '' 'a.com' '')"
+expect "the first of several proxy ports passes"                 0 "proxy 10.9.0.1:8770" "$(PPORTS='8770,8771' repo 'a.com' '' '' 'a.com' '')"
+expect "a parent of an Anthropic host in the VM's list fails"    1 "a parent of an Anthropic host in a list factory reaches" "$(repo 'a.com x.com' '' '' 'a.com x.com' '')"
+expect "a parent of an Anthropic host among the VM's own fails"  1 "x.com (for api.x.com)" "$(repo 'a.com' '' 'x.com' 'a.com' '')"
+expect "a Dockerfile choosing Anthropic by default fails"        1 "does not default to empty" "$(DOCKERARG='ARG FACTORY_ANTHROPIC="1"' repo 'a.com' '' '' 'a.com' '')"
+expect "a Dockerfile without the argument fails"                 1 "does not default to empty" "$(DOCKERARG='FROM scratch' repo 'a.com' '' '' 'a.com' '')"
+expect "a proxy constant with a trailing comment passes"         0 "proxy 10.9.0.1:8770" "$(repo 'a.com' '' '' 'a.com' '')"
+expect "no proxy constants found fails"                          1 "no PROXY_ADDR or PROXY_PORTS" "$(PADDR='' repo 'a.com' '' '' 'a.com' '')"
 expect "the repository's own lists"                              0 "the VM's copy equals"           "$SRC"
 
 if [ "$failures" -gt 0 ]; then echo "$failures check-allowlists case(s) failed."; exit 1; fi
