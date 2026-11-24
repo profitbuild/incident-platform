@@ -10,7 +10,8 @@
   points 3 and 4 amended with #0-301's code (2026-11-22, `factory` PR #26, v0.1.5): the built-in agents' closed list,
   `StructuredOutput` among each agent's tools, the version compared with the pinned `factory`'s; point 5 amended on the
   review of `factory` PR #29 (2026-11-23, sec-5a7e): the proxy reads the request body to check its tools and beta
-  values, reversing #0-313's "never read"
+  values, reversing #0-313's "never read"; point 5 amended again on its rounds 2–6 (2026-11-24, `factory` v0.1.6):
+  the allowlist on every part of the body and its bounds before parsing
 - **Backlog:** #0-300, #0-301, #0-313
 - **Date:** 2026-11-21
 - **Author:** human (owner's decision on the options of `/research #0-300`, 2026-11-21, drafted in an interactive session)
@@ -331,6 +332,20 @@ It has no field for hooks or for the sources of settings.
    parsed, never logged, written or kept; the response is still streamed unbuffered. A second layer outside the
    repository, checked by nothing here: those server tools turned off for the factory's Console workspace, if the
    Console allows it.
+   *Amended (2026-11-24, rounds 2–6 of the review of `factory` PR #29, security; the owner; built in `factory`
+   v0.1.6):* the allowlist covers every part of the body, since each round found another part through which a passed
+   body made Anthropic act for the task, and what an allowed beta enables could not be checked against Anthropic's
+   documentation. A request passes only when, besides the above, its top-level keys are on the measured list, every
+   content block in `messages`, `system` and a `tool_result`'s content is of a type of ordinary work (`text`, `image`,
+   `document`, `tool_use`, `tool_result`, `thinking`, `redacted_thinking`), every `source` is `base64` or `text` (a URL
+   or a file Anthropic would fetch is refused, sec-c41e), and no block names a `file_id`. What goes upstream is the
+   checked object, serialized again, not the client's bytes. A body is bounded before it is parsed: 32 MiB, depth 64
+   and 200 000 items, counted on its bytes and again on the tree (a body deep or wide enough made the parser and the
+   walk cost the dispatcher its heap, or, deep enough, a `RangeError` that ended it: sec-d3e7, a regression of round
+   2). The filter never throws on a client's input, and the request handler and the upstream listeners leave no
+   rejection, so no request ends the dispatcher and its `finally` blocks. The lists are measured (`.ai/context/migration/m2.md`,
+   measurement 4): a call they miss is refused with a 400, never let through, and a list grows only by a new
+   measurement (#0-322).
 
    This is an allowlist, not a denylist, as `factory`'s `childEnv` (`dispatcher/src/process/child-env.mjs`, #0-276)
    builds every child process's environment on the VM. One difference: there the values come from the dispatcher's

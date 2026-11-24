@@ -43,7 +43,8 @@ Legend:
 - **M1 done** (4.3d, #0-278, 2026-11-21): `factory` PR #20, PR #678 and its trial on the VM (`stage-4.md` "4.3").
 - **Current: M2** (`migration/m2.md`): M2.0 (#0-299) done 2026-11-21, `factory` PR #21; #0-300 (M2.1's spike) and
   #0-284 done 2026-11-22; #0-303 done 2026-11-22; #0-301's code done 2026-11-22 (`factory` PR #26, pinned `v0.1.5`),
-  its first call on the VM (AC4) after #0-313; next #0-313 and #0-302.
+  its first call on the VM (AC4) after #0-313; #0-313's proxy code done 2026-11-24 (`factory` PR #29, pinned
+  `v0.1.6`), its trial on a VM made anew left, with #0-301's AC4; next that trial and #0-302.
 - The old path (`/backlog-autopilot`) still runs until M4, since #0-313 (2026-11-23) in the owner's devcontainer on the
   Mac only: its rollback on the VM is withdrawn (ADR-0062 point 5 as amended), as the VM gives Anthropic to
   `dispatcher`'s uid alone. `/seed-bugs`' baseline for M4 runs on the Mac.
@@ -112,7 +113,8 @@ Legend:
   - #0-304 (M2.6, what 4.3a–c left);
   - #0-313 (M2.7, the credential proxy's core before the first real call; split from #0-289, ADR-0063 as amended
     for #0-301, 2026-11-22; widened 2026-11-22 by the review of opencomputer: the task's allowlist without
-    Anthropic, the proxy's missing parts, `ANTHROPIC_UNIX_SOCKET` measured);
+    Anthropic, the proxy's missing parts, `ANTHROPIC_UNIX_SOCKET` measured; the VM's side done 2026-11-23, PR #705;
+    the proxy's code done 2026-11-24, `factory` PR #29, pinned `v0.1.6`; the trial left);
   - #0-315 (`factory`'s slice limited, before the next trial on the VM; the review of opencomputer; done 2026-11-22:
     `provision.sh`'s drop-in checked by `create.sh`, PR #699; AC2's trial dropped `MemoryHigh`, which hung a runaway
     and the daemon instead of an OOM kill);
