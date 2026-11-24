@@ -25,7 +25,8 @@ may be skipped wherever skipping does not harm the migration. Reading stages 0â€
 
 - **Work built only to be thrown away.**
   - The rollback that shares the VM by time: `rollback-start.sh`/`rollback-exec.sh`, 35 test cases, refusals in
-    `daemon.mjs`/`environment.mjs`, logins re-entered. It goes at stage 5's exit.
+    `daemon.mjs`/`environment.mjs`, logins re-entered. It goes at stage 5's exit. *(Its VM part went earlier, with #0-313 on 2026-11-23: the scripts
+    refuse, the old path runs on the Mac; M4 removes the rest, ADR-0062 point 5 as amended.)*
   - A `backlog-md` queue kind in the dispatcher, with `0-N` ids, the `/<id>-` branch lock, `next-item.sh` and
     `BACKLOG-DONE.md` edits by an agent (4.5). It goes at stage 7.
   - The whole autopilot flow, review panel included, ported into the build VM in 4.4, then moved again to the

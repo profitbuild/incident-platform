@@ -16,12 +16,26 @@
 # IPv4 only: every allowed service is reached over IPv4, so IPv6 allows loopback and nothing else (without
 # this, a container with an IPv6 route would bypass the whole allow-list). If the container has IPv6 and
 # ip6tables cannot be set, the script fails rather than leave IPv6 open.
-# Allowed: DNS to the container's own resolver only (no direct queries to outside resolvers); the
-# Anthropic API and login; GitHub (its published IP ranges); Maven Central; the advisory hosts the verifier
-# agent may fetch from (OSV, Tomcat's and Spring's security pages: backlog #0-160, ADR-0037); the Docker host
-# (Testcontainers' mapped ports, and Ollama on the host for the optional local model); the hosts of
-# /etc/factory-firewall/extra-hosts (the ntfy server, when the image was built with one). Everything else from this
-# container is rejected.
+# Allowed: DNS to the container's own resolver only (no direct queries to outside resolvers); GitHub (its published
+# IP ranges); Maven Central; the advisory hosts the verifier agent may fetch from (OSV, Tomcat's and Spring's security
+# pages: backlog #0-160, ADR-0037); the Docker host (Testcontainers' mapped ports, and Ollama on the host for the
+# optional local model); the hosts of /etc/factory-firewall/extra-hosts (the ntfy server, when the image was built with
+# one); the Anthropic API and login only when the image chose them (/etc/factory-firewall/anthropic, the owner's
+# container); and the one address and port of /etc/factory-firewall/proxy, the dispatcher's credential proxy on the
+# build VM. Everything else from this container is rejected.
+#
+# Anthropic (backlog #0-313 AC7): a task's container reaches the model through the dispatcher's proxy alone, so it
+# opens no Anthropic host; kept, a task's code could still send there around the proxy (telemetry, a key of its own).
+# The choice is a file the image writes from devcontainer.json's build argument FACTORY_ANTHROPIC, root's: never an
+# argument, a variable or a file `dev` can write, since `dev` may run this script again through sudo. No file, or any
+# content but `yes`, means none (fail closed: a missing choice gives a task nothing more).
+# The proxy (backlog #0-313): its address and port are copied into every image, the owner's too, from
+# .devcontainer/factory-proxy (check-allowlists.sh holds it equal to provision.sh's). In the owner's container on the
+# Mac the rule is dead as long as nothing listens at that address: Docker Desktop sends it to whatever network the Mac
+# routes 10.0.0.0/8 to, so on a LAN or a VPN that holds it the rule opens that one address and port there (review
+# round 1, security). That is accepted on purpose: it opens one address and one port, and the other way, a build
+# argument of task.json only, would need the dispatcher's closed table of task.json's keys (ADR-0062 point 4) opened
+# for `build.args`.
 # The advisory hosts are open to every process in the container, not only to the verifier (whose WebFetch a hook
 # narrows to a path prefix), and by IP: a CDN or Google's front end serves other sites from the same addresses,
 # reachable by their own name (SNI/Host) once the IP is open. That is why its allow-list is short. .github/scripts/check-web-access.sh fails when
@@ -74,12 +88,36 @@ trap fail_closed EXIT
 # changes that copy too, which Factory guards checks (check-allowlists.sh). Both resolve each name to its IPv4
 # addresses, with different tools (dig here, getent there): two scripts, as provision.sh reads no repository file.
 ALLOWED_DOMAINS=(
-    api.anthropic.com claude.ai platform.claude.com console.anthropic.com
     repo.maven.apache.org repo1.maven.org
     api.osv.dev osv.dev tomcat.apache.org spring.io
 )
-# Optional (telemetry): allowed when they resolve, skipped with a warning when not.
-OPTIONAL_DOMAINS=(statsig.anthropic.com)
+# Optional: allowed when they resolve, skipped with a warning when not.
+OPTIONAL_DOMAINS=()
+# Anthropic's hosts, added to the two lists above only when the image chose them (the owner's container; above). The VM
+# allows `dispatcher`'s uid the API alone and `factory`'s none (provision.sh's DISPATCHER_DOMAINS; check-allowlists.sh).
+ANTHROPIC_DOMAINS=(api.anthropic.com claude.ai platform.claude.com console.anthropic.com)
+# Optional (telemetry), as OPTIONAL_DOMAINS.
+ANTHROPIC_OPTIONAL_DOMAINS=(statsig.anthropic.com)
+ANTHROPIC_FILE=/etc/factory-firewall/anthropic
+anthropic=no
+if [ -f "$ANTHROPIC_FILE" ] && [ ! -L "$ANTHROPIC_FILE" ] && [ "$(stat -c %u "$ANTHROPIC_FILE")" = 0 ] \
+    && [ "$(cat "$ANTHROPIC_FILE")" = yes ]; then
+    anthropic=yes
+    ALLOWED_DOMAINS+=("${ANTHROPIC_DOMAINS[@]}")
+    OPTIONAL_DOMAINS+=("${ANTHROPIC_OPTIONAL_DOMAINS[@]}")
+fi
+# The proxy's address and port, one line `<IPv4>:<port>`, root's. A file that is there but not of that form, or not
+# root's, fails the setup (closed): an image built from a broken file is noticed at once. No file: no rule.
+PROXY_FILE=/etc/factory-firewall/proxy
+proxy=
+if [ -e "$PROXY_FILE" ] || [ -L "$PROXY_FILE" ]; then
+    { [ -f "$PROXY_FILE" ] && [ ! -L "$PROXY_FILE" ] && [ "$(stat -c %u "$PROXY_FILE")" = 0 ]; } \
+        || { echo "$PROXY_FILE is not a regular file of root's" >&2; exit 1; }
+    proxy=$(cat "$PROXY_FILE")
+    octet='(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])'
+    [[ $proxy =~ ^$octet\.$octet\.$octet\.$octet:([1-9][0-9]{0,4})$ ]] && [ "${BASH_REMATCH[5]}" -le 65535 ] \
+        || { echo "$PROXY_FILE does not hold one <IPv4>:<port>" >&2; exit 1; }
+fi
 # The image's extra hosts, one per line (the Dockerfile writes at most one, the ntfy server's); required like the
 # rest once listed. A line that is not a plain host name is ignored, as an argument was, and so is one starting with a
 # hyphen, which `dig` would read as an option.
@@ -141,6 +179,7 @@ iptables -P OUTPUT DROP
 iptables -A INPUT  -m state --state ESTABLISHED,RELATED -j ACCEPT
 iptables -A OUTPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
 iptables -A OUTPUT -m set --match-set allowed dst -j ACCEPT
+[ -z "$proxy" ] || iptables -A OUTPUT -p tcp -d "${proxy%:*}" --dport "${proxy##*:}" -j ACCEPT
 iptables -A OUTPUT -j REJECT --reject-with icmp-admin-prohibited
 
 # IPv6: loopback only. Applied whenever the kernel has IPv6 (/proc/net/if_inet6 lists an address, ::1
@@ -167,5 +206,10 @@ fi
 if [ "$ipv6" = closed ] && curl -6 -fsS --max-time 5 https://example.com >/dev/null 2>&1; then
     echo "firewall self-test: example.com is reachable over IPv6" >&2; exit 1
 fi
+# Without the image's choice, Anthropic's API is refused too (backlog #0-313 AC7): any answer, a 4xx included, means
+# the connection was made.
+if [ "$anthropic" = no ] && curl -sS --max-time 5 -o /dev/null https://api.anthropic.com/ 2>/dev/null; then
+    echo "firewall self-test: api.anthropic.com is reachable without the image's choice" >&2; exit 1
+fi
 complete=yes
-echo "Firewall up: $(ipset list allowed | grep -c '^[0-9]') allowed networks; IPv6 $ipv6."
+echo "Firewall up: $(ipset list allowed | grep -c '^[0-9]') allowed networks; Anthropic ${anthropic/no/not chosen}; proxy ${proxy:-none}; IPv6 $ipv6."

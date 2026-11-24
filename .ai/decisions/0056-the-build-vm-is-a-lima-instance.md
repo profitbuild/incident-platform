@@ -109,7 +109,8 @@ environment (a new VM, a new `.m2` volume, the cloud) hit it; the Mac did not, b
 
 ## Consequences
 
-- The autopilot runs in the devcontainer inside `factory-build`; the owner's sessions stay on the Mac. What isolates
+- The autopilot runs in the devcontainer inside `factory-build`; the owner's sessions stay on the Mac. *(Since #0-313, 2026-11-23, ADR-0062 point 5 as amended:
+  the old path's autopilot runs in the owner's devcontainer on the Mac again; the VM holds the dispatcher's path alone.)* What isolates
   it is in README "Infrastructure Hardening" and `docs/ai-factory.md` "What isolates what".
 - **#0-202** is settled for the build VM: its clone is its own, with no gitignored file of the owner's.
 - **#0-116** is narrowed, not closed (ADR-0057 narrows it further: the daemon is rootless, its egress filtered): code an agent runs still reaches Docker with root, now the VM's, which holds no

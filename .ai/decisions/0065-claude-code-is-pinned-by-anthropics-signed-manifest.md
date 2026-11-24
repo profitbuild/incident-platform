@@ -1,8 +1,9 @@
 # ADR-0065: Claude Code in the devcontainer image is the pinned version from Anthropic's signed manifest, root's, and the firewall's sudo rule takes no arguments
 
 - **Status:** Accepted (2026-11-21, by the owner); amends ADR-0039 point 3 (the preflight's floor becomes the pin),
-  takes the binary's part of ADR-0064 point 5's direction without a mount
-- **Backlog:** #0-249, #0-283
+  takes the binary's part of ADR-0064 point 5's direction without a mount; point 5 amended by #0-313 (2026-11-23): the image's
+  `anthropic` and `proxy` files of the firewall
+- **Backlog:** #0-249, #0-283, #0-313
 - **Date:** 2026-11-21
 - **Author:** human (the owner's choice on `/research 0-249 0-283`, 2026-11-21: option A, the sudo rule S2, an exact
   version; drafted in an interactive session)
@@ -44,6 +45,21 @@ Code's setup documentation, "Binary integrity and code signing").
    which the image writes from the build argument `FACTORY_NTFY_SERVER` (the owner's `devcontainer.json` passes the
    host's variable; `task.json` passes none, so a task container has no file). `dev` leaves the base image's `sudo`
    and `admin` groups.
+   *Amended (2026-11-23, #0-313; review round 2 of its VM side, architecture):* the firewall reads two more files of
+   `/etc/factory-firewall/`, root's, written by the image and never by an argument, a variable or anything `dev` can
+   write, by the same rule:
+   - `anthropic` (`yes`), from the build argument `FACTORY_ANTHROPIC`, which only the owner's `devcontainer.json`
+     passes: Anthropic's hosts open only there. Its `ARG` defaults to empty and `task.json` carries no `build.args`,
+     so a task's image chooses none and reaches the model through the dispatcher's proxy alone (#0-313 AC7);
+     `check-allowlists.sh` holds both;
+   - `proxy` (`<IPv4>:<port>`), copied from `.devcontainer/factory-proxy` into **every** image, the owner's too: the
+     proxy's one address and port. A file and not a build argument of `task.json` (the owner's choice A′ on the review
+     of `factory` PR #29): the dispatcher carries `build.dockerfile` and `build.context` of `task.json` alone
+     (ADR-0062 point 4's closed table), and opening that table for `build.args` would let a product's file pass
+     arguments into every task's build. The cost: the rule is in the owner's container on the Mac too, dead unless the
+     Mac routes `10.0.0.0/8` to a network holding the address. `check-allowlists.sh` holds the file equal to
+     `provision.sh`'s `PROXY_ADDR` and first port. A second slot's port (M5) has to reach its container another way,
+     not by that table (`migration/m5.md`).
 6. **A new key** is a new key file after its fingerprint matches in three places (as ADR-0033 does for Snyk's: here
    the key's URL, the documentation, keys.openpgp.org) and a `CLAUDE_CODE_KEY` change. The key is not watched yet:
    `watch-signing-keys.sh` reads `.github/keys/` only, and its sources are GitHub paths, this one a URL (#0-312). A

@@ -8,7 +8,9 @@
   and #0-313 (2026-11-22: the built-in plugins, `apiKeySource`); point 5 amended on the review of opencomputer
   (2026-11-22, `.ai/context/migration/opencomputer.md`): `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1` in the list;
   points 3 and 4 amended with #0-301's code (2026-11-22, `factory` PR #26, v0.1.5): the built-in agents' closed list,
-  `StructuredOutput` among each agent's tools, the version compared with the pinned `factory`'s
+  `StructuredOutput` among each agent's tools, the version compared with the pinned `factory`'s; point 5 amended on the
+  review of `factory` PR #29 (2026-11-23, sec-5a7e): the proxy reads the request body to check its tools and beta
+  values, reversing #0-313's "never read"
 - **Backlog:** #0-300, #0-301, #0-313
 - **Date:** 2026-11-21
 - **Author:** human (owner's decision on the options of `/research #0-300`, 2026-11-21, drafted in an interactive session)
@@ -317,6 +319,18 @@ It has no field for hooks or for the sources of settings.
    leaked token yields is the proxy's, from the VM only and only while the task runs. #0-313 measures first that
    `apiKeyHelper` from the managed settings is read under F3's `--restricted`; if it is not, this point is amended
    before any code.
+   *Amended (2026-11-23, the review of `factory` PR #29, security, sec-5a7e; the owner):* what a leaked token yields
+   was wider than "the model's calls". The Messages API runs tools on Anthropic's side that reach other hosts
+   (`web_search`, `web_fetch`, the MCP connector's `mcp_servers`), so a task's code holding the token could have the
+   product's source fetched out past the VM's filter. So the proxy **reads the request body, to check it**, which
+   reverses #0-313's "the request body is streamed, never read or logged" (opencomputer's `modelproxy` reads none):
+   an allowlist, not a denylist. A request passes only when its body is a JSON object with no `mcp_servers` and every
+   element of `tools` a client tool (no `type`, or `type: "custom"`), and every `anthropic-beta` value is on a list
+   measured from Claude Code's own calls (a fixture of their shape alone, never their content); anything else is
+   refused in Anthropic's error shape, logged by its reason alone. The body is held (up to the proxy's limit) and
+   parsed, never logged, written or kept; the response is still streamed unbuffered. A second layer outside the
+   repository, checked by nothing here: those server tools turned off for the factory's Console workspace, if the
+   Console allows it.
 
    This is an allowlist, not a denylist, as `factory`'s `childEnv` (`dispatcher/src/process/child-env.mjs`, #0-276)
    builds every child process's environment on the VM. One difference: there the values come from the dispatcher's

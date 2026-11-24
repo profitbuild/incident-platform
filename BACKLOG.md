@@ -200,6 +200,8 @@ Code, Javadoc, config comments and commits reference items as `backlog #N`.
 | [0-316](#0-316-every-agent-call-reads-a-215-kb-claudemd-written-as-a-runbook) | Every agent call reads a 21.5 KB `CLAUDE.md` written as a runbook | docs | Medium | Open |
 | [0-318](#0-318-a-git-failure-in-the-dispatchers-base-tree-puts-gits-stderr-in-a-stops-reason) | A git failure in the dispatcher's base tree puts git's stderr in a stop's reason | ci | Low | Open |
 | [0-319](#0-319-nothing-tests-how-createsh-reads-the-slices-limits-back) | Nothing tests how `create.sh` reads the slice's limits back | ci | Low | Open |
+| [0-320](#0-320-the-build-vm-probes-that-factory-reaches-no-anthropic-host-only-when-the-vm-is-made) | The build VM probes that `factory` reaches no Anthropic host only when the VM is made | security | Low | Open |
+| [0-321](#0-321-nothing-holds-the-vms-contract-files-to-what-the-pinned-factory-reads) | Nothing holds the VM's contract files to what the pinned `factory` reads | ci | Low | Open |
 | [0-133](#0-133-incidentresolvedevent-carries-no-openedat) | `IncidentResolvedEvent` carries no `openedAt` | tech-debt | Low | Open |
 | [0-134](#0-134-diff-cover-is-installed-by-version-without-hashes) | `diff-cover` is installed by version, without hashes | ci | Low | Open |
 | [0-135](#0-135-kubectl-in-ci-is-downloaded-unverified) | kubectl in CI is downloaded unverified | ci | Low | Open |
@@ -4766,13 +4768,17 @@ AC2. A committed signing key under `.devcontainer/keys/` without a source the wa
 ### 0-313. The first real agent call on the VM would need Claude's key in the task container (migration step M2.7)
 
 **Type:** security · **Priority:** High · **Status:** Open (split from #0-289 by the owner, `/research` of #0-301,
-2026-11-22).
+2026-11-22; the measurements done; the VM's side done 2026-11-23, `m2.md` Record; the proxy's code in `factory` PR #29;
+the trial left, with #0-301's AC4).
 **Autopilot:** human-only · **Risk:** high · **Complexity:** medium · **Depends on:** #0-301's code (AC1–AC3, AC5, AC6: its managed file and call, which this extends); the measurements can come first. #0-301's AC4 (the first call on the VM) follows this item
 **Touches:** the repository `profitbuild/factory` (dispatcher/src/proxy/, the managed settings' `apiKeyHelper`, the token's mount in
 dispatcher/src/container/, its tests), factory (scripts/factory-admin/build-vm/provision.sh if the proxy needs an egress rule, .devcontainer/init-firewall.sh and task.json for the task's allowlist without Anthropic, provision.sh's `FACTORY-EGRESS` split by uid and check-allowlists.sh: owner-only), decisions
 (ADR-0064 point 5 if the measurement fails; ADR-0062 points 4 and 5 as amended), factory
 (scripts/factory-admin/build-vm/create.sh and provision.sh: the fresh-VM marker, owner-only), docs (docs/ai-factory.md: the VM made anew
-before a run that holds a token), root (README "Infrastructure Hardening", `.ai/context/migration/m2.md`)
+before a run that holds a token), root (README "Infrastructure Hardening", `.ai/context/migration/m2.md`), and since the owner's
+decisions of 2026-11-23: .devcontainer/ (`factory-proxy`, the Dockerfile's `FACTORY_ANTHROPIC`, devcontainer.json:
+owner-only), scripts/factory-admin/build-vm/rollback-start.sh and rollback-exec.sh withdrawn (owner-only), ADR-0062
+point 5 and ADR-0064 point 5 as amended, `migration/m4.md`, `opencomputer.md`
 
 **Migration (ADR-0063 as amended for #0-301, 2026-11-22):** step M2.7, before #0-301's trial and M2's exit; the
 core of #0-289 (M3.5), moved forward. #0-285 (M3.4) still comes before the rest of M3.5.
@@ -4828,7 +4834,8 @@ was planned for M3.5, after M2.
   - a client's `Authorization`, `X-Api-Key` and `Cookie` are removed before the key is set;
   - refusals use Anthropic's error shape, with `X-Should-Retry: false` on 401, 403 and 404, and `true` with
     `Retry-After: 1` on 429 and 503, so Claude Code retries only what can succeed;
-  - the request body is streamed, never read or logged;
+  - the request body is streamed, never read or logged (*reversed 2026-11-23, the review of `factory` PR #29,
+    sec-5a7e: read to check its tools and beta values, never logged or kept, ADR-0064 point 5 as amended*);
   - an in-flight limit per task (429 past it);
   - a refusal logged at most once per 10 s per task and reason, with a count of those skipped, so a looping agent
     cannot flood the log;
@@ -4866,7 +4873,9 @@ AC7. The task container's allowlist holds none of the five Anthropic hosts, chos
      sibling container started through `factory`'s daemon does not reach `api.anthropic.com`, and the first call
      answers through the proxy alone, recorded).
 AC8. A client's `Authorization`, `X-Api-Key` and `Cookie` never reach upstream; every refusal is in Anthropic's error
-     shape with its `X-Should-Retry`; the request body is never read or logged; a task past its in-flight limit gets
+     shape with its `X-Should-Retry`; the request body is read only to check it (its `tools` client tools alone, no
+     `mcp_servers`, every `anthropic-beta` value on the measured list; else refused, the response still unbuffered) and
+     never logged or kept (ADR-0064 point 5 as amended, 2026-11-23); a task past its in-flight limit gets
      429 with `Retry-After`; a refusal is logged at most once per 10 s per task and reason; the rate-limit headers
      reach the dispatcher per task; a stream is not buffered (tests).
 AC9. Whether the pinned Claude Code routes its calls through `ANTHROPIC_UNIX_SOCKET` under F3 is recorded in `m2.md`
@@ -4981,3 +4990,44 @@ read from `provision.sh`, so there is no second copy.
 **Acceptance criteria.**
 AC1. With a stub `vm` that drains stdin, a wrong value of any key fails the check and the right values pass; a loop
      that checks fewer keys than the function gives fails (tests, in Factory guards).
+
+### 0-320. The build VM probes that `factory` reaches no Anthropic host only when the VM is made
+
+**Type:** security · **Priority:** Low · **Status:** Open (review round 2 of #0-313's VM side, security, 2026-11-23).
+**Autopilot:** human-only · **Risk:** medium · **Complexity:** low · **Depends on:** #0-313
+**Touches:** factory (scripts/factory-admin/build-vm/provision.sh, its `factory-egress.sh`: owner-only), root
+(ADR-0057 amended), docs (docs/ai-factory.md "Build VM")
+
+**Problem.** #0-313's AC7 on the VM rests on address separation: `dispatcher`'s Anthropic sets hold
+`api.anthropic.com`'s addresses, and nothing `factory` reaches may hold one of them. A CDN host of a list `factory`
+reaches (Docker Hub's, `downloads.claude.ai`, GitHub's ranges) could come to share an address with the API, and the
+resolver's sets follow what it answers. `create.sh` probes the separation (a container of `factory`'s daemon does
+not reach the API) only when the VM is made and after its one reboot, never at the 30-minute refresh.
+
+**Work.** As #0-242 does for the listeners (and with it, one change): `factory-egress.sh`, at every boot and refresh,
+runs the probe as `factory` (a positive one to `api.github.com` first, then the API must be refused); on a reach it
+fails closed as a missing domain does, logging the address.
+
+**Acceptance criteria.**
+AC1. An address of `api.anthropic.com` that a list `factory` reaches comes to hold, after the VM was made, is found
+     at the next boot or refresh, and `factory` reaches the API no more from then on (a VM trial recorded).
+AC2. The behaviour and its availability cost are in ADR-0057 and `docs/ai-factory.md` "Build VM".
+
+### 0-321. Nothing holds the VM's contract files to what the pinned `factory` reads
+
+**Type:** ci · **Priority:** Low · **Status:** Open (review round 2 of #0-313's VM side, architecture, rule gap, 2026-11-23).
+**Autopilot:** human-only · **Risk:** low · **Complexity:** low · **Depends on:** #0-313
+**Touches:** ci (.github/scripts/check-factory-copies.rb or a step of Lint Workflows, owner-only), factory
+(scripts/factory-admin/build-vm/provision.sh and create.sh, owner-only)
+
+**Problem.** `provision.sh` writes `/etc/factory-proxy.conf` (`ADDR=`, `PORTS=`) and `create.sh` writes
+`/etc/factory-fresh-vm` (32 lowercase hex) for `factory`'s dispatcher, whose `proxy/conf.mjs` and `fresh-vm.mjs` read
+them. The two sides live in two repositories; `check-factory-copies.rb` compares pins and copied scripts, not a
+file's form. A change of the form on either side fails only on the VM, at the first run.
+
+**Work.** A check, in Lint Workflows beside the adapter's steps, that the forms `provision.sh` and `create.sh` write
+are the ones the pinned `FACTORY_COMMIT`'s dispatcher accepts (its own parser run on what this repository writes, or
+a fixture both sides test against).
+
+**Acceptance criteria.**
+AC1. A form changed on one side alone fails CI on the pull request that changes it (tests of the check).

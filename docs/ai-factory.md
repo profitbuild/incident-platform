@@ -129,23 +129,24 @@ has no item yet: `.ai/context/migration.md`.
 
 ## Build VM
 
-Stage 2 of ADR-0055 (#0-238, ADR-0056): the same devcontainer, inside a Lima VM on the Mac, so the Docker a test
-reaches is the VM's and the repository is a clone of its own, not your checkout. The files are in
+Stage 2 of ADR-0055 (#0-238, ADR-0056): a Lima VM on the Mac, where the dispatcher runs each task in a container of
+its own (the old path's devcontainer ran here until #0-313, step 3), so the Docker a test reaches is the VM's and the repository is a clone of its own, not your checkout. The files are in
 `scripts/factory-admin/build-vm/`; the Mac needs Lima (`brew install lima`) and, for `verify-pins.sh`, Docker.
 AC5 of #0-238 is met (stage 2 done, 2026-11-17); the devcontainer on the Mac (Setup above) stays the way back (the
-owner's decision, `.ai/context/migration/stage-2.md`).
+owner's decision, `.ai/context/migration/stage-2.md`). Since #0-313 it is the only place the old path runs: the VM holds the dispatcher's
+path alone (step 3).
 The VM's Docker is rootless (ADR-0057, #0-116, #0-240): its daemon runs as `factory`, so root in any container,
 the devcontainer's included, is `factory` in the VM, and root's chain `FACTORY-EGRESS` filters everything any uid
-from 1000 up sends, `factory` and its subordinate range among them (a copy of the devcontainer's allow-list plus the
-VM's own: image registries, Ubuntu's archive; nothing on the Mac, none of the VM's own listeners but the ports Docker
+from 1000 up sends, `factory` and its subordinate range among them (a copy of the devcontainer's allow-list without
+Anthropic's hosts, which are `dispatcher`'s alone on 443 for its proxy, ADR-0057 as amended, plus the VM's own: image registries, Ubuntu's archive; nothing on the Mac, none of the VM's own listeners but the ports Docker
 publishes, no IPv6). Every DNS query of those uids goes to the VM's own resolver (dnsmasq,
 `factory-dns.service`), which adds the addresses it answers for a listed name, or a subdomain of one, to the filter's
 set before the asker gets them: a set resolved every 30 minutes failed the first autopilot run's image pulls on
 CloudFront's changing addresses (#0-247). A domain added to or removed from the devcontainer's `init-firewall.sh`
 changes the copy in `factory-egress.sh` in `provision.sh` too: Factory guards and `create.sh` refuse the two apart.
 
-Steps 3, 5, 6 and 7 below describe a VM made from this checkout's `provision.sh` (ADR-0062, with the `FACTORY_COMMIT`
-that carries #0-277's dispatcher code: its refusal on a running rollback, its sweep, `cli.mjs sweep`). A VM made from
+Steps 4 to 6 below describe a VM made from this checkout's `provision.sh` (ADR-0062, with the `FACTORY_COMMIT`
+that carries the dispatcher's code: its sweep, `cli.mjs sweep`, and #0-313's proxy). A VM made from
 an earlier one (before #0-277, or from PR #672's, whose pin and marker differ) is refused by `install-builder-app.sh`,
 which compares the VM's provisioning marker with this checkout: recreate it.
 
@@ -173,34 +174,22 @@ which compares the VM's provisioning marker with this checkout: recreate it.
    `cd incident-platform`. Never `docker` as
    root in the VM (`sudo docker`): `/run/docker.sock` leads to `factory`'s daemon, which code a test runs can replace
    through `factory`'s own systemd unit, so root's client would talk to that code (ADR-0057).
-3. **Start the devcontainer** (the rollback, ADR-0062 point 5: only while no dispatcher run is active), from the Mac:
-   `scripts/factory-admin/build-vm/rollback-start.sh`, then `scripts/factory-admin/build-vm/rollback-exec.sh` (bash
-   inside it, as `dev`). The first refuses unless the VM's daemon holds no container and no object of a dispatcher
-   run, starts the devcontainer with the label `factory.rollback=1` the dispatcher refuses to start on, and checks again before you log
-   in; the second enters it by that label. It starts only on a daemon that holds no container at all (a task's code
-   could have left one, labelled or not, that would mount your logins' volumes): a run's leftovers go with the
-   dispatcher's `cli.mjs sweep`, an earlier rollback's stopped container with `limactl shell factory-build sudo -u
-   factory -H env DOCKER_HOST=unix:///run/docker.sock docker rm <id>` (its logins stay in their volumes); after `up` it accepts only the one container it
-   made. It sees only the daemon's containers and a run's labelled objects: what a dispatcher task left elsewhere in
-   `factory`'s reach (its home, a Docker CLI plugin, a systemd unit, this clone, an unlabelled named volume, the image
-   store and build cache the rollback's image is built from) survives the run, so a rollback after a dispatcher run, with
-   your logins, starts on a VM made anew (`delete.sh`, `create.sh`; ADR-0062's Consequences, accepted for the
-   migration). Never a bare `devcontainer up` or `exec --workspace-folder .`: it would not
-   find the labelled container and would make a second, unlabelled one on the same credential volumes. The firewall's
-   start log and `example.com` check are as in Setup 1. The VM's devcontainer sends no phone notifications (Setup 5):
-   `rollback-start.sh` runs `up` through `sudo -u factory`, which passes none of your shell's variables, and a topic
-   given as an argument would be readable by every process of the VM; its host is not in the VM's allow-list either
-   (ntfy.sh is a publishing service, a channel out for code a test runs).
-4. **Check the clone** (#0-202), inside the devcontainer (the clone is `dev`'s, not `factory`'s):
-   `git status --ignored --short` prints nothing: no `docker/.env`, no `application-local.yml`, no
-   `.claude/settings.local.json` of yours.
-5. **Log in inside the devcontainer**, as in Setup 2: `claude` (it prints a URL; open it on the Mac and paste the
-   code back) and the bot's token with `gh auth login --with-token`. Both are kept in the devcontainer's volumes,
-   on the VM's disk, until the next dispatcher run: its sweep removes every volume of the daemon but its own cache, so
-   you enter them again before each rollback (ADR-0062 point 5), and after the next `create.sh`. Stop the rollback
-   (`limactl shell factory-build sudo -u factory -H env DOCKER_HOST=unix:///run/docker.sock docker stop <its
-   container>`, the id `rollback-start.sh` printed)
-   before a dispatcher run: the dispatcher refuses to start while it runs.
+3. **No devcontainer on the VM any more** (backlog #0-313, ADR-0062 point 5 as amended, 2026-11-23): the VM gives
+   Anthropic's hosts to `dispatcher`'s uid alone, so a devcontainer of `factory`'s daemon can neither log Claude Code
+   in nor call the model. `rollback-start.sh` and `rollback-exec.sh` refuse, saying so. The old path
+   (`/backlog-autopilot`) runs in your devcontainer on the Mac (Setup above) until M4 removes it; so does `/seed-bugs`'
+   baseline for M4. The clone `create.sh` makes in `/home/factory/incident-platform` stays, for work by hand as
+   `factory` (step 2).
+4. **Claude's key for the dispatcher's proxy** (#0-313; once per VM, and at each rotation): the Console workspace of the
+   factory, with its monthly spend limit, gives a key that only `dispatcher` reads, never `factory`. Put it in
+   `dispatcher`'s `~/.config/factory/claude.key`, mode 600, from stdin, so it is in no argument:
+   `limactl shell factory-build sudo -u dispatcher -H sh -c 'umask 077; cat > ~/.config/factory/claude.key' < <key file>`,
+   then delete the file on the Mac. The dispatcher refuses a key that is not one `sk-ant-` line of its own, mode 600.
+   If the Console allows it per workspace, turn the workspace's server-side tools (web search, web fetch, the MCP
+   connector) off: a second layer behind the proxy's own refusal of them (ADR-0064 point 5 as amended).
+5. **A VM made anew before every run that holds a token** (until #0-285, #0-313 AC6): `create.sh` writes
+   `/etc/factory-fresh-vm`, root's; the first dispatcher run consumes it, and every later run on that VM stops in stage
+   `fresh-vm`. So each such run is `delete.sh`, `create.sh`, then steps 4 and 6 again.
 6. **builder-app's key** (#0-272; once per VM, and at each rotation): the VM holds a user `dispatcher` (an ordinary
    uid, under the same egress filter, its home mode 700, its state in `/home/dispatcher/state`), the one checkout of
    `factory` at `FACTORY_COMMIT` in `/opt/factory-checkout` (root's, mode 755, written by no user: the dispatcher runs
@@ -220,10 +209,7 @@ which compares the VM's provisioning marker with this checkout: recreate it.
    (`FACTORY_REPO_DIR`), made by `provision.sh` as `dispatcher`. The three limits are a snapshot taken at this run:
    after you change them in `.claude/settings.autopilot.json`, run the script again for the dispatcher to follow. On a rotation delete the old key in the app's settings
    afterwards; after `delete.sh`, delete the old VM's key there.
-7. **Run the autopilot** there (the rollback, while no dispatcher run is active), through `rollback-exec.sh`, as in
-   "Running it". Your own sessions stay on the Mac, in your checkout. The local
-   model ("Local model" below) is not reached from the VM: `OLLAMA_URL`'s `host.docker.internal` is the VM there, so
-   `localReview` reports `Ollama not reachable` and skips (ADR-0056); the VM's filter rejects the Mac (ADR-0057).
+7. **The local model** ("Local model" below) is not reached from the VM: the VM's filter rejects the Mac (ADR-0057).
 
 **Changing the VM:** its contents only in `provision.sh`, its size or image only in `factory-build.yaml`, then
 `delete.sh` and `create.sh`: a VM is recreated, never patched by hand. Every pin is bumped by hand (Renovate does not
@@ -242,7 +228,7 @@ read these files) and `verify-pins.sh` must print eight `verified:` lines in the
 - the helper image of the tasks' work directories: `HELPER_IMAGE` (`buildpack-deps:noble-scm` by its index digest,
   #0-277), an index Docker Hub serves with an amd64 and an arm64 image.
 **Stopping it** (12 GiB of RAM while it runs): `limactl stop factory-build`; `limactl start factory-build` brings it
-back with the clone and the logins.
+back with the clone and `dispatcher`'s keys (a run that holds a token still needs a VM made anew, step 5).
 
 ## Running it
 
