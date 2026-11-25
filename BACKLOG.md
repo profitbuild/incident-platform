@@ -202,6 +202,7 @@ Code, Javadoc, config comments and commits reference items as `backlog #N`.
 | [0-319](#0-319-nothing-tests-how-createsh-reads-the-slices-limits-back) | Nothing tests how `create.sh` reads the slice's limits back | ci | Low | Open |
 | [0-320](#0-320-the-build-vm-probes-that-factory-reaches-no-anthropic-host-only-when-the-vm-is-made) | The build VM probes that `factory` reaches no Anthropic host only when the VM is made | security | Low | Open |
 | [0-321](#0-321-nothing-holds-the-vms-contract-files-to-what-the-pinned-factory-reads) | Nothing holds the VM's contract files to what the pinned `factory` reads | ci | Low | Open |
+| [0-322](#0-322-nothing-tells-the-owner-a-newer-claude-code-is-out-and-a-bump-is-hours-of-hand-work) | Nothing tells the owner a newer Claude Code is out, and a bump is hours of hand work | design | Medium | Open |
 | [0-133](#0-133-incidentresolvedevent-carries-no-openedat) | `IncidentResolvedEvent` carries no `openedAt` | tech-debt | Low | Open |
 | [0-134](#0-134-diff-cover-is-installed-by-version-without-hashes) | `diff-cover` is installed by version, without hashes | ci | Low | Open |
 | [0-135](#0-135-kubectl-in-ci-is-downloaded-unverified) | kubectl in CI is downloaded unverified | ci | Low | Open |
@@ -4768,8 +4769,8 @@ AC2. A committed signing key under `.devcontainer/keys/` without a source the wa
 ### 0-313. The first real agent call on the VM would need Claude's key in the task container (migration step M2.7)
 
 **Type:** security · **Priority:** High · **Status:** Open (split from #0-289 by the owner, `/research` of #0-301,
-2026-11-22; the measurements done; the VM's side done 2026-11-23, `m2.md` Record; the proxy's code in `factory` PR #29;
-the trial left, with #0-301's AC4).
+2026-11-22; the measurements done; the VM's side done 2026-11-23, `m2.md` Record; the proxy's code done 2026-11-24,
+`factory` PR #29, pinned `v0.1.6`; the trial left, with #0-301's AC4).
 **Autopilot:** human-only · **Risk:** high · **Complexity:** medium · **Depends on:** #0-301's code (AC1–AC3, AC5, AC6: its managed file and call, which this extends); the measurements can come first. #0-301's AC4 (the first call on the VM) follows this item
 **Touches:** the repository `profitbuild/factory` (dispatcher/src/proxy/, the managed settings' `apiKeyHelper`, the token's mount in
 dispatcher/src/container/, its tests), factory (scripts/factory-admin/build-vm/provision.sh if the proxy needs an egress rule, .devcontainer/init-firewall.sh and task.json for the task's allowlist without Anthropic, provision.sh's `FACTORY-EGRESS` split by uid and check-allowlists.sh: owner-only), decisions
@@ -4875,7 +4876,10 @@ AC7. The task container's allowlist holds none of the five Anthropic hosts, chos
 AC8. A client's `Authorization`, `X-Api-Key` and `Cookie` never reach upstream; every refusal is in Anthropic's error
      shape with its `X-Should-Retry`; the request body is read only to check it (its `tools` client tools alone, no
      `mcp_servers`, every `anthropic-beta` value on the measured list; else refused, the response still unbuffered) and
-     never logged or kept (ADR-0064 point 5 as amended, 2026-11-23); a task past its in-flight limit gets
+     never logged or kept (ADR-0064 point 5 as amended, 2026-11-23; widened by the six rounds of factory PR #29's review,
+     2026-11-24: an allowlist of the measured top-level keys, content-block types and `base64`/`text` sources, no
+     `file_id`, a body bounded by depth, items and bytes before it is parsed, and a filter that never throws; `m2.md`
+     Record, measurement 4); a task past its in-flight limit gets
      429 with `Retry-After`; a refusal is logged at most once per 10 s per task and reason; the rate-limit headers
      reach the dispatcher per task; a stream is not buffered (tests).
 AC9. Whether the pinned Claude Code routes its calls through `ANTHROPIC_UNIX_SOCKET` under F3 is recorded in `m2.md`
@@ -5031,3 +5035,40 @@ a fixture both sides test against).
 
 **Acceptance criteria.**
 AC1. A form changed on one side alone fails CI on the pull request that changes it (tests of the check).
+
+### 0-322. Nothing tells the owner a newer Claude Code is out, and a bump is hours of hand work
+
+**Type:** design · **Priority:** Medium · **Status:** Open (owner's question during review round 5 of factory#29, #0-313, 2026-11-24).
+**Autopilot:** human-only · **Risk:** high · **Complexity:** medium · **Depends on:** #0-313
+**Touches:** ci (.github/workflows/, owner-only), devcontainer (.devcontainer/claude-code.pin, install-claude-code.sh,
+owner-only), factory (`profitbuild/factory`'s `claude-code/expectations.json` and the request-shape fixture),
+docs (docs/ai-factory.md "Pinned versions", ADR-0065)
+
+**Problem.** Claude Code is pinned in `.devcontainer/claude-code.pin` (ADR-0065), and pinning is right: a new release
+changes nothing until the owner moves the pin, and a half-done bump fails in CI, not on the VM
+(`install-claude-code.sh --check` against the signed manifest; `check-claude-code-expectations.sh`, #0-301 AC6; the
+fixture's `claudeCodeVersion` in `factory`, factory#29 round 4). Two things are missing:
+- **No signal.** Renovate cannot propose the bump (the binaries are no GitHub release assets, ADR-0065), so the owner
+  learns of a new version, a security fix among them, only by looking. Releases can come every few days.
+- **A bump costs hours by hand, in two repositories.** The pin's lines from the manifest; in `factory` the
+  re-measurement of the init event (built-in plugins, agents, their `tools`) and of the request's shape (betas, body
+  keys, block types: the credential proxy's allowlists, #0-313, refuse what was not measured), `expectations.json`,
+  the fixture, a tag; here the pin PR with `factoryVersion`; then `/seed-bugs` (docs/ai-factory.md "Pinned
+  versions"). At that cost the pin ages, and an old pin is missing fixes, not broken.
+
+**Decision to make** (`/research` first): the bump policy (a fixed rhythm, e.g. every 2–4 weeks, and earlier for a
+security fix or a needed feature); what notifies (a scheduled job reading the newest version from Anthropic's
+manifest and opening an issue, not a PR, since a bump needs measuring); what one command does (pin lines from the
+signed manifest, image build, the init-event and request-shape measurements, the diff of `expectations.json` and the
+fixture ready to review); and an emergency path for a security release (what may be skipped and what is made up
+after, recorded in ADR-0065).
+
+**Acceptance criteria.**
+AC1. A newer Claude Code than the pin's opens one issue (no duplicate while it is open) naming both versions, within
+the job's period; tests of the job's logic on a fake manifest.
+AC2. One command, run by the owner, produces the new pin's lines and the measurements' diffs for `factory`, with no
+content of a request kept (shape only, as #0-313's measurement 4). The proxy's measured lists live in one record
+beside the pin's version: `BODY_KEYS` (a constant of `request-filter.mjs` in `factory` v0.1.6) moves into
+`claude-code/expectations.json` next to `anthropicBetas`, and each list is held equal to the fixture's measured
+variants both ways, so a key added without a measurement fails (review round 6 of factory PR #29, architecture).
+AC3. The policy and the emergency path are written in ADR-0065 and docs/ai-factory.md "Pinned versions".

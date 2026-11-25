@@ -835,23 +835,27 @@ security boundary, so every rule that matters is also enforced outside the model
   firewall sudo rule and its Claude Code were #0-283, closed with #0-249 (the two entries of "Network" and "Claude
   Code pinned" above).
 - **The dispatcher's credential proxy on the build VM** (backlog #0-313, ADR-0064 point 5 and ADR-0062 point 5 as
-  amended; the proxy's code is `factory`'s, its VM side here): a task's container holds no Claude key, only its task's
-  random token, mounted read-only and printed by the managed settings' `apiKeyHelper`; the dispatcher's proxy, of
-  `dispatcher`'s uid, swaps it for the key it alone reads. The proxy listens on an address of its own, `10.203.0.1` on
-  the dummy interface `factory-proxy0` (`provision.sh`; `/etc/factory-proxy.conf`, root's), port 8770, never on the
-  VM's address: `factory`'s containers reach it through one `FACTORY-EGRESS` `ACCEPT` for that address and port, and an
-  INPUT rule closes the port to everything outside the VM (AC5). It reads each request's body only to check it,
-  never logging or keeping it (its `tools` client tools alone, no `mcp_servers`, every `anthropic-beta` value on a list
-  measured from Claude Code's own calls; anything else refused, the response still streamed): the API's server-side
-  tools (web search, web fetch, the MCP connector) would otherwise fetch from any host on Anthropic's side, past the
-  VM's filter. **What a leaked token yields:** the model's calls through that run's proxy, from the VM only, while the
-  run lives, within the Console workspace's spend limit. Anthropic's hosts are open to `dispatcher`'s uid alone, on
-  443, in sets of their own (`FACTORY-EGRESS`, its resolver): neither a task's container nor a sibling container its
-  code starts on `factory`'s daemon reaches Anthropic around the proxy (AC7). Until #0-285 a run that holds a token
-  runs only on a VM made anew: `create.sh` writes a root-owned marker, `/etc/factory-fresh-vm`, that the first such run
-  consumes and every later one is refused on (AC6). `create.sh` checks the configuration, the interface, both rules,
-  that `dispatcher` reaches `api.anthropic.com` and that neither `factory` nor a container of its daemon does, and
-  writes the marker; `check-allowlists.sh` (in `create.sh` and Factory guards) holds Anthropic's hosts out of every list
+  amended; the proxy's code is `factory`'s, pinned `v0.1.6`, its VM side here): a task's container holds no Claude
+  key, only its task's random token, mounted read-only and printed by the managed settings' `apiKeyHelper`; the
+  dispatcher's proxy, of `dispatcher`'s uid, swaps it for the key it alone reads. The proxy listens on an address of
+  its own, `10.203.0.1` on the dummy interface `factory-proxy0` (`provision.sh`; `/etc/factory-proxy.conf`, root's),
+  port 8770, never on the VM's address: `factory`'s containers reach it through one `FACTORY-EGRESS` `ACCEPT` for that
+  address and port, and an INPUT rule closes the port to everything outside the VM (AC5). It reads each request's body
+  only to check it, never logging or keeping it, against allowlists measured from Claude Code's own calls (`m2.md`
+  measurement 4): client tools alone, no `mcp_servers`, the measured top-level keys and `anthropic-beta` values, the
+  content-block types of ordinary work with `base64` or `text` sources only and no `file_id`; anything else refused,
+  the response still streamed. The API's server-side tools (web search, web fetch, the MCP connector) and URL sources
+  would otherwise fetch from any host on Anthropic's side, past the VM's filter. A body is bounded before it is parsed
+  (depth 64, 200 000 items counted on its bytes, 32 MiB), and no request ends the dispatcher: the filter never throws,
+  and the handler and the upstream listeners catch what is left (factory PR #29's review, sec-d3e7). **What a leaked
+  token yields:** the model's calls through that run's proxy, from the VM only, while the run lives, within the
+  Console workspace's spend limit. Anthropic's hosts are open to `dispatcher`'s uid alone, on 443, in sets of their
+  own (`FACTORY-EGRESS`, its resolver): neither a task's container nor a sibling container its code starts on
+  `factory`'s daemon reaches Anthropic around the proxy (AC7). Until #0-285 a run that holds a token runs only on a VM
+  made anew: `create.sh` writes a root-owned marker, `/etc/factory-fresh-vm`, that the first such run consumes and
+  every later one is refused on (AC6). `create.sh` checks the configuration, the interface, both rules, that
+  `dispatcher` reaches `api.anthropic.com` and that neither `factory` nor a container of its daemon does, and writes
+  the marker; `check-allowlists.sh` (in `create.sh` and Factory guards) holds Anthropic's hosts out of every list
   `factory` reaches and the task image's proxy address equal to `provision.sh`'s. A second layer outside the
   repository, checked by nothing here: the server-side tools turned off for the factory's Console workspace, where the
   Console allows it. Limits: any process of the task's container reads its token (444), and so does a task through
