@@ -18,6 +18,7 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 
 @RestControllerAdvice
@@ -25,9 +26,29 @@ public class GlobalExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
-    private static final Set<String> SENSITIVE_FIELD_NAMES = Set.of(
-            "password", "secret", "token", "apiKey", "api_key",
-            "authorization", "credential", "privateKey"
+    /**
+     * Substrings of a field name whose rejected value a 400 {@code VALIDATION_FAILED} body replaces with
+     * {@code [REDACTED]}: {@link #isSensitiveField} lower-cases the field name and looks for each entry in it.
+     *
+     * <h2>Fixed (backlog #0-245): every entry is lower-case</h2>
+     * The set held {@code apiKey} and {@code privateKey}, mixed-case, so a lower-cased field name never
+     * contained them and a field named {@code apiKey}, {@code privateKey} or {@code userApiKey} was echoed back
+     * with its value. There is one comparison rule, the lower-cased name against lower-case entries, and
+     * {@code GlobalExceptionHandlerTest} fails on an entry that is not lower-case.
+     *
+     * <p>The same item went through the services' request DTOs for secrets no entry matched: {@code totpCode}
+     * and {@code backupCode} (auth-service's MFA requests, a one-time second factor) and {@code keyHash}
+     * (auth-service's API key introspection, the SHA-256 the key is looked up by), hence {@code totp},
+     * {@code backupcode} and {@code keyhash}. A bare {@code code} is not an entry: it would redact fields
+     * such as an error or country code that hold no secret. The fields matched by an older entry, every
+     * {@code *Password} and {@code *Token} ({@code mfaToken}, {@code refreshToken}, {@code botToken}), stay so.
+     *
+     * <p>Package-private for {@code GlobalExceptionHandlerTest}, which checks every entry.
+     */
+    static final Set<String> SENSITIVE_FIELD_NAMES = Set.of(
+            "password", "secret", "token", "apikey", "api_key",
+            "authorization", "credential", "privatekey",
+            "totp", "backupcode", "keyhash"
     );
 
     @ExceptionHandler(ResourceNotFoundException.class)
@@ -217,7 +238,8 @@ public class GlobalExceptionHandler {
 
     private boolean isSensitiveField(String fieldName) {
         if (fieldName == null) return false;
-        final String lowerField = fieldName.toLowerCase();
+        // Locale.ROOT: under a Turkish default locale "API_KEY".toLowerCase() has a dotless i (backlog #0-245)
+        final String lowerField = fieldName.toLowerCase(Locale.ROOT);
         return SENSITIVE_FIELD_NAMES.stream()
                 .anyMatch(lowerField::contains);
     }
