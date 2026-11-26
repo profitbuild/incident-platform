@@ -176,7 +176,7 @@ resolvable.
 | 0-303 | a lock per task, the dispatcher's only for a slot and the sweep, the state's lock, `FACTORY_SLOTS` (factory PR #25, `v0.1.4`); details in [the section](#0-303-the-dispatchers-lock-sweep-and-caches-assume-one-task-at-a-time-migration-step-m25) | PR #693 |
 | 0-315 | `factory`'s user slice limited on the build VM: `MemoryMax` from the VM's memory, `TasksMax` 16384, `MemoryHigh` `infinity` after AC2's trial (PR #699, then this), checked by `create.sh`; details in [the section](#0-315-a-runaway-task-can-take-the-build-vm-and-the-dispatcher-down-with-it) | PR #703 |
 | 0-317 | `factory`'s modules held to 400 lines (a warning) and 600 (a failure) by `dispatcher/test/max-lines.test.mjs`, the files over it on a ratchet list each at its length (`fake-daemon.mjs`, 640), its shrinking and no new entry held by review (factory PR #28); details in [the section](#0-317-nothing-keeps-factorys-modules-small) | factory PR #28 |
-| 0-245 | Validation errors redact `apiKey`, `privateKey` and the MFA and key-hash fields: lower-case entries, `Locale.ROOT`, every entry tested in several cases; details in [the section](#0-245-validation-errors-do-not-redact-apikey-and-privatekey-fields) | PR #TBD |
+| 0-245 | Validation errors redact `apiKey`, `privateKey` and the MFA and key-hash fields: lower-case entries, `Locale.ROOT`, every entry tested in several cases; details in [the section](#0-245-validation-errors-do-not-redact-apikey-and-privatekey-fields) | PR #707 |
 
 Items completed before `BACKLOG.md` existed are not listed.
 
@@ -5266,7 +5266,7 @@ AC1. `factory`'s CI fails a module over the hard limit, and the ratchet's list m
 
 ### 0-245. Validation errors do not redact `apiKey` and `privateKey` fields
 
-**Type:** bug · **Priority:** Medium · **Status:** Done, PR #TBD (2026-11-26). Found in `/ready #0-58` (2026-11-14).
+**Type:** bug · **Priority:** Medium · **Status:** Done, PR #707 (2026-11-26). Found in `/ready #0-58` (2026-11-14).
 
 **Problem.** `GlobalExceptionHandler` (`shared/exception`) replaces the rejected value of a sensitive field with
 `[REDACTED]` in a 400 `VALIDATION_FAILED` body. `isSensitiveField` lower-cases the field name and checks it against
