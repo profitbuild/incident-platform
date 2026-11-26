@@ -151,7 +151,6 @@ Code, Javadoc, config comments and commits reference items as `backlog #N`.
 | [0-242](#0-242-the-build-vms-listener-check-runs-only-when-the-vm-is-created) | The build VM's listener check runs only when the VM is created | security | Low | Open |
 | [0-243](#0-243-two-parsers-read-the-devcontainers-allow-list) | Two parsers read the devcontainer's allow-list | ci | Low | Open |
 | [0-244](#0-244-no-review-rule-covers-the-build-vms-own-allow-list) | No review rule covers the build VM's own allow-list | security | Low | Open |
-| [0-245](#0-245-validation-errors-do-not-redact-apikey-and-privatekey-fields) | Validation errors do not redact `apiKey` and `privateKey` fields | bug | Medium | Open |
 | [0-246](#0-246-service-classes-below-60-coverage-found-with-0-57) | Service classes below 60% coverage, found with #0-57 | tech-debt | Low | Open |
 | [0-251](#0-251-a-live-runs-lock-turns-stale-after-a-fixed-three-hours) | A live run's lock turns stale after a fixed three hours | ci | Low | Blocked (superseded, ADR-0055) |
 | [0-253](#0-253-a-run-stopped-by-the-factory-scripts-guard-keeps-its-lock) | A run stopped by the factory-scripts guard keeps its lock | ci | Medium | Blocked (superseded, ADR-0055) |
@@ -203,6 +202,8 @@ Code, Javadoc, config comments and commits reference items as `backlog #N`.
 | [0-320](#0-320-the-build-vm-probes-that-factory-reaches-no-anthropic-host-only-when-the-vm-is-made) | The build VM probes that `factory` reaches no Anthropic host only when the VM is made | security | Low | Open |
 | [0-321](#0-321-nothing-holds-the-vms-contract-files-to-what-the-pinned-factory-reads) | Nothing holds the VM's contract files to what the pinned `factory` reads | ci | Low | Open |
 | [0-322](#0-322-nothing-tells-the-owner-a-newer-claude-code-is-out-and-a-bump-is-hours-of-hand-work) | Nothing tells the owner a newer Claude Code is out, and a bump is hours of hand work | design | Medium | Open |
+| [0-323](#0-323-incident-platform-tolowercase-without-a-locale-changes-alert-severity-and-fingerprints-under-some-locales) | incident-platform: `toLowerCase()` without a locale changes alert severity and fingerprints under some locales | tech-debt | Low | Open |
+| [0-324](#0-324-incident-platform-validation-errors-redact-secrets-by-a-list-of-name-fragments-not-tied-to-the-dtos) | incident-platform: validation errors redact secrets by a list of name fragments, not tied to the DTOs | security | Low | Open |
 | [0-133](#0-133-incidentresolvedevent-carries-no-openedat) | `IncidentResolvedEvent` carries no `openedAt` | tech-debt | Low | Open |
 | [0-134](#0-134-diff-cover-is-installed-by-version-without-hashes) | `diff-cover` is installed by version, without hashes | ci | Low | Open |
 | [0-135](#0-135-kubectl-in-ci-is-downloaded-unverified) | kubectl in CI is downloaded unverified | ci | Low | Open |
@@ -3416,25 +3417,6 @@ AC5. A FAC-A rule says a workflow's check of an agent (its type, its definition,
 workflow's own prompt does not give it: #0-248 found `as()`'s preamble pointing the isolation check's agent at the
 file holding the expected answer (review round 1 of #0-248).
 
-### 0-245. Validation errors do not redact `apiKey` and `privateKey` fields
-
-**Type:** bug · **Priority:** Medium · **Status:** Open. Found in `/ready #0-58` (2026-11-14).
-
-**Problem.** `GlobalExceptionHandler` (`shared/exception`) replaces the rejected value of a sensitive field with
-`[REDACTED]` in a 400 `VALIDATION_FAILED` body. `isSensitiveField` lower-cases the field name and checks it against
-`SENSITIVE_FIELD_NAMES` with `contains`, but two of the set's entries are mixed-case, `apiKey` and `privateKey`, and a
-lower-cased name never contains them. So a request field named `apiKey`, `privateKey` or `userApiKey` (anything not
-also holding `token`, `secret`, `password`, `api_key`, `authorization` or `credential`) is echoed back in the error
-body with its rejected value. A key's value is what the set exists to keep out of answers. `shared`, so every service.
-
-**Approach.** Lower-case the set's entries (or compare case-insensitively), and test every entry, mixed-case names
-among them. Check the services' request DTOs for other sensitive field names the set misses.
-
-**Acceptance criteria.**
-AC1. A field error on `apiKey`, `privateKey` or `userApiKey` answers `[REDACTED]` as its rejected value; a test in
-`shared` covers every entry of the set in more than one case form.
-AC2. The fields of the services' request DTOs that hold a secret are all matched, or the item names why one is not.
-
 ### 0-246. Service classes below 60% coverage, found with #0-57
 
 **Type:** tech-debt · **Priority:** Low · **Status:** Open. Moved out of #0-58 in its `/ready` (2026-11-14).
@@ -5072,3 +5054,59 @@ beside the pin's version: `BODY_KEYS` (a constant of `request-filter.mjs` in `fa
 `claude-code/expectations.json` next to `anthropicBetas`, and each list is held equal to the fixture's measured
 variants both ways, so a key added without a measurement fails (review round 6 of factory PR #29, architecture).
 AC3. The policy and the emergency path are written in ADR-0065 and docs/ai-factory.md "Pinned versions".
+
+### 0-323. incident-platform: `toLowerCase()` without a locale changes alert severity and fingerprints under some locales
+
+**Type:** tech-debt · **Priority:** Low · **Status:** Open (found in the review of #0-245, 2026-11-26).
+
+**Problem.** `String.toLowerCase()` with no argument follows the JVM's default locale. Under a Turkish one (`tr`,
+also `az`) an `I` becomes a dotless `ı`, so `"CRITICAL".toLowerCase()` is `"crıtıcal"`. Seven calls in the services'
+main code have no locale, two of them with a visible effect:
+- `PrometheusNormalizer.mapSeverity` (ingestion-service): `CRITICAL` or `INFO` from Alertmanager would match no
+  `case` and fall to the default, `LOW` with a WARN, so a critical alert would be opened as a low one;
+- `BaseNormalizer.buildFingerprint` (ingestion-service): the dedup fingerprint of an alert with an `I` in a part
+  would differ between replicas run under different locales, so Redis dedup and the resolve of `alerts.resolved`
+  would miss.
+The others: `AlertIngestionService` (`source`), `UnifiedAlertDto` (`shared`, `source`), `IncidentSpecification`
+(incident-service, the source filter), `MfaRecoveryService` (auth-service, a metric tag). Nothing sets a locale
+today (no `user.language`, `LANG` or `Locale.setDefault` in the services, images or manifests), so this is latent: it
+needs a developer's machine or a base image with such a locale. #0-245 fixed the same in `GlobalExceptionHandler`.
+
+**Approach.** `toLowerCase(Locale.ROOT)` (and `toUpperCase`) at every call, and a build check so a new call without
+a locale fails: forbidden-apis (`de.thetaphi:forbiddenapis`, signature `jdk-unsafe`) in the root POM, or an ArchUnit
+rule in `architecture-tests/` (owner-only). Decide which one; forbidden-apis also catches `String.format` and
+`Charset`-less calls, so its findings beyond case need a look first.
+
+**Acceptance criteria.**
+AC1. No call of `toLowerCase()`/`toUpperCase()` without a locale is left in the services' and `shared`'s main code.
+AC2. A test of `PrometheusNormalizer` and of `buildFingerprint` under a Turkish default locale gives the same severity
+and fingerprint as under `Locale.ROOT` (the default restored after the test).
+AC3. The build fails on a new call without a locale (the chosen check, named in the item when done).
+
+### 0-324. incident-platform: validation errors redact secrets by a list of name fragments, not tied to the DTOs
+
+**Type:** security · **Priority:** Low · **Status:** Open (non-blocking finding of the security review of #0-245,
+2026-11-26).
+
+**Problem.** `GlobalExceptionHandler` (`shared`) answers a 400 `VALIDATION_FAILED` with each field's rejected value,
+except where the field name contains an entry of `SENSITIVE_FIELD_NAMES`. That is a denylist of name fragments: a
+request field that holds a secret under a name with none of them (`signature`, `otp`, `pin`, `passphrase`, ...) is
+echoed back. #0-245 checked every request DTO by hand and added `totp`, `backupcode` and `keyhash`, but nothing keeps
+the list in step with the DTOs: a new field is safe only if its author knows the list exists. It is `shared`, so
+every service.
+
+**Options (to decide).**
+- (A) A marker annotation (e.g. `@Sensitive`) on the DTO's field or record component, read by the handler from the
+  binding target's class; the name list stays as a fallback. Explicit, but again needs the author to remember it.
+- (B) A test that walks every request DTO of the services and fails on a field neither marked nor named sensitive
+  unless it is on an allow-list of fields known to hold no secret. It catches the forgotten case, at the cost of a
+  list to keep.
+- (C) An allow-list instead: echo a rejected value only for fields marked safe, `[REDACTED]` for the rest. Safest,
+  but a client loses the value for every field it did not mark.
+How the field reaches the handler (a nested path such as `items[0].secret`) decides how (A) finds the field.
+
+**Acceptance criteria.**
+AC1. The option chosen, and why, is written in this item (or an ADR if it changes `shared`'s contract).
+AC2. A request field holding a secret that no name fragment matches is redacted, shown by a test.
+AC3. A new DTO field holding a secret cannot reach `main` unredacted without a test failing, or the item names why
+that is not checked.

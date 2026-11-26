@@ -13,6 +13,8 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.slf4j.MDC;
 import org.springframework.core.MethodParameter;
 import org.springframework.dao.OptimisticLockingFailureException;
@@ -28,8 +30,11 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -157,6 +162,74 @@ class GlobalExceptionHandlerTest {
                         tuple("api_key", "[REDACTED]", "unknown key"),
                         tuple("email", "not-an-email", "must be a well-formed email address"),
                         tuple("title", null, "must not be null"));
+    }
+
+    /**
+     * Backlog #0-245: every entry of {@link GlobalExceptionHandler#SENSITIVE_FIELD_NAMES}, in more than one
+     * case form and inside a longer name. The mixed-case {@code apiKey} and {@code privateKey} never matched a
+     * lower-cased field name, so these values went back to the caller. {@link #everyEntryHasCases} keeps this
+     * list and the set in step: an entry added without its cases fails there.
+     */
+    private static final Map<String, List<String>> CASES_PER_ENTRY = Map.ofEntries(
+            Map.entry("password", List.of("password", "PASSWORD", "newPassword")),
+            Map.entry("secret", List.of("secret", "SECRET", "signingSecret")),
+            Map.entry("token", List.of("token", "TOKEN", "mfaSetupToken")),
+            Map.entry("apikey", List.of("apiKey", "APIKEY", "apikey", "userApiKey")),
+            Map.entry("api_key", List.of("api_key", "API_KEY", "integration_api_key")),
+            Map.entry("authorization", List.of("authorization", "Authorization", "proxyAuthorization")),
+            Map.entry("credential", List.of("credential", "CREDENTIALS", "smtpCredential")),
+            Map.entry("privatekey", List.of("privateKey", "PRIVATEKEY", "signingPrivateKey")),
+            Map.entry("totp", List.of("totpCode", "TOTP", "totp")),
+            Map.entry("backupcode", List.of("backupCode", "BACKUPCODE", "mfaBackupCode")),
+            Map.entry("keyhash", List.of("keyHash", "KEYHASH", "apiKeyHash")));
+
+    static Stream<String> sensitiveFieldNames() {
+        return CASES_PER_ENTRY.values().stream().flatMap(List::stream);
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("sensitiveFieldNames")
+    @DisplayName("MethodArgumentNotValidException: a sensitive field's value is redacted, whatever its case (backlog #0-245)")
+    void sensitiveFieldRedactedInAnyCase(String field) throws NoSuchMethodException {
+        final BeanPropertyBindingResult bindingResult =
+                new BeanPropertyBindingResult(new Object(), "request");
+        bindingResult.addError(fieldError(field, "fake-sensitive-value", "invalid"));
+
+        final ResponseEntity<ErrorResponse> response = handler.handleValidationErrors(
+                new MethodArgumentNotValidException(endpointParameter(), bindingResult));
+
+        assertThat(response.getBody().validationErrors())
+                .extracting(ErrorResponse.ValidationError::field, ErrorResponse.ValidationError::rejectedValue)
+                .containsExactly(tuple(field, "[REDACTED]"));
+    }
+
+    @Test
+    @DisplayName("SENSITIVE_FIELD_NAMES: every entry is lower-case and has its cases here (backlog #0-245)")
+    void everyEntryHasCases() {
+        assertThat(GlobalExceptionHandler.SENSITIVE_FIELD_NAMES)
+                .allSatisfy(entry -> assertThat(entry).isEqualTo(entry.toLowerCase(Locale.ROOT)));
+        assertThat(CASES_PER_ENTRY.keySet())
+                .containsExactlyInAnyOrderElementsOf(GlobalExceptionHandler.SENSITIVE_FIELD_NAMES);
+        CASES_PER_ENTRY.forEach((entry, names) -> assertThat(names)
+                .as("the cases of %s", entry)
+                .hasSizeGreaterThan(1)
+                .allSatisfy(name -> assertThat(name.toLowerCase(Locale.ROOT)).contains(entry)));
+    }
+
+    @Test
+    @DisplayName("MethodArgumentNotValidException: a field that only looks close keeps its value (backlog #0-245)")
+    void nonSensitiveFieldKeepsItsValue() throws NoSuchMethodException {
+        final BeanPropertyBindingResult bindingResult =
+                new BeanPropertyBindingResult(new Object(), "request");
+        bindingResult.addError(fieldError("countryCode", "XX", "unknown country"));
+        bindingResult.addError(fieldError("keyName", "my key", "too long"));
+
+        final ResponseEntity<ErrorResponse> response = handler.handleValidationErrors(
+                new MethodArgumentNotValidException(endpointParameter(), bindingResult));
+
+        assertThat(response.getBody().validationErrors())
+                .extracting(ErrorResponse.ValidationError::field, ErrorResponse.ValidationError::rejectedValue)
+                .containsExactly(tuple("countryCode", "XX"), tuple("keyName", "my key"));
     }
 
     private static FieldError fieldError(String field, Object rejectedValue, String message) {

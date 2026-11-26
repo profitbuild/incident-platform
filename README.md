@@ -255,7 +255,7 @@ Each escalation level creates an independent `EscalationTask` in PostgreSQL. ACK
 - **Dev endpoints**: `DevTokenController` (`GET /dev/token`, an unauthenticated token for any tenant and role) is gated with `@Profile({"local", "dev"})`, plus a startup guard that refuses to run outside those profiles. The guard cannot help if a deployment sets the dev profile itself, which the k8s base ConfigMap did for every overlay, prod included (backlog #0-63). Now only `k8s/overlays/dev` sets `SPRING_PROFILES_ACTIVE`, docker-compose sets none, and CI fails if the rendered staging or prod overlay sets any Spring profile
 - **Management port isolation**: Prometheus metrics and health endpoints on separate ports (8091–8097) — never co-located with the business API
 - **API key security**: Gemini API key passed via `x-goog-api-key` HTTP header — never embedded in URLs where it could appear in access logs
-- **Sensitive field redaction**: `GlobalExceptionHandler` redacts `password`, `secret`, `token`, `apiKey` from validation error responses
+- **Sensitive field redaction**: `GlobalExceptionHandler` redacts the rejected value of a field whose name holds `password`, `secret`, `token`, `apiKey`/`api_key`, `authorization`, `credential`, `privateKey`, `totp`, `backupCode` or `keyHash`, in any case, from validation error responses (backlog #0-245)
 - **Slack Bot Token**: Minimal OAuth scopes (`chat:write`, `im:write`) — principle of least privilege
 - **Request size limits**: `ingestion-service` rejects payloads over 1MB — protection against DoS via oversized alerts
 

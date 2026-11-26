@@ -176,6 +176,7 @@ resolvable.
 | 0-303 | a lock per task, the dispatcher's only for a slot and the sweep, the state's lock, `FACTORY_SLOTS` (factory PR #25, `v0.1.4`); details in [the section](#0-303-the-dispatchers-lock-sweep-and-caches-assume-one-task-at-a-time-migration-step-m25) | PR #693 |
 | 0-315 | `factory`'s user slice limited on the build VM: `MemoryMax` from the VM's memory, `TasksMax` 16384, `MemoryHigh` `infinity` after AC2's trial (PR #699, then this), checked by `create.sh`; details in [the section](#0-315-a-runaway-task-can-take-the-build-vm-and-the-dispatcher-down-with-it) | PR #703 |
 | 0-317 | `factory`'s modules held to 400 lines (a warning) and 600 (a failure) by `dispatcher/test/max-lines.test.mjs`, the files over it on a ratchet list each at its length (`fake-daemon.mjs`, 640), its shrinking and no new entry held by review (factory PR #28); details in [the section](#0-317-nothing-keeps-factorys-modules-small) | factory PR #28 |
+| 0-245 | Validation errors redact `apiKey`, `privateKey` and the MFA and key-hash fields: lower-case entries, `Locale.ROOT`, every entry tested in several cases; details in [the section](#0-245-validation-errors-do-not-redact-apikey-and-privatekey-fields) | PR #707 |
 
 Items completed before `BACKLOG.md` existed are not listed.
 
@@ -5262,3 +5263,31 @@ its longest is 446 lines today. Nothing keeps them so.
 
 **Acceptance criteria.**
 AC1. `factory`'s CI fails a module over the hard limit, and the ratchet's list may only shrink (tests).
+
+### 0-245. Validation errors do not redact `apiKey` and `privateKey` fields
+
+**Type:** bug · **Priority:** Medium · **Status:** Done, PR #707 (2026-11-26). Found in `/ready #0-58` (2026-11-14).
+
+**Problem.** `GlobalExceptionHandler` (`shared/exception`) replaces the rejected value of a sensitive field with
+`[REDACTED]` in a 400 `VALIDATION_FAILED` body. `isSensitiveField` lower-cases the field name and checks it against
+`SENSITIVE_FIELD_NAMES` with `contains`, but two of the set's entries are mixed-case, `apiKey` and `privateKey`, and a
+lower-cased name never contains them. So a request field named `apiKey`, `privateKey` or `userApiKey` (anything not
+also holding `token`, `secret`, `password`, `api_key`, `authorization` or `credential`) is echoed back in the error
+body with its rejected value. A key's value is what the set exists to keep out of answers. `shared`, so every service.
+
+**Approach.** Lower-case the set's entries (or compare case-insensitively), and test every entry, mixed-case names
+among them. Check the services' request DTOs for other sensitive field names the set misses.
+
+**Acceptance criteria.**
+AC1. A field error on `apiKey`, `privateKey` or `userApiKey` answers `[REDACTED]` as its rejected value; a test in
+`shared` covers every entry of the set in more than one case form.
+AC2. The fields of the services' request DTOs that hold a secret are all matched, or the item names why one is not.
+
+**Done.** Every entry of `SENSITIVE_FIELD_NAMES` is lower-case, and the field name is lower-cased with `Locale.ROOT`
+(the default locale's `toLowerCase` turns `I` into a dotless `ı` under a Turkish locale). AC2's sweep of the request
+DTOs added `totp` (`totpCode`), `backupcode` (`backupCode`) and `keyhash` (`ApiKeyIntrospectionRequest.keyHash`); a
+bare `code` was not added, since it would redact fields such as a country code that hold no secret. The
+`*Password` and `*Token` fields were matched already. `GlobalExceptionHandlerTest` checks every entry in at least
+two case forms and inside a longer name, fails on an entry that is not lower-case or has no cases, and keeps the
+value of a field that only looks close (`countryCode`, `keyName`). Follow-ups from its review: #0-323 (`toLowerCase()`
+without a locale elsewhere) and #0-324 (the name list is not tied to the DTOs).
