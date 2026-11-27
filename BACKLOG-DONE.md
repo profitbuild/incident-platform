@@ -177,7 +177,7 @@ resolvable.
 | 0-315 | `factory`'s user slice limited on the build VM: `MemoryMax` from the VM's memory, `TasksMax` 16384, `MemoryHigh` `infinity` after AC2's trial (PR #699, then this), checked by `create.sh`; details in [the section](#0-315-a-runaway-task-can-take-the-build-vm-and-the-dispatcher-down-with-it) | PR #703 |
 | 0-317 | `factory`'s modules held to 400 lines (a warning) and 600 (a failure) by `dispatcher/test/max-lines.test.mjs`, the files over it on a ratchet list each at its length (`fake-daemon.mjs`, 640), its shrinking and no new entry held by review (factory PR #28); details in [the section](#0-317-nothing-keeps-factorys-modules-small) | factory PR #28 |
 | 0-245 | Validation errors redact `apiKey`, `privateKey` and the MFA and key-hash fields: lower-case entries, `Locale.ROOT`, every entry tested in several cases; details in [the section](#0-245-validation-errors-do-not-redact-apikey-and-privatekey-fields) | PR #707 |
-| 0-323 | Every `toLowerCase()`/`toUpperCase()` of main code on `Locale.ROOT` (nine calls: Prometheus severity, the dedup fingerprint, `SourceType`, `Severity.fromString`, TOTP base32 among them); no test under a particular locale (AC2 dropped by the owner); the build check split out as #0-325; details in [the section](#0-323-incident-platform-tolowercase-without-a-locale-changes-alert-severity-and-fingerprints-under-some-locales) | PR #TBD |
+| 0-323 | Every `toLowerCase()`/`toUpperCase()` of main code on `Locale.ROOT` (nine calls: Prometheus severity, the dedup fingerprint, `SourceType`, `Severity.fromString`, TOTP base32 among them); no test under a particular locale (AC2 dropped by the owner); the build check split out as #0-325; details in [the section](#0-323-incident-platform-tolowercase-without-a-locale-changes-alert-severity-and-fingerprints-under-some-locales) | PR #708 |
 
 Items completed before `BACKLOG.md` existed are not listed.
 
@@ -5295,7 +5295,7 @@ without a locale elsewhere) and #0-324 (the name list is not tied to the DTOs).
 
 ### 0-323. incident-platform: `toLowerCase()` without a locale changes alert severity and fingerprints under some locales
 
-**Type:** tech-debt · **Priority:** Low · **Status:** Done, PR #TBD (2026-11-27). Found in the review of #0-245 (2026-11-26).
+**Type:** tech-debt · **Priority:** Low · **Status:** Done, PR #708 (2026-11-27). Found in the review of #0-245 (2026-11-26).
 
 **Problem.** `String.toLowerCase()` with no argument follows the JVM's default locale. Under a Turkish one (`tr`,
 also `az`) an `I` becomes a dotless `ı`, so `"CRITICAL".toLowerCase()` is `"crıtıcal"`. Seven calls in the services'
