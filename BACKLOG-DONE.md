@@ -177,6 +177,7 @@ resolvable.
 | 0-315 | `factory`'s user slice limited on the build VM: `MemoryMax` from the VM's memory, `TasksMax` 16384, `MemoryHigh` `infinity` after AC2's trial (PR #699, then this), checked by `create.sh`; details in [the section](#0-315-a-runaway-task-can-take-the-build-vm-and-the-dispatcher-down-with-it) | PR #703 |
 | 0-317 | `factory`'s modules held to 400 lines (a warning) and 600 (a failure) by `dispatcher/test/max-lines.test.mjs`, the files over it on a ratchet list each at its length (`fake-daemon.mjs`, 640), its shrinking and no new entry held by review (factory PR #28); details in [the section](#0-317-nothing-keeps-factorys-modules-small) | factory PR #28 |
 | 0-245 | Validation errors redact `apiKey`, `privateKey` and the MFA and key-hash fields: lower-case entries, `Locale.ROOT`, every entry tested in several cases; details in [the section](#0-245-validation-errors-do-not-redact-apikey-and-privatekey-fields) | PR #707 |
+| 0-323 | Every `toLowerCase()`/`toUpperCase()` of main code on `Locale.ROOT` (nine calls: Prometheus severity, the dedup fingerprint, `SourceType`, `Severity.fromString`, TOTP base32 among them); no test under a particular locale (AC2 dropped by the owner); the build check split out as #0-325; details in [the section](#0-323-incident-platform-tolowercase-without-a-locale-changes-alert-severity-and-fingerprints-under-some-locales) | PR #TBD |
 
 Items completed before `BACKLOG.md` existed are not listed.
 
@@ -5291,3 +5292,41 @@ bare `code` was not added, since it would redact fields such as a country code t
 two case forms and inside a longer name, fails on an entry that is not lower-case or has no cases, and keeps the
 value of a field that only looks close (`countryCode`, `keyName`). Follow-ups from its review: #0-323 (`toLowerCase()`
 without a locale elsewhere) and #0-324 (the name list is not tied to the DTOs).
+
+### 0-323. incident-platform: `toLowerCase()` without a locale changes alert severity and fingerprints under some locales
+
+**Type:** tech-debt · **Priority:** Low · **Status:** Done, PR #TBD (2026-11-27). Found in the review of #0-245 (2026-11-26).
+
+**Problem.** `String.toLowerCase()` with no argument follows the JVM's default locale. Under a Turkish one (`tr`,
+also `az`) an `I` becomes a dotless `ı`, so `"CRITICAL".toLowerCase()` is `"crıtıcal"`. Seven calls in the services'
+main code have no locale, two of them with a visible effect:
+- `PrometheusNormalizer.mapSeverity` (ingestion-service): `CRITICAL` or `INFO` from Alertmanager would match no
+  `case` and fall to the default, `LOW` with a WARN, so a critical alert would be opened as a low one;
+- `BaseNormalizer.buildFingerprint` (ingestion-service): the dedup fingerprint of an alert with an `I` in a part
+  would differ between replicas run under different locales, so Redis dedup and the resolve of `alerts.resolved`
+  would miss.
+The others: `AlertIngestionService` (`source`), `UnifiedAlertDto` (`shared`, `source`), `IncidentSpecification`
+(incident-service, the source filter), `MfaRecoveryService` (auth-service, a metric tag). Nothing sets a locale
+today (no `user.language`, `LANG` or `Locale.setDefault` in the services, images or manifests), so this is latent: it
+needs a developer's machine or a base image with such a locale. #0-245 fixed the same in `GlobalExceptionHandler`.
+
+**Approach.** `toLowerCase(Locale.ROOT)` (and `toUpperCase`) at every call, and a build check so a new call without
+a locale fails: forbidden-apis (`de.thetaphi:forbiddenapis`, signature `jdk-unsafe`) in the root POM, or an ArchUnit
+rule in `architecture-tests/` (owner-only). Decide which one; forbidden-apis also catches `String.format` and
+`Charset`-less calls, so its findings beyond case need a look first.
+
+**Acceptance criteria.**
+AC1. No call of `toLowerCase()`/`toUpperCase()` without a locale is left in the services' and `shared`'s main code.
+AC2. A test of `PrometheusNormalizer` and of `buildFingerprint` under a Turkish default locale gives the same severity
+and fingerprint as under `Locale.ROOT` (the default restored after the test).
+AC3. The build fails on a new call without a locale (the chosen check, named in the item when done).
+
+**Done.** The code held nine calls, not seven: three `toUpperCase()` more, `TotpService.base32Decode` (an `i` of a
+secret typed in lower case became `İ`, outside the base32 alphabet, and decoded to other bytes), `Severity.fromString`
+(`shared`, `critical` refused) and `GenericNormalizer`'s `SourceType.valueOf` (`security` fell back to OPS). All nine
+take `Locale.ROOT`; under the locales the platform runs with (en, C) the result is the same as before, and the
+existing tests of every changed class pass. AC2, a test under a Turkish default, was dropped by the owner: the
+platform is not tested per locale, and a test that sets `Locale.setDefault` changes a JVM-wide value other tests
+read. Tests of that kind were written, each failing without its fix, and removed before the PR. What keeps a new
+call from coming back is AC3, the build check, split out by the owner as #0-325.
+

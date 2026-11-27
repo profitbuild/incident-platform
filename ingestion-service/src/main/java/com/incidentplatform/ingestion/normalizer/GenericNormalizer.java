@@ -9,6 +9,7 @@ import org.springframework.stereotype.Component;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 
@@ -115,7 +116,8 @@ public class GenericNormalizer extends BaseNormalizer {
 
     private SourceType parseSourceType(String sourceType) {
         try {
-            return SourceType.valueOf(sourceType.toUpperCase());
+            // Locale.ROOT: under a Turkish default an "i" upper-cases to "İ" and matches no constant (backlog #0-323)
+            return SourceType.valueOf(sourceType.toUpperCase(Locale.ROOT));
         } catch (IllegalArgumentException e) {
             log.warn("Unknown sourceType '{}', defaulting to OPS", sourceType);
             return SourceType.OPS;

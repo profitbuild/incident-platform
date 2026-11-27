@@ -20,6 +20,7 @@ import org.springframework.stereotype.Service;
 import java.time.Clock;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -355,7 +356,7 @@ public class AlertIngestionService {
 
     private AlertNormalizer findNormalizer(String source) {
         final AlertNormalizer normalizer = normalizersBySource.get(
-                source.toLowerCase());
+                source.toLowerCase(Locale.ROOT));
         if (normalizer == null) {
             throw new UnknownSourceException(source,
                     List.copyOf(normalizersBySource.keySet()));

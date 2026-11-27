@@ -6,6 +6,7 @@ import org.slf4j.LoggerFactory;
 
 import java.time.Instant;
 import java.time.format.DateTimeParseException;
+import java.util.Locale;
 
 public abstract class BaseNormalizer implements AlertNormalizer {
 
@@ -49,7 +50,8 @@ public abstract class BaseNormalizer implements AlertNormalizer {
         final StringBuilder sb = new StringBuilder(getSourceName());
         for (final String part : parts) {
             sb.append(":");
-            sb.append(part != null ? part.toLowerCase().trim() : "unknown");
+            // Locale.ROOT: the dedup fingerprint must not depend on the replica's default locale (backlog #0-323)
+            sb.append(part != null ? part.toLowerCase(Locale.ROOT).trim() : "unknown");
         }
         return sb.toString();
     }
