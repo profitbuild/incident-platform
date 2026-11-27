@@ -202,7 +202,7 @@ Code, Javadoc, config comments and commits reference items as `backlog #N`.
 | [0-320](#0-320-the-build-vm-probes-that-factory-reaches-no-anthropic-host-only-when-the-vm-is-made) | The build VM probes that `factory` reaches no Anthropic host only when the VM is made | security | Low | Open |
 | [0-321](#0-321-nothing-holds-the-vms-contract-files-to-what-the-pinned-factory-reads) | Nothing holds the VM's contract files to what the pinned `factory` reads | ci | Low | Open |
 | [0-322](#0-322-nothing-tells-the-owner-a-newer-claude-code-is-out-and-a-bump-is-hours-of-hand-work) | Nothing tells the owner a newer Claude Code is out, and a bump is hours of hand work | design | Medium | Open |
-| [0-323](#0-323-incident-platform-tolowercase-without-a-locale-changes-alert-severity-and-fingerprints-under-some-locales) | incident-platform: `toLowerCase()` without a locale changes alert severity and fingerprints under some locales | tech-debt | Low | Open |
+| [0-325](#0-325-incident-platform-nothing-stops-a-new-tolowercase-or-touppercase-without-a-locale) | incident-platform: nothing stops a new `toLowerCase()` or `toUpperCase()` without a locale | ci | Low | Open |
 | [0-324](#0-324-incident-platform-validation-errors-redact-secrets-by-a-list-of-name-fragments-not-tied-to-the-dtos) | incident-platform: validation errors redact secrets by a list of name fragments, not tied to the DTOs | security | Low | Open |
 | [0-133](#0-133-incidentresolvedevent-carries-no-openedat) | `IncidentResolvedEvent` carries no `openedAt` | tech-debt | Low | Open |
 | [0-134](#0-134-diff-cover-is-installed-by-version-without-hashes) | `diff-cover` is installed by version, without hashes | ci | Low | Open |
@@ -5055,34 +5055,6 @@ beside the pin's version: `BODY_KEYS` (a constant of `request-filter.mjs` in `fa
 variants both ways, so a key added without a measurement fails (review round 6 of factory PR #29, architecture).
 AC3. The policy and the emergency path are written in ADR-0065 and docs/ai-factory.md "Pinned versions".
 
-### 0-323. incident-platform: `toLowerCase()` without a locale changes alert severity and fingerprints under some locales
-
-**Type:** tech-debt · **Priority:** Low · **Status:** Open (found in the review of #0-245, 2026-11-26).
-
-**Problem.** `String.toLowerCase()` with no argument follows the JVM's default locale. Under a Turkish one (`tr`,
-also `az`) an `I` becomes a dotless `ı`, so `"CRITICAL".toLowerCase()` is `"crıtıcal"`. Seven calls in the services'
-main code have no locale, two of them with a visible effect:
-- `PrometheusNormalizer.mapSeverity` (ingestion-service): `CRITICAL` or `INFO` from Alertmanager would match no
-  `case` and fall to the default, `LOW` with a WARN, so a critical alert would be opened as a low one;
-- `BaseNormalizer.buildFingerprint` (ingestion-service): the dedup fingerprint of an alert with an `I` in a part
-  would differ between replicas run under different locales, so Redis dedup and the resolve of `alerts.resolved`
-  would miss.
-The others: `AlertIngestionService` (`source`), `UnifiedAlertDto` (`shared`, `source`), `IncidentSpecification`
-(incident-service, the source filter), `MfaRecoveryService` (auth-service, a metric tag). Nothing sets a locale
-today (no `user.language`, `LANG` or `Locale.setDefault` in the services, images or manifests), so this is latent: it
-needs a developer's machine or a base image with such a locale. #0-245 fixed the same in `GlobalExceptionHandler`.
-
-**Approach.** `toLowerCase(Locale.ROOT)` (and `toUpperCase`) at every call, and a build check so a new call without
-a locale fails: forbidden-apis (`de.thetaphi:forbiddenapis`, signature `jdk-unsafe`) in the root POM, or an ArchUnit
-rule in `architecture-tests/` (owner-only). Decide which one; forbidden-apis also catches `String.format` and
-`Charset`-less calls, so its findings beyond case need a look first.
-
-**Acceptance criteria.**
-AC1. No call of `toLowerCase()`/`toUpperCase()` without a locale is left in the services' and `shared`'s main code.
-AC2. A test of `PrometheusNormalizer` and of `buildFingerprint` under a Turkish default locale gives the same severity
-and fingerprint as under `Locale.ROOT` (the default restored after the test).
-AC3. The build fails on a new call without a locale (the chosen check, named in the item when done).
-
 ### 0-324. incident-platform: validation errors redact secrets by a list of name fragments, not tied to the DTOs
 
 **Type:** security · **Priority:** Low · **Status:** Open (non-blocking finding of the security review of #0-245,
@@ -5110,3 +5082,26 @@ AC1. The option chosen, and why, is written in this item (or an ADR if it change
 AC2. A request field holding a secret that no name fragment matches is redacted, shown by a test.
 AC3. A new DTO field holding a secret cannot reach `main` unredacted without a test failing, or the item names why
 that is not checked.
+
+### 0-325. incident-platform: nothing stops a new `toLowerCase()` or `toUpperCase()` without a locale
+
+**Type:** ci · **Priority:** Low · **Status:** Open (AC3 of #0-323, split out by the owner, 2026-11-27).
+
+**Problem.** #0-323 moved every `toLowerCase()`/`toUpperCase()` of the services' and `shared`'s main code to
+`Locale.ROOT`, among them the calls where the default locale changed a result (Prometheus severity, the dedup
+fingerprint, `SourceType`, `Severity.fromString`, TOTP base32); no test runs under a particular locale (the owner's
+decision in #0-323), so this check is the only guard. Nothing stops the next call without a locale: it
+compiles, passes every test under the build's own locale, and breaks only on a machine or image whose default is
+Turkish or Azeri.
+
+**Approach.** forbidden-apis (`de.thetaphi:forbiddenapis`) in the root `pom.xml`, `check` (and `testCheck`) bound to
+`verify`, with a signatures file of its own that lists only `java.lang.String#toLowerCase()` and
+`java.lang.String#toUpperCase()`. Its bundled `jdk-unsafe` set would also flag `String.format`, `getBytes()` and
+others: a separate decision, not this item. `architecture-tests/` (ArchUnit) does not exist, so a rule there would
+be a new module. A new build plugin is a supply-chain change (`review-k8s`, the POM's pinned plugins, Renovate).
+
+**Acceptance criteria.**
+AC1. `./mvnw verify` fails on a call of `toLowerCase()` or `toUpperCase()` without a locale in any module's main
+code, shown on a throwaway branch or by a test of the configuration.
+AC2. The plugin's version is pinned the way the root POM pins its other plugins, and Renovate tracks it.
+

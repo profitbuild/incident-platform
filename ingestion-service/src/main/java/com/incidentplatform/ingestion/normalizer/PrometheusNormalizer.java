@@ -13,6 +13,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 
@@ -182,7 +183,8 @@ public class PrometheusNormalizer extends BaseNormalizer {
 
     private Severity mapSeverity(String rawSeverity) {
         if (rawSeverity == null) return Severity.LOW;
-        return switch (rawSeverity.toLowerCase()) {
+        // Locale.ROOT: under a Turkish default "CRITICAL" would lower-case to "crıtıcal" and map to LOW (backlog #0-323)
+        return switch (rawSeverity.toLowerCase(Locale.ROOT)) {
             case "critical" -> Severity.CRITICAL;
             case "high"     -> Severity.HIGH;
             case "warning"  -> Severity.MEDIUM;

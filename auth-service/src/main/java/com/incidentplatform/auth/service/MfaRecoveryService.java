@@ -39,6 +39,7 @@ import java.time.Instant;
 import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -187,7 +188,7 @@ public class MfaRecoveryService {
         for (final Outcome outcome : Outcome.values()) {
             counters.put(outcome, Counter.builder(COUNTER)
                     .description("Operator MFA recovery requests by outcome (backlog #0-90)")
-                    .tag("outcome", outcome.name().toLowerCase())
+                    .tag("outcome", outcome.name().toLowerCase(Locale.ROOT))
                     .register(meterRegistry));
         }
     }

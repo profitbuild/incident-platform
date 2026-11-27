@@ -3,6 +3,8 @@ package com.incidentplatform.shared.domain;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonValue;
 
+import java.util.Locale;
+
 // Enum reprezentujący poziom severity incydentu/alertu.
 // Centralna definicja domenowa używana przez wszystkie serwisy —
 // eliminuje duplikację switch/String w każdym serwisie osobno.
@@ -49,7 +51,8 @@ public enum Severity {
         if (value == null) {
             throw new IllegalArgumentException("Severity value cannot be null");
         }
-        return switch (value.toUpperCase()) {
+        // Locale.ROOT: under a Turkish default "critical" would upper-case to "CRİTİCAL" (backlog #0-323)
+        return switch (value.toUpperCase(Locale.ROOT)) {
             case "CRITICAL" -> CRITICAL;
             case "HIGH"     -> HIGH;
             case "MEDIUM"   -> MEDIUM;

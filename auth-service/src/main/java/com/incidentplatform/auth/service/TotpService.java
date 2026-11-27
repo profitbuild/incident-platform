@@ -13,6 +13,7 @@ import java.security.SecureRandom;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 
 /**
@@ -255,7 +256,8 @@ public class TotpService {
      * Used at verify time — decodes secret from authenticator app input.
      */
     static byte[] base32Decode(String base32) {
-        final String upper = base32.toUpperCase().replaceAll("[=\\s]", "");
+        // Locale.ROOT: under a Turkish default a secret's "i" would become "İ", outside the base32 alphabet (backlog #0-323)
+        final String upper = base32.toUpperCase(Locale.ROOT).replaceAll("[=\\s]", "");
         final byte[] output = new byte[upper.length() * 5 / 8];
         int buffer = 0, bitsLeft = 0, index = 0;
         for (final char c : upper.toCharArray()) {

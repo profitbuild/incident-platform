@@ -10,6 +10,7 @@ import jakarta.validation.constraints.Size;
 
 import java.time.Instant;
 import java.util.Collections;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 
@@ -77,7 +78,7 @@ public record UnifiedAlertDto(
     public UnifiedAlertDto {
         if (alertId == null) alertId = UUID.randomUUID();
         if (title != null) title = title.trim();
-        if (source != null) source = source.toLowerCase();
+        if (source != null) source = source.toLowerCase(Locale.ROOT);
 
         if (metadata != null) {
             metadata = Collections.unmodifiableMap(Map.copyOf(metadata));

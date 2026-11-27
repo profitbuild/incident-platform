@@ -8,6 +8,7 @@ import org.springframework.data.jpa.domain.Specification;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 public final class IncidentSpecification {
 
@@ -40,7 +41,7 @@ public final class IncidentSpecification {
 
             if (filter.source() != null && !filter.source().isBlank()) {
                 // lower() on both sides: criteriaBuilder.lower() pushes LOWER()
-                // to the database, filter.source().toLowerCase() normalises the
+                // to the database, filter.source().toLowerCase(Locale.ROOT) normalises the
                 // parameter in Java. Together they make the filter case-insensitive
                 // even if a row was inserted via a path that bypassed the
                 // UnifiedAlertDto compact-constructor normalisation (e.g. a direct
@@ -49,7 +50,7 @@ public final class IncidentSpecification {
                 // as a second layer of defence — see that migration for rationale.
                 predicates.add(criteriaBuilder.equal(
                         criteriaBuilder.lower(root.get("source")),
-                        filter.source().toLowerCase()));
+                        filter.source().toLowerCase(Locale.ROOT)));
             }
 
             if (filter.teamId() != null) {
